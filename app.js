@@ -26,16 +26,19 @@ const WEEK = ['일','월','화','수','목','금','토'];
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
 const DEFAULT_STATE = {
-  version: 2,
-  shiftOrder: ['D','S','G','O','D2','G2','OFF'],
+  version: 3,
+  shiftOrder: ['D','S','G','O','D2','G2','OFF','JG','JH'],
   shiftTypes: {
-    D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b' },
-    S:   { label:'SW',   short:'S',  start:'14:00', end:'22:00', color:'#10b981' },
-    G:   { label:'GY',   short:'G',  start:'22:00', end:'06:00', color:'#6366f1' },
-    O:   { label:'오피스', short:'O',  start:'09:00', end:'18:00', color:'#0ea5e9' },
-    D2:  { label:'DAY2', short:'D2', start:'06:00', end:'14:00', color:'#fb923c' },
-    G2:  { label:'GY2',  short:'G2', start:'22:00', end:'06:00', color:'#a78bfa' },
-    OFF: { label:'휴무', short:'휴', start:'',      end:'',      color:'#94a3b8' },
+    D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b', kind:'work' },
+    S:   { label:'SW',   short:'S',  start:'14:00', end:'22:00', color:'#10b981', kind:'work' },
+    G:   { label:'GY',   short:'G',  start:'22:00', end:'06:00', color:'#6366f1', kind:'work' },
+    O:   { label:'오피스', short:'O',  start:'09:00', end:'18:00', color:'#0ea5e9', kind:'work' },
+    D2:  { label:'DAY2', short:'D2', start:'06:00', end:'18:00', color:'#fb923c', kind:'work' },
+    G2:  { label:'GY2',  short:'G2', start:'18:00', end:'06:00', color:'#a78bfa', kind:'work' },
+    OFF: { label:'휴무', short:'휴', start:'',      end:'',      color:'#94a3b8', kind:'off'  },
+    // 특수근무: 배치 규칙 있음 (special)
+    JG:  { label:'지정근무', short:'지근', start:'', end:'', color:'#ef4444', kind:'work', special:'desigWork' }, // 휴무일에만
+    JH:  { label:'지정휴무', short:'지휴', start:'', end:'', color:'#0d9488', kind:'off',  special:'desigOff'  }, // 근무일에만
   },
   pattern: {
     cycle: ['D','D','S','S','G','G','OFF','OFF'],
@@ -51,20 +54,33 @@ function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
 function migrate(s){
   const base = clone(DEFAULT_STATE);
-  const merged = {
-    ...base, ...s,
-    shiftTypes: (s.shiftTypes && typeof s.shiftTypes === 'object') ? s.shiftTypes : base.shiftTypes,
-    shiftOrder: Array.isArray(s.shiftOrder) ? s.shiftOrder : base.shiftOrder,
-    pattern:    { ...base.pattern, ...(s.pattern || {}) },
-    overrides:  s.overrides || {},
-    memos:      s.memos || {},
-  };
-  // shiftOrder 에 정의되지 않은 key 제거, shiftTypes 에만 있는 key 보강
-  merged.shiftOrder = merged.shiftOrder.filter(k => merged.shiftTypes[k]);
-  if(!merged.shiftOrder.length){ merged.shiftTypes = base.shiftTypes; merged.shiftOrder = base.shiftOrder; }
-  if(!Array.isArray(merged.pattern.cycle)) merged.pattern.cycle = clone(DEFAULT_CYCLE);
-  if(!merged.pattern.startDate) merged.pattern.startDate = todayStr();
-  return merged;
+  const out = clone(base);
+  if(s && typeof s === 'object'){
+    if(s.shiftTypes && typeof s.shiftTypes === 'object'){
+      out.shiftTypes = { ...base.shiftTypes, ...s.shiftTypes }; // 저장값 우선 + 내장 종류 보강
+      for(const k in out.shiftTypes){
+        const b = base.shiftTypes[k];
+        if(!out.shiftTypes[k].kind) out.shiftTypes[k].kind = (b && b.kind) || 'work';
+        if(b && b.special) out.shiftTypes[k].special = b.special; // 내장 특수근무 규칙 유지
+      }
+    }
+    if(Array.isArray(s.shiftOrder) && s.shiftOrder.length){
+      const order = s.shiftOrder.filter(k => out.shiftTypes[k]);
+      for(const k of base.shiftOrder){ if(out.shiftTypes[k] && !order.includes(k)) order.push(k); }
+      out.shiftOrder = order;
+    }
+    if(s.pattern && typeof s.pattern === 'object'){
+      if(Array.isArray(s.pattern.cycle)) out.pattern.cycle = s.pattern.cycle;
+      if(s.pattern.startDate) out.pattern.startDate = s.pattern.startDate;
+    }
+    out.overrides = s.overrides || {};
+    out.memos = s.memos || {};
+  }
+  out.shiftOrder = out.shiftOrder.filter(k => out.shiftTypes[k]);
+  if(!out.shiftOrder.length){ out.shiftTypes = base.shiftTypes; out.shiftOrder = base.shiftOrder.slice(); }
+  if(!Array.isArray(out.pattern.cycle)) out.pattern.cycle = clone(DEFAULT_CYCLE);
+  if(!out.pattern.startDate) out.pattern.startDate = todayStr();
+  return out;
 }
 
 function loadState(){
@@ -102,8 +118,22 @@ function shiftFor(dateStr){
 function st(key){ return key ? state.shiftTypes[key] : null; }
 function isNextDay(t){ return !!(t && t.start && t.end && t.end <= t.start); } // 예: 22:00 → 06:00
 function timeText(t){
-  if(!t || !t.start) return '쉬는 날';
-  return `${t.start} ~ ${t.end}${isNextDay(t) ? ' (익일)' : ''}`;
+  if(!t) return '';
+  if(t.start) return `${t.start} ~ ${t.end}${isNextDay(t) ? ' (익일)' : ''}`;
+  return (t.kind === 'work') ? '근무' : '쉬는 날';
+}
+// 특수근무 배치 규칙: 지정휴무(지휴)는 '근무일'에만, 지정근무(지근)는 '휴무일'에만
+function patternKind(dateStr){
+  const t = state.shiftTypes[patternShiftFor(dateStr)];
+  return t ? (t.kind || 'work') : 'off';
+}
+function canPlace(key, dateStr){
+  const t = state.shiftTypes[key];
+  if(!t || !t.special) return true;          // 일반 근무는 제한 없음
+  const baseWork = patternKind(dateStr) === 'work';
+  if(t.special === 'desigOff')  return baseWork;   // 지휴: 근무일에만
+  if(t.special === 'desigWork') return !baseWork;  // 지근: 휴무일에만
+  return true;
 }
 function hexToTint(hex, alpha = 0.14){
   const h = (hex || '#000000').replace('#','');
@@ -187,10 +217,12 @@ function openDaySheet(dateStr){
   const current = shiftFor(dateStr);
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
-    return `<button class="opt ${key===current?'selected':''}" data-code="${key}" style="--c:${t.color}">
+    const allowed = canPlace(key, dateStr);
+    const note = allowed ? timeText(t) : (t.special === 'desigOff' ? '근무일에만' : '휴무일에만');
+    return `<button class="opt ${key===current?'selected':''} ${allowed?'':'opt-disabled'}" data-code="${key}" ${allowed?'':'disabled'} style="--c:${t.color}">
       <span class="opt-badge" style="background:${t.color}">${t.short || t.label}</span>
       <span class="opt-textwrap"><span class="opt-label">${t.label}</span>
-      <span class="opt-time">${t.start ? `${t.start}~${t.end}` : '쉬는 날'}</span></span>
+      <span class="opt-time">${note}</span></span>
     </button>`;
   }).join('');
   $('sheetMemo').value = state.memos[dateStr] || '';
@@ -206,6 +238,7 @@ function closeDaySheet(){
 }
 function setShift(key){
   if(!selectedDate) return;
+  if(!canPlace(key, selectedDate)) return;  // 못 넣는 자리 차단
   if(key === patternShiftFor(selectedDate)) delete state.overrides[selectedDate];
   else state.overrides[selectedDate] = key;
   saveState();
@@ -229,7 +262,7 @@ function renderSettings(){
         <input class="st-time" type="time" value="${t.start}" data-field="start" />
         <span class="st-sep">~</span>
         <input class="st-time" type="time" value="${t.end}" data-field="end" />
-        <span class="st-note">비우면 ‘쉬는 날’</span>
+        <label class="st-kind"><input type="checkbox" data-field="kindoff" ${t.kind==='off'?'checked':''}/> 휴무</label>
       </div>
     </div>`;
   }).join('') + `<button class="add-type-btn" id="btnAddType">＋ 근무 종류 추가</button>`;
@@ -343,14 +376,17 @@ function wire(){
     if(e.target.id === 'btnAddType') addShiftType();
     else if(e.target.dataset.del !== undefined) removeShiftType(e.target.dataset.del);
   });
-  $('setShiftTypes').addEventListener('input', (e)=>{
+  function onShiftTypeEdit(e){
     const card = e.target.closest('.st-card'); if(!card) return;
     const key = card.dataset.code, field = e.target.dataset.field;
     if(!field) return;
-    state.shiftTypes[key][field] = e.target.value;
+    if(field === 'kindoff') state.shiftTypes[key].kind = e.target.checked ? 'off' : 'work';
+    else state.shiftTypes[key][field] = e.target.value;
     saveState();
     renderAll(); renderPatternChips(); renderPatternAdd(); // 설정 화면은 다시 안 그림(입력 포커스 유지)
-  });
+  }
+  $('setShiftTypes').addEventListener('input', onShiftTypeEdit);
+  $('setShiftTypes').addEventListener('change', onShiftTypeEdit);
 
   // 패턴 칩(이동/삭제)
   $('patternChips').addEventListener('click', (e)=>{
