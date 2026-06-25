@@ -16,11 +16,20 @@
         <span class="brand-logo">🚒</span>
         <div class="brand-text">
           <h1>교대 캘린더</h1>
-          <p class="brand-sub">A조 기준 · 4조 3교대</p>
+          <p class="brand-sub">내 조 선택 · 4조 3교대</p>
         </div>
       </div>
       <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
     </header>
+
+    <!-- 내 조 선택 -->
+    <section class="group-switcher" aria-label="내 조 선택">
+      <div class="group-switch-head">
+        <span>내 조</span>
+        <b id="activeGroupLabel">A조</b>
+      </div>
+      <div class="group-tabs" id="groupTabs"></div>
+    </section>
 
     <!-- 오늘 근무 배너 -->
     <section class="today-banner" id="todayBanner"></section>
@@ -85,7 +94,7 @@
 
       <section class="set-section">
         <h3>반복 패턴</h3>
-        <p class="set-desc">한 주기(사이클)를 순서대로 만드세요. 이 패턴이 자동으로 반복 적용됩니다. 달력에서 특정 날을 탭해 따로 바꾸면 그 날만 수동 변경됩니다.</p>
+        <p class="set-desc">한 주기(사이클)를 순서대로 만드세요. 이 패턴이 조별로 자동 적용됩니다. 달력에서 특정 날을 탭해 따로 바꾸면 현재 선택한 조의 그 날만 수동 변경됩니다.</p>
         <div class="pattern-chips" id="patternChips"></div>
         <div class="pattern-add" id="patternAdd"></div>
         <div class="pattern-actions">

@@ -12,7 +12,6 @@ const BASE_DATE = '2026-06-25';
 const BASE_PATTERN_START = '2026-06-09'; // 2026-06-25 = A조 GY 4일차
 const GROUPS = ['A','B','C','D'];
 const GROUP_OFFSETS = { A:0, B:5, C:10, D:15 };
-const GROUP_SHIFT_ORDER = ['G','S','D','OFF'];
 
 /* ---------- 날짜 유틸 ---------- */
 function pad(n){ return String(n).padStart(2, '0'); }
@@ -49,7 +48,8 @@ function isHoliday(dateStr){ return !!HOLIDAYS[dateStr]; }
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
 const DEFAULT_STATE = {
-  version: 4,
+  version: 5,
+  activeGroup: 'A',
   shiftOrder: ['D','S','G','O','D2','G2','OFF','JG','JH'],
   shiftTypes: {
     D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b', kind:'work' },
@@ -68,7 +68,8 @@ const DEFAULT_STATE = {
     cycle: ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'],
     startDate: BASE_PATTERN_START,   // 이 날짜 = A조 cycle[0] (첫 D)
   },
-  overrides: {},  // { 'YYYY-MM-DD': shiftKey }
+  groupOverrides: { A:{}, B:{}, C:{}, D:{} }, // { A: { 'YYYY-MM-DD': shiftKey }, ... }
+  overrides: {},  // legacy: A조 수동 변경
   memos: {},      // { 'YYYY-MM-DD': '메모' }
 };
 const DEFAULT_CYCLE = ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'];
@@ -101,10 +102,29 @@ function migrate(s){
     if(savedVersion < 4 && out.pattern.startDate === BASE_DATE){
       out.pattern.startDate = BASE_PATTERN_START;
     }
-    out.overrides = s.overrides || {};
+    out.activeGroup = GROUPS.includes(s.activeGroup) ? s.activeGroup : base.activeGroup;
+    out.groupOverrides = clone(base.groupOverrides);
+    if(s.groupOverrides && typeof s.groupOverrides === 'object'){
+      for(const group of GROUPS){
+        if(s.groupOverrides[group] && typeof s.groupOverrides[group] === 'object'){
+          out.groupOverrides[group] = s.groupOverrides[group];
+        }
+      }
+    } else if(s.overrides && typeof s.overrides === 'object'){
+      out.groupOverrides.A = s.overrides;
+    }
+    out.overrides = out.groupOverrides.A;
     out.memos = s.memos || {};
   }
   out.version = base.version;
+  out.activeGroup = GROUPS.includes(out.activeGroup) ? out.activeGroup : base.activeGroup;
+  out.groupOverrides = out.groupOverrides || clone(base.groupOverrides);
+  for(const group of GROUPS){
+    if(!out.groupOverrides[group] || typeof out.groupOverrides[group] !== 'object'){
+      out.groupOverrides[group] = {};
+    }
+  }
+  out.overrides = out.groupOverrides.A;
   out.shiftOrder = out.shiftOrder.filter(k => out.shiftTypes[k]);
   if(!out.shiftOrder.length){ out.shiftTypes = base.shiftTypes; out.shiftOrder = base.shiftOrder.slice(); }
   if(!Array.isArray(out.pattern.cycle)) out.pattern.cycle = clone(DEFAULT_CYCLE);
@@ -123,7 +143,10 @@ function loadState(){
   }
 }
 function saveState(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  try{
+    state.overrides = groupOverrideMap('A');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
   catch(e){ console.warn('저장 실패', e); }
 }
 
@@ -136,12 +159,24 @@ function patternShiftFor(dateStr){
   const idx = cycleIndexFor(dateStr);
   return idx === null ? null : state.pattern.cycle[idx];
 }
-function isOverride(dateStr){ return Object.prototype.hasOwnProperty.call(state.overrides, dateStr); }
-function shiftFor(dateStr){
-  const key = isOverride(dateStr) ? state.overrides[dateStr] : patternShiftFor(dateStr);
+function st(key){ return key ? state.shiftTypes[key] : null; }
+function normalizeGroup(group){ return GROUPS.includes(group) ? group : 'A'; }
+function currentGroup(){ return normalizeGroup(state.activeGroup); }
+function groupOffset(group){ return GROUP_OFFSETS[normalizeGroup(group)] || 0; }
+function groupOverrideMap(group = currentGroup()){
+  const g = normalizeGroup(group);
+  if(!state.groupOverrides) state.groupOverrides = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupOverrides[g]) state.groupOverrides[g] = {};
+  return state.groupOverrides[g];
+}
+function isOverride(dateStr, group = currentGroup()){
+  return Object.prototype.hasOwnProperty.call(groupOverrideMap(group), dateStr);
+}
+function shiftFor(dateStr, group = currentGroup()){
+  const overrides = groupOverrideMap(group);
+  const key = isOverride(dateStr, group) ? overrides[dateStr] : groupShiftFor(dateStr, group);
   return state.shiftTypes[key] ? key : null;  // 삭제된 근무 key 면 null
 }
-function st(key){ return key ? state.shiftTypes[key] : null; }
 function mod(n, m){ return ((n % m) + m) % m; }
 function cycleIndexFor(dateStr, offset = 0){
   const cycle = state.pattern.cycle;
@@ -149,7 +184,7 @@ function cycleIndexFor(dateStr, offset = 0){
   return mod(dayDiff(state.pattern.startDate, dateStr) + offset, cycle.length);
 }
 function groupShiftFor(dateStr, group){
-  const idx = cycleIndexFor(dateStr, GROUP_OFFSETS[group] || 0);
+  const idx = cycleIndexFor(dateStr, groupOffset(group));
   return idx === null ? null : state.pattern.cycle[idx];
 }
 function runDayAtIndex(idx){
@@ -165,10 +200,12 @@ function runDayAtIndex(idx){
   return day;
 }
 function groupRunDayFor(dateStr, group){
-  return runDayAtIndex(cycleIndexFor(dateStr, GROUP_OFFSETS[group] || 0));
+  return runDayAtIndex(cycleIndexFor(dateStr, groupOffset(group)));
 }
-function groupForShift(dateStr, shiftKey){
-  return GROUPS.find(group => groupShiftFor(dateStr, group) === shiftKey) || null;
+function shiftDayText(dateStr, group){
+  if(isOverride(dateStr, group)) return '수동 변경';
+  const runDay = groupRunDayFor(dateStr, group);
+  return runDay ? `${runDay}일차` : '';
 }
 function isNextDay(t){ return !!(t && t.start && t.end && t.end <= t.start); } // 예: 22:00 → 06:00
 function timeText(t){
@@ -177,22 +214,22 @@ function timeText(t){
   return (t.kind === 'work') ? '근무' : '쉬는 날';
 }
 // 특수근무 배치 규칙: 지정휴무(지휴)는 '근무일'에만, 지정근무(지근)는 '휴무일'에만
-function patternKind(dateStr){
-  const t = state.shiftTypes[patternShiftFor(dateStr)];
+function patternKind(dateStr, group = currentGroup()){
+  const t = state.shiftTypes[groupShiftFor(dateStr, group)];
   return t ? (t.kind || 'work') : 'off';
 }
-function canPlace(key, dateStr){
+function canPlace(key, dateStr, group = currentGroup()){
   const t = state.shiftTypes[key];
   if(!t || !t.special) return true;          // 일반 근무는 제한 없음
-  const baseWork = patternKind(dateStr) === 'work';
+  const baseWork = patternKind(dateStr, group) === 'work';
   if(t.special === 'desigOff')  return baseWork;   // 지휴: 근무일에만
   if(t.special === 'desigWork') return !baseWork;  // 지근: 휴무일에만
   return true;
 }
 // 특근: 빨간날(공휴일)에 '근무'하면 자동 특근
-function isSpecialWork(dateStr){
+function isSpecialWork(dateStr, group = currentGroup()){
   if(!isHoliday(dateStr)) return false;
-  const t = state.shiftTypes[shiftFor(dateStr)];
+  const t = state.shiftTypes[shiftFor(dateStr, group)];
   return !!(t && t.kind === 'work');
 }
 function hexToTint(hex, alpha = 0.14){
@@ -212,15 +249,27 @@ function renderWeekdays(){
   ).join('');
 }
 
+function renderGroupSwitcher(){
+  const group = currentGroup();
+  const label = $('activeGroupLabel');
+  if(label) label.textContent = `${group}조`;
+  $('groupTabs').innerHTML = GROUPS.map(g =>
+    `<button class="group-tab${g===group?' active':''}" data-group="${g}" aria-pressed="${g===group}">
+      ${g}조
+    </button>`
+  ).join('');
+}
+
 function renderTodayBanner(){
   const el = $('todayBanner');
   const d = new Date();
   const wd = WEEK[d.getDay()];
   const today = todayStr();
-  const key = shiftFor(today);
+  const group = currentGroup();
+  const key = shiftFor(today, group);
   const t = st(key);
-  const runDay = groupRunDayFor(today, 'A');
-  const dateLabel = `오늘 ${d.getMonth()+1}월 ${d.getDate()}일 (${wd}) · A조 기준`;
+  const shiftDay = shiftDayText(today, group);
+  const dateLabel = `오늘 ${d.getMonth()+1}월 ${d.getDate()}일 (${wd}) · ${group}조 기준`;
   if(!t){
     el.style.setProperty('--accent', '#94a3b8');
     el.innerHTML = `<div class="tb-left"><div class="tb-date">${dateLabel}</div>
@@ -231,36 +280,38 @@ function renderTodayBanner(){
   el.innerHTML = `
     <div class="tb-left">
       <div class="tb-date">${dateLabel}</div>
-      <div class="tb-shift"><span class="tb-badge" style="background:${t.color}">A조 ${t.label}</span></div>
+      <div class="tb-shift"><span class="tb-badge" style="background:${t.color}">${group}조 ${t.label}</span></div>
     </div>
-    <div class="tb-time">${runDay ? `${runDay}일차 · ` : ''}${timeText(t)}</div>`;
+    <div class="tb-time">${shiftDay ? `${shiftDay} · ` : ''}${timeText(t)}</div>`;
 }
 
 function renderTeamBoard(){
   const el = $('teamBoard');
   if(!el) return;
   const today = todayStr();
-  const items = GROUP_SHIFT_ORDER.map(key=>{
-    const group = groupForShift(today, key);
+  const selected = currentGroup();
+  const items = GROUPS.map(group=>{
+    const key = shiftFor(today, group);
     const t = st(key);
-    if(!group || !t) return '';
-    const runDay = groupRunDayFor(today, group);
-    return `<div class="team-item" style="--c:${t.color}">
-      <span class="team-shift">${t.label}</span>
+    const accent = t ? t.color : '#94a3b8';
+    const shiftDay = shiftDayText(today, group);
+    return `<button class="team-item${group===selected?' active':''}" data-group="${group}" style="--c:${accent}">
       <strong>${group}조</strong>
-      <span class="team-day">${runDay ? `${runDay}일차` : ''}</span>
-    </div>`;
+      <span class="team-shift">${t ? t.label : '미설정'}</span>
+      <span class="team-day">${shiftDay}</span>
+    </button>`;
   }).join('');
   el.innerHTML = `
     <div class="team-head">
-      <span>오늘 조별 배치</span>
+      <span>A/B/C/D 오늘 배치</span>
       <b>${BASE_DATE} 기준</b>
     </div>
     <div class="team-grid">${items}</div>`;
 }
 
 function renderCalendar(){
-  $('monthTitle').textContent = `${view.year}년 ${view.month+1}월`;
+  const group = currentGroup();
+  $('monthTitle').textContent = `${view.year}년 ${view.month+1}월 · ${group}조`;
   const startDow = new Date(view.year, view.month, 1).getDay();
   const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
   const todayS = todayStr();
@@ -269,7 +320,7 @@ function renderCalendar(){
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = `${view.year}-${pad(view.month+1)}-${pad(d)}`;
     const dow = new Date(view.year, view.month, d).getDay();
-    const t = st(shiftFor(dateStr));
+    const t = st(shiftFor(dateStr, group));
     const tint = t ? hexToTint(t.color) : 'transparent';
     const badge = t
       ? `<span class="badge" style="background:${t.color}">${t.short || t.label}</span>`
@@ -278,8 +329,8 @@ function renderCalendar(){
     html += `<button class="cell ${dateStr===todayS?'today':''}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dnumCls}">${d}</span>
       ${badge}
-      ${isSpecialWork(dateStr) ? '<span class="tag-teuk">특근</span>' : ''}
-      ${isOverride(dateStr) ? '<span class="dot-ov"></span>' : ''}
+      ${isSpecialWork(dateStr, group) ? '<span class="tag-teuk">특근</span>' : ''}
+      ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
       ${state.memos[dateStr] ? '<span class="dot-memo"></span>' : ''}
     </button>`;
   }
@@ -296,18 +347,20 @@ function renderLegend(){
 }
 
 function renderSummary(){
+  const group = currentGroup();
   const dim = new Date(view.year, view.month+1, 0).getDate();
   let work=0, off=0, jg=0, jh=0, teuk=0;
   for(let d=1; d<=dim; d++){
     const ds = `${view.year}-${pad(view.month+1)}-${pad(d)}`;
-    const key = shiftFor(ds);
+    const key = shiftFor(ds, group);
     const t = state.shiftTypes[key];
     if(key === 'JG') jg++;
     if(key === 'JH') jh++;
     if(t && t.kind === 'work') work++; else off++;
-    if(isSpecialWork(ds)) teuk++;
+    if(isSpecialWork(ds, group)) teuk++;
   }
   $('summary').innerHTML =
+    `<span class="sm sm-group">${group}조</span>` +
     `<span class="sm sm-work">근무 <b>${work}</b></span>` +
     `<span class="sm sm-off">휴무 <b>${off}</b></span>` +
     `<span class="sm sm-teuk">특근 <b>${teuk}</b></span>` +
@@ -315,21 +368,22 @@ function renderSummary(){
     `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`;
 }
 
-function renderAll(){ renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderLegend(); }
+function renderAll(){ renderGroupSwitcher(); renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderLegend(); }
 
 /* ---------- 날짜 편집 시트 ---------- */
 function openDaySheet(dateStr){
   selectedDate = dateStr;
+  const group = currentGroup();
   const d = parseYmd(dateStr);
-  $('sheetDate').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
-  const hol = holidayName(dateStr), teuk = isSpecialWork(dateStr);
+  $('sheetDate').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WEEK[d.getDay()]}) · ${group}조`;
+  const hol = holidayName(dateStr), teuk = isSpecialWork(dateStr, group);
   const sh = $('sheetHoliday');
   if(hol || teuk){ sh.hidden = false; sh.innerHTML = `${hol ? '🔴 ' + hol : ''}${teuk ? ' <b>특근</b>' : ''}`; }
   else { sh.hidden = true; sh.innerHTML = ''; }
-  const current = shiftFor(dateStr);
+  const current = shiftFor(dateStr, group);
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
-    const allowed = canPlace(key, dateStr);
+    const allowed = canPlace(key, dateStr, group);
     const note = allowed ? timeText(t) : (t.special === 'desigOff' ? '근무일에만' : '휴무일에만');
     return `<button class="opt ${key===current?'selected':''} ${allowed?'':'opt-disabled'}" data-code="${key}" ${allowed?'':'disabled'} style="--c:${t.color}">
       <span class="opt-badge" style="background:${t.color}">${t.short || t.label}</span>
@@ -338,7 +392,7 @@ function openDaySheet(dateStr){
     </button>`;
   }).join('');
   $('sheetMemo').value = state.memos[dateStr] || '';
-  $('btnRevert').hidden = !isOverride(dateStr);
+  $('btnRevert').hidden = !isOverride(dateStr, group);
   $('dayBackdrop').hidden = false;
   $('daySheet').hidden = false;
 }
@@ -350,13 +404,16 @@ function closeDaySheet(){
 }
 function setShift(key){
   if(!selectedDate) return;
-  if(!canPlace(key, selectedDate)) return;  // 못 넣는 자리 차단
-  if(key === patternShiftFor(selectedDate)) delete state.overrides[selectedDate];
-  else state.overrides[selectedDate] = key;
+  const group = currentGroup();
+  if(!canPlace(key, selectedDate, group)) return;  // 못 넣는 자리 차단
+  const overrides = groupOverrideMap(group);
+  if(key === groupShiftFor(selectedDate, group)) delete overrides[selectedDate];
+  else overrides[selectedDate] = key;
   saveState();
   openDaySheet(selectedDate);
   renderCalendar();
   renderTodayBanner();
+  renderTeamBoard();
 }
 
 /* ---------- 설정: 근무 종류 ---------- */
@@ -397,7 +454,10 @@ function removeShiftType(key){
   delete state.shiftTypes[key];
   state.shiftOrder = state.shiftOrder.filter(k => k !== key);
   state.pattern.cycle = state.pattern.cycle.filter(k => k !== key);
-  for(const dt in state.overrides){ if(state.overrides[dt] === key) delete state.overrides[dt]; }
+  for(const group of GROUPS){
+    const overrides = groupOverrideMap(group);
+    for(const dt in overrides){ if(overrides[dt] === key) delete overrides[dt]; }
+  }
   saveState(); renderSettings(); renderAll();
 }
 
@@ -448,8 +508,27 @@ function importData(file){
   reader.readAsText(file);
 }
 
+function selectGroup(group){
+  const next = normalizeGroup(group);
+  if(state.activeGroup === next) return;
+  state.activeGroup = next;
+  saveState();
+  renderAll();
+  if(selectedDate) openDaySheet(selectedDate);
+}
+
 /* ---------- 이벤트 연결 ---------- */
 function wire(){
+  // 내 조 선택
+  $('groupTabs').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-group]');
+    if(btn) selectGroup(btn.dataset.group);
+  });
+  $('teamBoard').addEventListener('click', (e)=>{
+    const card = e.target.closest('[data-group]');
+    if(card) selectGroup(card.dataset.group);
+  });
+
   // 월 이동
   $('btnPrev').onclick = () => { if(--view.month < 0){ view.month=11; view.year--; } renderCalendar(); };
   $('btnNext').onclick = () => { if(++view.month > 11){ view.month=0; view.year++; } renderCalendar(); };
@@ -466,7 +545,10 @@ function wire(){
   $('dayBackdrop').onclick = closeDaySheet;
   $('btnCloseSheet').onclick = closeDaySheet;
   $('btnRevert').onclick = () => {
-    if(selectedDate){ delete state.overrides[selectedDate]; saveState(); openDaySheet(selectedDate); renderCalendar(); }
+    if(selectedDate){
+      delete groupOverrideMap(currentGroup())[selectedDate];
+      saveState(); openDaySheet(selectedDate); renderCalendar(); renderTodayBanner(); renderTeamBoard();
+    }
   };
   $('sheetOptions').addEventListener('click', (e)=>{
     const opt = e.target.closest('.opt');

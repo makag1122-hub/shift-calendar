@@ -53,6 +53,41 @@ body{
 .icon-btn:active{ transform: scale(.94); }
 .icon-btn.nav{ font-size: 24px; }
 
+/* 내 조 선택 */
+.group-switcher{
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 10px;
+  margin: 0 0 10px;
+}
+.group-switch-head{
+  display:flex; align-items:center; justify-content:space-between;
+  gap: 10px; margin-bottom: 8px;
+  font-size: 12.5px; color: var(--ink-soft); font-weight:700;
+}
+.group-switch-head b{ color: var(--brand); font-size: 13px; }
+.group-tabs{ display:grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
+.group-tab{
+  border: 1px solid var(--line);
+  background: #f8f9fb;
+  color: var(--ink);
+  border-radius: 10px;
+  min-height: 38px;
+  font-size: 13px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+}
+.group-tab.active{
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(79,70,229,.22);
+}
+.group-tab:active{ transform: scale(.96); }
+
 /* 오늘 배너 */
 .today-banner{
   --accent: var(--brand);
@@ -88,12 +123,17 @@ body{
 .team-item{
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--c) 30%, var(--line));
+  font-family: inherit;
+  cursor: pointer;
   background: color-mix(in srgb, var(--c) 10%, white);
   border-left: 4px solid var(--c);
   border-radius: 10px;
   padding: 8px 7px;
   display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+  text-align: left;
 }
+.team-item.active{ outline: 2px solid var(--brand); outline-offset: -2px; }
+.team-item:active{ transform: scale(.97); }
 .team-shift{ font-size: 11px; color: var(--ink-soft); font-weight:700; line-height:1.1; }
 .team-item strong{ font-size: 15px; color: var(--ink); line-height:1.15; }
 .team-day{ font-size: 10.5px; color: var(--ink-soft); font-weight:700; line-height:1.1; }
@@ -157,6 +197,7 @@ body{
 .summary{ display:flex; flex-wrap:wrap; gap:7px; justify-content:center; padding: 14px 4px 0; }
 .sm{ font-size:12px; color:var(--ink-soft); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 11px; box-shadow:var(--shadow-sm); }
 .sm b{ color:var(--ink); font-weight:800; margin-left:1px; }
+.sm-group{ color:#fff; background:var(--brand); border-color:var(--brand); font-weight:800; }
 .sm-teuk{ border-color:#fbd5d0; } .sm-teuk b{ color:#dc2626; }
 .sm-jg b{ color:#ef4444; }
 .sm-jh b{ color:#0d9488; }
