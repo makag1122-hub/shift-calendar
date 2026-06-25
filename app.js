@@ -59,13 +59,14 @@ const DEFAULT_STATE = {
     JH:  { label:'지정휴무', short:'지휴', start:'', end:'', color:'#0d9488', kind:'off',  special:'desigOff'  }, // 근무일에만
   },
   pattern: {
-    cycle: ['D','D','S','S','G','G','OFF','OFF'],
-    startDate: todayStr(),   // 이 날짜 = cycle[0]
+    // 20일 주기: D×5 · 휴×2 · S×5 · 휴×1 · G×5 · 휴×2
+    cycle: ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'],
+    startDate: todayStr(),   // 이 날짜 = cycle[0] (첫 D) — 실제 시작일로 맞춰야 함
   },
   overrides: {},  // { 'YYYY-MM-DD': shiftKey }
   memos: {},      // { 'YYYY-MM-DD': '메모' }
 };
-const DEFAULT_CYCLE = ['D','D','S','S','G','G','OFF','OFF'];
+const DEFAULT_CYCLE = ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'];
 
 /* ---------- 상태 로드/저장 ---------- */
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
