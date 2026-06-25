@@ -24,6 +24,7 @@ function dayDiff(aStr, bStr){
   const ub = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
   return Math.round((ub - ua) / 86400000);
 }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 const WEEK = ['일','월','화','수','목','금','토'];
 
@@ -153,6 +154,8 @@ function saveState(){
 let state = loadState();
 let view = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
 let selectedDate = null;
+let sheetRange = null;   // 범위 시트 모드 { start, end }
+let rangeAnchor = null;  // 길게 눌러 시작한 날짜
 
 /* ---------- 근무 계산 ---------- */
 function patternShiftFor(dateStr){
@@ -315,6 +318,7 @@ function renderCalendar(){
   const startDow = new Date(view.year, view.month, 1).getDay();
   const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
   const todayS = todayStr();
+  const rangeSet = sheetRange ? new Set(rangeDays(sheetRange.start, sheetRange.end)) : null;
   let html = '';
   for(let i=0; i<startDow; i++) html += `<div class="cell empty"></div>`;
   for(let d=1; d<=daysInMonth; d++){
@@ -326,12 +330,14 @@ function renderCalendar(){
       ? `<span class="badge" style="background:${t.color}">${t.short || t.label}</span>`
       : `<span class="badge none">-</span>`;
     const dnumCls = holidayName(dateStr) ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
-    html += `<button class="cell ${dateStr===todayS?'today':''}" data-date="${dateStr}" style="--tint:${tint}">
+    const memo = state.memos[dateStr];
+    const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
+    html += `<button class="cell ${dateStr===todayS?'today':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dnumCls}">${d}</span>
       ${badge}
       ${isSpecialWork(dateStr, group) ? '<span class="tag-teuk">특근</span>' : ''}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
-      ${state.memos[dateStr] ? '<span class="dot-memo"></span>' : ''}
+      ${memo ? `<span class="cell-memo">${escapeHtml(memo)}</span>` : ''}
     </button>`;
   }
   $('grid').innerHTML = html;
@@ -370,9 +376,52 @@ function renderSummary(){
 
 function renderAll(){ renderGroupSwitcher(); renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderLegend(); }
 
+/* ---------- 범위(여러 날) 선택 ---------- */
+function rangeDays(a, b){
+  let s = a, e = b;
+  if(dayDiff(a, b) < 0){ s = b; e = a; }
+  const out = [], n = dayDiff(s, e), start = parseYmd(s);
+  for(let i=0; i<=n; i++){ const d = new Date(start); d.setDate(d.getDate()+i); out.push(ymd(d)); }
+  return out;
+}
+function startRange(dateStr){
+  rangeAnchor = dateStr;
+  const d = parseYmd(dateStr);
+  $('rangeBannerText').textContent = `시작 ${d.getMonth()+1}/${d.getDate()} — 끝 날짜를 탭하세요`;
+  $('rangeBanner').hidden = false;
+  renderCalendar();
+}
+function hideRangeBanner(){ rangeAnchor = null; $('rangeBanner').hidden = true; }
+
+function openRangeSheet(a, b){
+  selectedDate = null;
+  sheetRange = { start: a, end: b };
+  const group = currentGroup();
+  const days = rangeDays(a, b);
+  const s = parseYmd(days[0]), e = parseYmd(days[days.length-1]);
+  $('sheetDate').textContent = `${s.getMonth()+1}월 ${s.getDate()}일 ~ ${e.getMonth()+1}월 ${e.getDate()}일 · ${days.length}일 · ${group}조`;
+  $('sheetHoliday').hidden = true;
+  document.querySelector('.sheet-hint').innerHTML = `선택한 <b>${days.length}일</b>에 한꺼번에 적용돼요. (지근/지휴는 가능한 날에만)`;
+  $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
+    const t = state.shiftTypes[key];
+    const anyValid = days.some(ds => canPlace(key, ds, group));
+    return `<button class="opt ${anyValid?'':'opt-disabled'}" data-code="${key}" ${anyValid?'':'disabled'} style="--c:${t.color}">
+      <span class="opt-badge" style="background:${t.color}">${t.short || t.label}</span>
+      <span class="opt-textwrap"><span class="opt-label">${t.label}</span>
+      <span class="opt-time">${timeText(t)}</span></span>
+    </button>`;
+  }).join('');
+  $('sheetMemo').value = '';
+  $('btnRevert').textContent = '↺ 이 기간 수동변경·메모 지우기';
+  $('btnRevert').hidden = false;
+  $('dayBackdrop').hidden = false;
+  $('daySheet').hidden = false;
+}
+
 /* ---------- 날짜 편집 시트 ---------- */
 function openDaySheet(dateStr){
   selectedDate = dateStr;
+  sheetRange = null;
   const group = currentGroup();
   const d = parseYmd(dateStr);
   $('sheetDate').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WEEK[d.getDay()]}) · ${group}조`;
@@ -380,6 +429,7 @@ function openDaySheet(dateStr){
   const sh = $('sheetHoliday');
   if(hol || teuk){ sh.hidden = false; sh.innerHTML = `${hol ? '🔴 ' + hol : ''}${teuk ? ' <b>특근</b>' : ''}`; }
   else { sh.hidden = true; sh.innerHTML = ''; }
+  document.querySelector('.sheet-hint').innerHTML = '이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시)';
   const current = shiftFor(dateStr, group);
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
@@ -392,6 +442,7 @@ function openDaySheet(dateStr){
     </button>`;
   }).join('');
   $('sheetMemo').value = state.memos[dateStr] || '';
+  $('btnRevert').textContent = '↺ 패턴 값으로 되돌리기';
   $('btnRevert').hidden = !isOverride(dateStr, group);
   $('dayBackdrop').hidden = false;
   $('daySheet').hidden = false;
@@ -400,11 +451,24 @@ function closeDaySheet(){
   $('dayBackdrop').hidden = true;
   $('daySheet').hidden = true;
   selectedDate = null;
+  sheetRange = null;
   renderAll();
 }
 function setShift(key){
-  if(!selectedDate) return;
   const group = currentGroup();
+  if(sheetRange){  // 범위 모드: 기간 내 모든 날에 적용(가능한 날만)
+    const overrides = groupOverrideMap(group);
+    rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{
+      if(!canPlace(key, ds, group)) return;
+      if(key === groupShiftFor(ds, group)) delete overrides[ds];
+      else overrides[ds] = key;
+    });
+    saveState();
+    renderCalendar(); renderTodayBanner(); renderTeamBoard();
+    openRangeSheet(sheetRange.start, sheetRange.end);
+    return;
+  }
+  if(!selectedDate) return;
   if(!canPlace(key, selectedDate, group)) return;  // 못 넣는 자리 차단
   const overrides = groupOverrideMap(group);
   if(key === groupShiftFor(selectedDate, group)) delete overrides[selectedDate];
@@ -534,19 +598,52 @@ function wire(){
   $('btnNext').onclick = () => { if(++view.month > 11){ view.month=0; view.year++; } renderCalendar(); };
   $('btnToday').onclick = () => { const n=new Date(); view={year:n.getFullYear(), month:n.getMonth()}; renderCalendar(); };
 
-  // 날짜 셀 클릭
-  $('grid').addEventListener('click', (e)=>{
+  // 날짜 셀: 짧게 탭 = 하루 편집 / 길게 누르기 = 기간 선택 시작
+  const grid = $('grid');
+  let lpTimer = null, lpFired = false, lpXY = null;
+  const cancelLp = () => { if(lpTimer){ clearTimeout(lpTimer); lpTimer = null; } };
+  grid.addEventListener('pointerdown', (e)=>{
     const cell = e.target.closest('.cell');
     if(!cell || cell.classList.contains('empty')) return;
+    lpFired = false; lpXY = { x:e.clientX, y:e.clientY };
+    const date = cell.dataset.date;
+    lpTimer = setTimeout(()=>{ lpTimer = null; lpFired = true; startRange(date); }, 480);
+  });
+  grid.addEventListener('pointermove', (e)=>{
+    if(lpTimer && lpXY && (Math.abs(e.clientX-lpXY.x)>10 || Math.abs(e.clientY-lpXY.y)>10)) cancelLp();
+  });
+  grid.addEventListener('pointerup', cancelLp);
+  grid.addEventListener('pointercancel', cancelLp);
+  grid.addEventListener('pointerleave', cancelLp);
+  grid.addEventListener('click', (e)=>{
+    const cell = e.target.closest('.cell');
+    if(!cell || cell.classList.contains('empty')) return;
+    if(lpFired){ lpFired = false; return; }   // 길게 누른 직후 발생하는 click 무시
+    if(rangeAnchor){                          // 두 번째 탭 = 기간 끝
+      const start = rangeAnchor, end = cell.dataset.date;
+      hideRangeBanner();
+      openRangeSheet(start, end);
+      renderCalendar();
+      return;
+    }
     openDaySheet(cell.dataset.date);
   });
+  $('rangeCancel').onclick = () => { hideRangeBanner(); renderCalendar(); };
 
   // 시트
   $('dayBackdrop').onclick = closeDaySheet;
   $('btnCloseSheet').onclick = closeDaySheet;
   $('btnRevert').onclick = () => {
+    const group = currentGroup();
+    if(sheetRange){
+      const ov = groupOverrideMap(group);
+      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ delete ov[ds]; delete state.memos[ds]; });
+      saveState(); renderCalendar(); renderTodayBanner(); renderTeamBoard();
+      openRangeSheet(sheetRange.start, sheetRange.end);
+      return;
+    }
     if(selectedDate){
-      delete groupOverrideMap(currentGroup())[selectedDate];
+      delete groupOverrideMap(group)[selectedDate];
       saveState(); openDaySheet(selectedDate); renderCalendar(); renderTodayBanner(); renderTeamBoard();
     }
   };
@@ -555,10 +652,15 @@ function wire(){
     if(opt) setShift(opt.dataset.code);
   });
   $('sheetMemo').addEventListener('input', (e)=>{
-    if(!selectedDate) return;
     const v = e.target.value.trim();
+    if(sheetRange){
+      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ if(v) state.memos[ds]=v; else delete state.memos[ds]; });
+      saveState(); renderCalendar();
+      return;
+    }
+    if(!selectedDate) return;
     if(v) state.memos[selectedDate] = v; else delete state.memos[selectedDate];
-    saveState();
+    saveState(); renderCalendar();
   });
 
   // 설정 열기/닫기

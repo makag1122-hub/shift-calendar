@@ -6,7 +6,7 @@
   <title>교대 캘린더</title>
   <meta name="theme-color" content="#4f46e5" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20260626" />
+  <link rel="stylesheet" href="style.css?v=20260627" />
 </head>
 <body>
   <div class="app">
@@ -44,10 +44,17 @@
       <button class="icon-btn nav" id="btnNext" aria-label="다음 달">›</button>
     </section>
 
+    <!-- 기간 선택 안내 -->
+    <div class="range-banner" id="rangeBanner" hidden>
+      <span id="rangeBannerText"></span>
+      <button id="rangeCancel">취소</button>
+    </div>
+
     <!-- 캘린더 -->
     <main class="calendar">
       <div class="weekdays" id="weekdays"></div>
       <div class="grid" id="grid"></div>
+      <p class="cal-hint">💡 날짜를 <b>길게 누르면</b> 여러 날을 한꺼번에 선택할 수 있어요</p>
     </main>
 
     <!-- 월 요약 -->
@@ -124,6 +131,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260626"></script>
+  <script src="app.js?v=20260627"></script>
 </body>
 </html>
