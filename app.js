@@ -8,6 +8,11 @@
    ============================================================ */
 
 const STORAGE_KEY = 'shiftcal.v2';
+const BASE_DATE = '2026-06-25';
+const BASE_PATTERN_START = '2026-06-09'; // 2026-06-25 = A조 GY 4일차
+const GROUPS = ['A','B','C','D'];
+const GROUP_OFFSETS = { A:0, B:5, C:10, D:15 };
+const GROUP_SHIFT_ORDER = ['G','S','D','OFF'];
 
 /* ---------- 날짜 유틸 ---------- */
 function pad(n){ return String(n).padStart(2, '0'); }
@@ -44,7 +49,7 @@ function isHoliday(dateStr){ return !!HOLIDAYS[dateStr]; }
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
 const DEFAULT_STATE = {
-  version: 3,
+  version: 4,
   shiftOrder: ['D','S','G','O','D2','G2','OFF','JG','JH'],
   shiftTypes: {
     D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b', kind:'work' },
@@ -61,7 +66,7 @@ const DEFAULT_STATE = {
   pattern: {
     // 20일 주기: D×5 · 휴×2 · S×5 · 휴×1 · G×5 · 휴×2
     cycle: ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'],
-    startDate: todayStr(),   // 이 날짜 = cycle[0] (첫 D) — 실제 시작일로 맞춰야 함
+    startDate: BASE_PATTERN_START,   // 이 날짜 = A조 cycle[0] (첫 D)
   },
   overrides: {},  // { 'YYYY-MM-DD': shiftKey }
   memos: {},      // { 'YYYY-MM-DD': '메모' }
@@ -75,6 +80,7 @@ function migrate(s){
   const base = clone(DEFAULT_STATE);
   const out = clone(base);
   if(s && typeof s === 'object'){
+    const savedVersion = Number(s.version) || 0;
     if(s.shiftTypes && typeof s.shiftTypes === 'object'){
       out.shiftTypes = { ...base.shiftTypes, ...s.shiftTypes }; // 저장값 우선 + 내장 종류 보강
       for(const k in out.shiftTypes){
@@ -92,9 +98,13 @@ function migrate(s){
       if(Array.isArray(s.pattern.cycle)) out.pattern.cycle = s.pattern.cycle;
       if(s.pattern.startDate) out.pattern.startDate = s.pattern.startDate;
     }
+    if(savedVersion < 4 && out.pattern.startDate === BASE_DATE){
+      out.pattern.startDate = BASE_PATTERN_START;
+    }
     out.overrides = s.overrides || {};
     out.memos = s.memos || {};
   }
+  out.version = base.version;
   out.shiftOrder = out.shiftOrder.filter(k => out.shiftTypes[k]);
   if(!out.shiftOrder.length){ out.shiftTypes = base.shiftTypes; out.shiftOrder = base.shiftOrder.slice(); }
   if(!Array.isArray(out.pattern.cycle)) out.pattern.cycle = clone(DEFAULT_CYCLE);
@@ -123,11 +133,8 @@ let selectedDate = null;
 
 /* ---------- 근무 계산 ---------- */
 function patternShiftFor(dateStr){
-  const cycle = state.pattern.cycle;
-  if(!cycle || !cycle.length) return null;
-  let idx = dayDiff(state.pattern.startDate, dateStr) % cycle.length;
-  if(idx < 0) idx += cycle.length;
-  return cycle[idx];
+  const idx = cycleIndexFor(dateStr);
+  return idx === null ? null : state.pattern.cycle[idx];
 }
 function isOverride(dateStr){ return Object.prototype.hasOwnProperty.call(state.overrides, dateStr); }
 function shiftFor(dateStr){
@@ -135,6 +142,34 @@ function shiftFor(dateStr){
   return state.shiftTypes[key] ? key : null;  // 삭제된 근무 key 면 null
 }
 function st(key){ return key ? state.shiftTypes[key] : null; }
+function mod(n, m){ return ((n % m) + m) % m; }
+function cycleIndexFor(dateStr, offset = 0){
+  const cycle = state.pattern.cycle;
+  if(!cycle || !cycle.length) return null;
+  return mod(dayDiff(state.pattern.startDate, dateStr) + offset, cycle.length);
+}
+function groupShiftFor(dateStr, group){
+  const idx = cycleIndexFor(dateStr, GROUP_OFFSETS[group] || 0);
+  return idx === null ? null : state.pattern.cycle[idx];
+}
+function runDayAtIndex(idx){
+  const cycle = state.pattern.cycle;
+  if(idx === null || !cycle || !cycle.length) return null;
+  const key = cycle[idx];
+  let day = 1;
+  for(let step = 1; step < cycle.length; step++){
+    const prev = idx - step;
+    if(prev < 0 || cycle[prev] !== key) break;
+    day++;
+  }
+  return day;
+}
+function groupRunDayFor(dateStr, group){
+  return runDayAtIndex(cycleIndexFor(dateStr, GROUP_OFFSETS[group] || 0));
+}
+function groupForShift(dateStr, shiftKey){
+  return GROUPS.find(group => groupShiftFor(dateStr, group) === shiftKey) || null;
+}
 function isNextDay(t){ return !!(t && t.start && t.end && t.end <= t.start); } // 예: 22:00 → 06:00
 function timeText(t){
   if(!t) return '';
@@ -181,9 +216,11 @@ function renderTodayBanner(){
   const el = $('todayBanner');
   const d = new Date();
   const wd = WEEK[d.getDay()];
-  const key = shiftFor(todayStr());
+  const today = todayStr();
+  const key = shiftFor(today);
   const t = st(key);
-  const dateLabel = `오늘 ${d.getMonth()+1}월 ${d.getDate()}일 (${wd})`;
+  const runDay = groupRunDayFor(today, 'A');
+  const dateLabel = `오늘 ${d.getMonth()+1}월 ${d.getDate()}일 (${wd}) · A조 기준`;
   if(!t){
     el.style.setProperty('--accent', '#94a3b8');
     el.innerHTML = `<div class="tb-left"><div class="tb-date">${dateLabel}</div>
@@ -194,9 +231,32 @@ function renderTodayBanner(){
   el.innerHTML = `
     <div class="tb-left">
       <div class="tb-date">${dateLabel}</div>
-      <div class="tb-shift"><span class="tb-badge" style="background:${t.color}">${t.label}</span></div>
+      <div class="tb-shift"><span class="tb-badge" style="background:${t.color}">A조 ${t.label}</span></div>
     </div>
-    <div class="tb-time">${timeText(t)}</div>`;
+    <div class="tb-time">${runDay ? `${runDay}일차 · ` : ''}${timeText(t)}</div>`;
+}
+
+function renderTeamBoard(){
+  const el = $('teamBoard');
+  if(!el) return;
+  const today = todayStr();
+  const items = GROUP_SHIFT_ORDER.map(key=>{
+    const group = groupForShift(today, key);
+    const t = st(key);
+    if(!group || !t) return '';
+    const runDay = groupRunDayFor(today, group);
+    return `<div class="team-item" style="--c:${t.color}">
+      <span class="team-shift">${t.label}</span>
+      <strong>${group}조</strong>
+      <span class="team-day">${runDay ? `${runDay}일차` : ''}</span>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="team-head">
+      <span>오늘 조별 배치</span>
+      <b>${BASE_DATE} 기준</b>
+    </div>
+    <div class="team-grid">${items}</div>`;
 }
 
 function renderCalendar(){
@@ -255,7 +315,7 @@ function renderSummary(){
     `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`;
 }
 
-function renderAll(){ renderTodayBanner(); renderCalendar(); renderLegend(); }
+function renderAll(){ renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderLegend(); }
 
 /* ---------- 날짜 편집 시트 ---------- */
 function openDaySheet(dateStr){

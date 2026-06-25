@@ -16,7 +16,7 @@
         <span class="brand-logo">🚒</span>
         <div class="brand-text">
           <h1>교대 캘린더</h1>
-          <p class="brand-sub">4조 3교대 · 변형근무</p>
+          <p class="brand-sub">A조 기준 · 4조 3교대</p>
         </div>
       </div>
       <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
@@ -24,6 +24,9 @@
 
     <!-- 오늘 근무 배너 -->
     <section class="today-banner" id="todayBanner"></section>
+
+    <!-- 오늘 조별 배치 -->
+    <section class="team-board" id="teamBoard"></section>
 
     <!-- 월 이동 -->
     <section class="month-nav">
@@ -93,7 +96,7 @@
 
       <section class="set-section">
         <h3>패턴 시작일</h3>
-        <p class="set-desc">위 패턴의 <b>첫 번째 근무</b>가 적용되는 기준 날짜예요. 이 날짜를 기준으로 앞뒤가 자동 계산됩니다.</p>
+        <p class="set-desc">A조의 <b>DAY 1일차</b>가 적용되는 기준 날짜예요. 기본값은 2026년 6월 25일이 A조 GY 4일차가 되도록 맞춰져 있습니다.</p>
         <input class="date-input" id="startDate" type="date" />
       </section>
 
