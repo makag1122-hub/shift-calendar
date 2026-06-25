@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>교대 캘린더</title>
+  <meta name="theme-color" content="#4f46e5" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 상단 헤더 -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-logo">🚒</span>
+        <div class="brand-text">
+          <h1>교대 캘린더</h1>
+          <p class="brand-sub">4조 3교대 · 변형근무</p>
+        </div>
+      </div>
+      <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
+    </header>
+
+    <!-- 오늘 근무 배너 -->
+    <section class="today-banner" id="todayBanner"></section>
+
+    <!-- 월 이동 -->
+    <section class="month-nav">
+      <button class="icon-btn nav" id="btnPrev" aria-label="이전 달">‹</button>
+      <button class="month-title" id="monthTitle">2026년 6월</button>
+      <button class="icon-btn nav" id="btnNext" aria-label="다음 달">›</button>
+    </section>
+
+    <!-- 캘린더 -->
+    <main class="calendar">
+      <div class="weekdays" id="weekdays"></div>
+      <div class="grid" id="grid"></div>
+    </main>
+
+    <!-- 범례 -->
+    <section class="legend" id="legend"></section>
+
+    <footer class="app-footer">
+      <button class="btn-soft" id="btnToday">오늘로 이동</button>
+    </footer>
+  </div>
+
+  <!-- 날짜 편집 시트 -->
+  <div class="backdrop" id="dayBackdrop" hidden></div>
+  <div class="sheet" id="daySheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2 id="sheetDate">날짜</h2>
+      <button class="icon-btn" id="btnCloseSheet" aria-label="닫기">✕</button>
+    </div>
+    <p class="sheet-hint">이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시됩니다)</p>
+    <div class="options" id="sheetOptions"></div>
+    <button class="btn-revert" id="btnRevert" hidden>↺ 패턴 값으로 되돌리기</button>
+    <label class="memo-label" for="sheetMemo">메모</label>
+    <input class="memo-input" id="sheetMemo" type="text" placeholder="예: 교육, 비번, 연차…" maxlength="40" />
+  </div>
+
+  <!-- 설정 화면 -->
+  <div class="modal" id="settingsModal" hidden role="dialog" aria-modal="true">
+    <header class="modal-head">
+      <button class="icon-btn" id="btnCloseSettings" aria-label="닫기">‹</button>
+      <h2>설정</h2>
+      <span style="width:38px"></span>
+    </header>
+    <div class="modal-body">
+
+      <section class="set-section">
+        <h3>근무 종류 · 시간 · 색상</h3>
+        <p class="set-desc">근무명, 시작·종료 시간, 색을 본인 일정에 맞게 바꾸세요.</p>
+        <div class="st-list" id="setShiftTypes"></div>
+      </section>
+
+      <section class="set-section">
+        <h3>반복 패턴</h3>
+        <p class="set-desc">한 주기(사이클)를 순서대로 만드세요. 이 패턴이 자동으로 반복 적용됩니다. 달력에서 특정 날을 탭해 따로 바꾸면 그 날만 수동 변경됩니다.</p>
+        <div class="pattern-chips" id="patternChips"></div>
+        <div class="pattern-add" id="patternAdd"></div>
+        <button class="btn-text-danger" id="btnClearPattern">패턴 모두 비우기</button>
+      </section>
+
+      <section class="set-section">
+        <h3>패턴 시작일</h3>
+        <p class="set-desc">위 패턴의 <b>첫 번째 근무</b>가 적용되는 기준 날짜예요. 이 날짜를 기준으로 앞뒤가 자동 계산됩니다.</p>
+        <input class="date-input" id="startDate" type="date" />
+      </section>
+
+      <section class="set-section">
+        <h3>데이터</h3>
+        <p class="set-desc">데이터는 이 브라우저에 저장됩니다. 백업하거나 다른 기기로 옮길 때 사용하세요.</p>
+        <div class="data-btns">
+          <button class="btn-soft" id="btnExport">⬇ 백업 내보내기</button>
+          <button class="btn-soft" id="btnImport">⬆ 불러오기</button>
+          <button class="btn-text-danger" id="btnReset">전체 초기화</button>
+        </div>
+        <input id="importFile" type="file" accept="application/json" hidden />
+      </section>
+
+      <p class="set-foot">교대 캘린더 v1 · 만든이 🤝 Claude</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

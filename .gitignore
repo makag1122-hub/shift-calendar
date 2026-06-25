@@ -1,0 +1,6 @@
+# 로컬 미리보기 설정 (배포에 불필요)
+.claude/
+
+# OS 부산물
+Thumbs.db
+.DS_Store
