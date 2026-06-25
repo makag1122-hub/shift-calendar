@@ -23,6 +23,24 @@ function dayDiff(aStr, bStr){
 
 const WEEK = ['일','월','화','수','목','금','토'];
 
+/* ---------- 공휴일(빨간날) ----------
+   출처: publicholidays.co.kr / gyesan.co.kr (2026년 법정공휴일 19일, 제헌절 제외) */
+const HOLIDAYS = {
+  '2026-01-01':'신정',
+  '2026-02-16':'설날','2026-02-17':'설날','2026-02-18':'설날',
+  '2026-03-01':'삼일절','2026-03-02':'삼일절 대체',
+  '2026-05-05':'어린이날',
+  '2026-05-24':'부처님오신날','2026-05-25':'부처님오신날 대체',
+  '2026-06-06':'현충일',
+  '2026-08-15':'광복절','2026-08-17':'광복절 대체',
+  '2026-09-24':'추석','2026-09-25':'추석','2026-09-26':'추석',
+  '2026-10-03':'개천절','2026-10-05':'개천절 대체',
+  '2026-10-09':'한글날',
+  '2026-12-25':'크리스마스',
+};
+function holidayName(dateStr){ return HOLIDAYS[dateStr] || null; }
+function isHoliday(dateStr){ return !!HOLIDAYS[dateStr]; }
+
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
 const DEFAULT_STATE = {
@@ -135,6 +153,12 @@ function canPlace(key, dateStr){
   if(t.special === 'desigWork') return !baseWork;  // 지근: 휴무일에만
   return true;
 }
+// 특근: 빨간날(공휴일)에 '근무'하면 자동 특근
+function isSpecialWork(dateStr){
+  if(!isHoliday(dateStr)) return false;
+  const t = state.shiftTypes[shiftFor(dateStr)];
+  return !!(t && t.kind === 'work');
+}
 function hexToTint(hex, alpha = 0.14){
   const h = (hex || '#000000').replace('#','');
   const r = parseInt(h.substring(0,2),16) || 0;
@@ -189,14 +213,17 @@ function renderCalendar(){
     const badge = t
       ? `<span class="badge" style="background:${t.color}">${t.short || t.label}</span>`
       : `<span class="badge none">-</span>`;
+    const dnumCls = holidayName(dateStr) ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
     html += `<button class="cell ${dateStr===todayS?'today':''}" data-date="${dateStr}" style="--tint:${tint}">
-      <span class="dnum ${dow===0?'sun':''} ${dow===6?'sat':''}">${d}</span>
+      <span class="dnum ${dnumCls}">${d}</span>
       ${badge}
+      ${isSpecialWork(dateStr) ? '<span class="tag-teuk">특근</span>' : ''}
       ${isOverride(dateStr) ? '<span class="dot-ov"></span>' : ''}
       ${state.memos[dateStr] ? '<span class="dot-memo"></span>' : ''}
     </button>`;
   }
   $('grid').innerHTML = html;
+  renderSummary();
 }
 
 function renderLegend(){
@@ -207,6 +234,26 @@ function renderLegend(){
   }).join('');
 }
 
+function renderSummary(){
+  const dim = new Date(view.year, view.month+1, 0).getDate();
+  let work=0, off=0, jg=0, jh=0, teuk=0;
+  for(let d=1; d<=dim; d++){
+    const ds = `${view.year}-${pad(view.month+1)}-${pad(d)}`;
+    const key = shiftFor(ds);
+    const t = state.shiftTypes[key];
+    if(key === 'JG') jg++;
+    if(key === 'JH') jh++;
+    if(t && t.kind === 'work') work++; else off++;
+    if(isSpecialWork(ds)) teuk++;
+  }
+  $('summary').innerHTML =
+    `<span class="sm sm-work">근무 <b>${work}</b></span>` +
+    `<span class="sm sm-off">휴무 <b>${off}</b></span>` +
+    `<span class="sm sm-teuk">특근 <b>${teuk}</b></span>` +
+    `<span class="sm sm-jg">지근 <b>${jg}</b></span>` +
+    `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`;
+}
+
 function renderAll(){ renderTodayBanner(); renderCalendar(); renderLegend(); }
 
 /* ---------- 날짜 편집 시트 ---------- */
@@ -214,6 +261,10 @@ function openDaySheet(dateStr){
   selectedDate = dateStr;
   const d = parseYmd(dateStr);
   $('sheetDate').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
+  const hol = holidayName(dateStr), teuk = isSpecialWork(dateStr);
+  const sh = $('sheetHoliday');
+  if(hol || teuk){ sh.hidden = false; sh.innerHTML = `${hol ? '🔴 ' + hol : ''}${teuk ? ' <b>특근</b>' : ''}`; }
+  else { sh.hidden = true; sh.innerHTML = ''; }
   const current = shiftFor(dateStr);
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
