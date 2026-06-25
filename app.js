@@ -1,12 +1,13 @@
 'use strict';
 
 /* ============================================================
-   교대 캘린더 — 변형 4조 3교대 (DAY / SW / GY) 대응
+   교대 캘린더 — 변형 4조 3교대 (D / S / G / O / D2 / G2 / 휴)
+   - 근무 종류 자유 커스텀(추가·삭제·수정)
    - 반복 패턴(사이클) 자동 계산 + 날짜별 수동 변경(override)
-   - 데이터는 localStorage 에 저장
+   - 데이터는 localStorage 저장
    ============================================================ */
 
-const STORAGE_KEY = 'shiftcal.v1';
+const STORAGE_KEY = 'shiftcal.v2';
 
 /* ---------- 날짜 유틸 ---------- */
 function pad(n){ return String(n).padStart(2, '0'); }
@@ -23,23 +24,27 @@ function dayDiff(aStr, bStr){
 const WEEK = ['일','월','화','수','목','금','토'];
 
 /* ---------- 기본 상태 ----------
-   ※ 시간/패턴은 사용자가 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
+   ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
 const DEFAULT_STATE = {
-  version: 1,
-  shiftOrder: ['DAY','SW','GY','OFF'],
+  version: 2,
+  shiftOrder: ['D','S','G','O','D2','G2','OFF'],
   shiftTypes: {
-    DAY: { label:'주간', short:'주', start:'06:00', end:'14:00', color:'#f59e0b' },
-    SW:  { label:'스윙', short:'S',  start:'14:00', end:'22:00', color:'#10b981' },
-    GY:  { label:'야간', short:'야', start:'22:00', end:'06:00', color:'#6366f1' },
+    D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b' },
+    S:   { label:'SW',   short:'S',  start:'14:00', end:'22:00', color:'#10b981' },
+    G:   { label:'GY',   short:'G',  start:'22:00', end:'06:00', color:'#6366f1' },
+    O:   { label:'오피스', short:'O',  start:'09:00', end:'18:00', color:'#0ea5e9' },
+    D2:  { label:'DAY2', short:'D2', start:'06:00', end:'14:00', color:'#fb923c' },
+    G2:  { label:'GY2',  short:'G2', start:'22:00', end:'06:00', color:'#a78bfa' },
     OFF: { label:'휴무', short:'휴', start:'',      end:'',      color:'#94a3b8' },
   },
   pattern: {
-    cycle: ['DAY','DAY','SW','SW','GY','GY','OFF','OFF'],
+    cycle: ['D','D','S','S','G','G','OFF','OFF'],
     startDate: todayStr(),   // 이 날짜 = cycle[0]
   },
-  overrides: {},  // { 'YYYY-MM-DD': shiftCode }
+  overrides: {},  // { 'YYYY-MM-DD': shiftKey }
   memos: {},      // { 'YYYY-MM-DD': '메모' }
 };
+const DEFAULT_CYCLE = ['D','D','S','S','G','G','OFF','OFF'];
 
 /* ---------- 상태 로드/저장 ---------- */
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -48,13 +53,16 @@ function migrate(s){
   const base = clone(DEFAULT_STATE);
   const merged = {
     ...base, ...s,
-    shiftTypes: { ...base.shiftTypes, ...(s.shiftTypes || {}) },
-    pattern:    { ...base.pattern,    ...(s.pattern || {}) },
+    shiftTypes: (s.shiftTypes && typeof s.shiftTypes === 'object') ? s.shiftTypes : base.shiftTypes,
+    shiftOrder: Array.isArray(s.shiftOrder) ? s.shiftOrder : base.shiftOrder,
+    pattern:    { ...base.pattern, ...(s.pattern || {}) },
     overrides:  s.overrides || {},
     memos:      s.memos || {},
-    shiftOrder: Array.isArray(s.shiftOrder) ? s.shiftOrder : base.shiftOrder,
   };
-  if(!Array.isArray(merged.pattern.cycle)) merged.pattern.cycle = base.pattern.cycle;
+  // shiftOrder 에 정의되지 않은 key 제거, shiftTypes 에만 있는 key 보강
+  merged.shiftOrder = merged.shiftOrder.filter(k => merged.shiftTypes[k]);
+  if(!merged.shiftOrder.length){ merged.shiftTypes = base.shiftTypes; merged.shiftOrder = base.shiftOrder; }
+  if(!Array.isArray(merged.pattern.cycle)) merged.pattern.cycle = clone(DEFAULT_CYCLE);
   if(!merged.pattern.startDate) merged.pattern.startDate = todayStr();
   return merged;
 }
@@ -86,19 +94,16 @@ function patternShiftFor(dateStr){
   if(idx < 0) idx += cycle.length;
   return cycle[idx];
 }
-function isOverride(dateStr){
-  return Object.prototype.hasOwnProperty.call(state.overrides, dateStr);
-}
+function isOverride(dateStr){ return Object.prototype.hasOwnProperty.call(state.overrides, dateStr); }
 function shiftFor(dateStr){
-  if(isOverride(dateStr)) return state.overrides[dateStr];
-  return patternShiftFor(dateStr);
+  const key = isOverride(dateStr) ? state.overrides[dateStr] : patternShiftFor(dateStr);
+  return state.shiftTypes[key] ? key : null;  // 삭제된 근무 key 면 null
 }
-function isNextDay(st){
-  return !!(st && st.start && st.end && st.end <= st.start); // 예: 22:00 → 06:00
-}
-function timeText(st){
-  if(!st || !st.start) return '쉬는 날';
-  return `${st.start} ~ ${st.end}${isNextDay(st) ? ' (익일)' : ''}`;
+function st(key){ return key ? state.shiftTypes[key] : null; }
+function isNextDay(t){ return !!(t && t.start && t.end && t.end <= t.start); } // 예: 22:00 → 06:00
+function timeText(t){
+  if(!t || !t.start) return '쉬는 날';
+  return `${t.start} ~ ${t.end}${isNextDay(t) ? ' (익일)' : ''}`;
 }
 function hexToTint(hex, alpha = 0.14){
   const h = (hex || '#000000').replace('#','');
@@ -119,30 +124,28 @@ function renderWeekdays(){
 
 function renderTodayBanner(){
   const el = $('todayBanner');
-  const ts = todayStr();
   const d = new Date();
   const wd = WEEK[d.getDay()];
-  const code = shiftFor(ts);
-  const st = code ? state.shiftTypes[code] : null;
+  const key = shiftFor(todayStr());
+  const t = st(key);
   const dateLabel = `오늘 ${d.getMonth()+1}월 ${d.getDate()}일 (${wd})`;
-  if(!st){
+  if(!t){
     el.style.setProperty('--accent', '#94a3b8');
     el.innerHTML = `<div class="tb-left"><div class="tb-date">${dateLabel}</div>
       <div class="tb-shift">근무 미설정</div></div>`;
     return;
   }
-  el.style.setProperty('--accent', st.color);
+  el.style.setProperty('--accent', t.color);
   el.innerHTML = `
     <div class="tb-left">
       <div class="tb-date">${dateLabel}</div>
-      <div class="tb-shift"><span class="tb-badge" style="background:${st.color}">${st.label}</span></div>
+      <div class="tb-shift"><span class="tb-badge" style="background:${t.color}">${t.label}</span></div>
     </div>
-    <div class="tb-time">${timeText(st)}</div>`;
+    <div class="tb-time">${timeText(t)}</div>`;
 }
 
 function renderCalendar(){
   $('monthTitle').textContent = `${view.year}년 ${view.month+1}월`;
-  const grid = $('grid');
   const startDow = new Date(view.year, view.month, 1).getDay();
   const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
   const todayS = todayStr();
@@ -151,11 +154,10 @@ function renderCalendar(){
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = `${view.year}-${pad(view.month+1)}-${pad(d)}`;
     const dow = new Date(view.year, view.month, d).getDay();
-    const code = shiftFor(dateStr);
-    const st = code ? state.shiftTypes[code] : null;
-    const tint = st ? hexToTint(st.color) : 'transparent';
-    const badge = st
-      ? `<span class="badge" style="background:${st.color}">${st.short || st.label}</span>`
+    const t = st(shiftFor(dateStr));
+    const tint = t ? hexToTint(t.color) : 'transparent';
+    const badge = t
+      ? `<span class="badge" style="background:${t.color}">${t.short || t.label}</span>`
       : `<span class="badge none">-</span>`;
     html += `<button class="cell ${dateStr===todayS?'today':''}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dow===0?'sun':''} ${dow===6?'sat':''}">${d}</span>
@@ -164,22 +166,18 @@ function renderCalendar(){
       ${state.memos[dateStr] ? '<span class="dot-memo"></span>' : ''}
     </button>`;
   }
-  grid.innerHTML = html;
+  $('grid').innerHTML = html;
 }
 
 function renderLegend(){
-  $('legend').innerHTML = state.shiftOrder.map(code=>{
-    const st = state.shiftTypes[code];
-    if(!st) return '';
-    return `<span class="lg"><span class="lg-dot" style="background:${st.color}"></span>${st.label}</span>`;
+  $('legend').innerHTML = state.shiftOrder.map(key=>{
+    const t = state.shiftTypes[key];
+    if(!t) return '';
+    return `<span class="lg"><span class="lg-dot" style="background:${t.color}"></span>${t.label}</span>`;
   }).join('');
 }
 
-function renderAll(){
-  renderTodayBanner();
-  renderCalendar();
-  renderLegend();
-}
+function renderAll(){ renderTodayBanner(); renderCalendar(); renderLegend(); }
 
 /* ---------- 날짜 편집 시트 ---------- */
 function openDaySheet(dateStr){
@@ -187,12 +185,12 @@ function openDaySheet(dateStr){
   const d = parseYmd(dateStr);
   $('sheetDate').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
   const current = shiftFor(dateStr);
-  $('sheetOptions').innerHTML = state.shiftOrder.map(code=>{
-    const st = state.shiftTypes[code];
-    return `<button class="opt ${code===current?'selected':''}" data-code="${code}" style="--c:${st.color}">
-      <span class="opt-badge" style="background:${st.color}">${st.short || st.label}</span>
-      <span class="opt-textwrap"><span class="opt-label">${st.label}</span>
-      <span class="opt-time">${st.start ? `${st.start}~${st.end}` : '쉬는 날'}</span></span>
+  $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
+    const t = state.shiftTypes[key];
+    return `<button class="opt ${key===current?'selected':''}" data-code="${key}" style="--c:${t.color}">
+      <span class="opt-badge" style="background:${t.color}">${t.short || t.label}</span>
+      <span class="opt-textwrap"><span class="opt-label">${t.label}</span>
+      <span class="opt-time">${t.start ? `${t.start}~${t.end}` : '쉬는 날'}</span></span>
     </button>`;
   }).join('');
   $('sheetMemo').value = state.memos[dateStr] || '';
@@ -206,56 +204,79 @@ function closeDaySheet(){
   selectedDate = null;
   renderAll();
 }
-function setShift(code){
+function setShift(key){
   if(!selectedDate) return;
-  // 패턴 값과 같으면 override 를 굳이 저장하지 않음(자동 패턴 유지)
-  if(code === patternShiftFor(selectedDate)) delete state.overrides[selectedDate];
-  else state.overrides[selectedDate] = code;
+  if(key === patternShiftFor(selectedDate)) delete state.overrides[selectedDate];
+  else state.overrides[selectedDate] = key;
   saveState();
-  openDaySheet(selectedDate); // 시트 갱신(선택 표시/되돌리기 버튼)
+  openDaySheet(selectedDate);
   renderCalendar();
   renderTodayBanner();
 }
 
-/* ---------- 설정 화면 ---------- */
+/* ---------- 설정: 근무 종류 ---------- */
 function renderSettings(){
-  // 근무 종류
-  $('setShiftTypes').innerHTML = state.shiftOrder.map(code=>{
-    const st = state.shiftTypes[code];
-    const off = (code === 'OFF');
-    return `<div class="st-row" data-code="${code}">
-      <input class="st-color" type="color" value="${st.color}" data-field="color" />
-      <input class="st-label" type="text" value="${st.label}" data-field="label" maxlength="6" />
-      <input class="st-time" type="time" value="${st.start}" data-field="start" ${off?'disabled':''} />
-      <span class="st-sep">~</span>
-      <input class="st-time" type="time" value="${st.end}" data-field="end" ${off?'disabled':''} />
+  $('setShiftTypes').innerHTML = state.shiftOrder.map(key=>{
+    const t = state.shiftTypes[key];
+    return `<div class="st-card" data-code="${key}">
+      <div class="st-line1">
+        <input class="st-color" type="color" value="${t.color}" data-field="color" />
+        <input class="st-short" type="text" value="${t.short}" data-field="short" maxlength="3" placeholder="D" title="달력 뱃지" />
+        <input class="st-label" type="text" value="${t.label}" data-field="label" maxlength="8" placeholder="이름" />
+        <button class="st-del" data-del="${key}" aria-label="삭제" title="삭제">🗑</button>
+      </div>
+      <div class="st-line2">
+        <input class="st-time" type="time" value="${t.start}" data-field="start" />
+        <span class="st-sep">~</span>
+        <input class="st-time" type="time" value="${t.end}" data-field="end" />
+        <span class="st-note">비우면 ‘쉬는 날’</span>
+      </div>
     </div>`;
-  }).join('');
+  }).join('') + `<button class="add-type-btn" id="btnAddType">＋ 근무 종류 추가</button>`;
   renderPatternChips();
   renderPatternAdd();
   $('startDate').value = state.pattern.startDate;
 }
 
+function addShiftType(){
+  let n = 1, key = 'C1';
+  while(state.shiftTypes[key]){ n++; key = 'C' + n; }
+  state.shiftTypes[key] = { label:'새 근무', short:'?', start:'09:00', end:'18:00', color:'#64748b' };
+  state.shiftOrder.push(key);
+  saveState(); renderSettings(); renderAll();
+}
+function removeShiftType(key){
+  if(state.shiftOrder.length <= 1) return;
+  const t = state.shiftTypes[key];
+  if(!confirm(`'${t ? t.label : key}' 근무를 삭제할까요?\n(달력에서 이 근무로 지정된 날은 비워집니다)`)) return;
+  delete state.shiftTypes[key];
+  state.shiftOrder = state.shiftOrder.filter(k => k !== key);
+  state.pattern.cycle = state.pattern.cycle.filter(k => k !== key);
+  for(const dt in state.overrides){ if(state.overrides[dt] === key) delete state.overrides[dt]; }
+  saveState(); renderSettings(); renderAll();
+}
+
+/* ---------- 설정: 반복 패턴 ---------- */
 function renderPatternChips(){
   const cycle = state.pattern.cycle;
   if(!cycle.length){
     $('patternChips').innerHTML = '<span class="muted">패턴이 비어 있어요. 아래에서 근무를 추가하세요.</span>';
     return;
   }
-  $('patternChips').innerHTML = cycle.map((code,i)=>{
-    const st = state.shiftTypes[code];
-    return `<span class="chip" style="--c:${st.color}">
+  $('patternChips').innerHTML = cycle.map((key,i)=>{
+    const t = state.shiftTypes[key] || { color:'#ccc', short:'?' };
+    return `<span class="chip" style="--c:${t.color}">
       <button class="chip-mv" data-mv="-1" data-i="${i}" aria-label="왼쪽">‹</button>
-      <span class="chip-badge" style="background:${st.color}">${st.short || st.label}</span>
+      <span class="chip-badge" style="background:${t.color}">${t.short || t.label}</span>
       <button class="chip-mv" data-mv="1" data-i="${i}" aria-label="오른쪽">›</button>
       <button class="chip-x" data-x="${i}" aria-label="삭제">×</button>
     </span>`;
   }).join('');
 }
 function renderPatternAdd(){
-  $('patternAdd').innerHTML = state.shiftOrder.map(code=>{
-    const st = state.shiftTypes[code];
-    return `<button class="add-btn" data-add="${code}" style="background:${st.color}">+ ${st.label}</button>`;
+  $('patternAdd').innerHTML = state.shiftOrder.map(key=>{
+    const t = state.shiftTypes[key];
+    return `<button class="add-btn" data-add="${key}" style="background:${t.color}">+ ${t.short || t.label}</button>`;
   }).join('');
 }
 
@@ -267,9 +288,7 @@ function exportData(){
   const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = `교대캘린더-백업-${todayStr()}.json`;
-  a.click();
+  a.href = url; a.download = `교대캘린더-백업-${todayStr()}.json`; a.click();
   URL.revokeObjectURL(url);
 }
 function importData(file){
@@ -277,9 +296,7 @@ function importData(file){
   reader.onload = () => {
     try{
       state = migrate(JSON.parse(reader.result));
-      saveState();
-      renderSettings();
-      renderAll();
+      saveState(); renderSettings(); renderAll();
       alert('불러오기 완료!');
     }catch(e){ alert('파일을 읽을 수 없습니다: ' + e.message); }
   };
@@ -321,13 +338,18 @@ function wire(){
   $('btnSettings').onclick = openSettings;
   $('btnCloseSettings').onclick = closeSettings;
 
-  // 근무 종류 편집
+  // 근무 종류: 추가/삭제(클릭) + 수정(입력)
+  $('setShiftTypes').addEventListener('click', (e)=>{
+    if(e.target.id === 'btnAddType') addShiftType();
+    else if(e.target.dataset.del !== undefined) removeShiftType(e.target.dataset.del);
+  });
   $('setShiftTypes').addEventListener('input', (e)=>{
-    const row = e.target.closest('.st-row'); if(!row) return;
-    const code = row.dataset.code, field = e.target.dataset.field;
-    state.shiftTypes[code][field] = e.target.value;
+    const card = e.target.closest('.st-card'); if(!card) return;
+    const key = card.dataset.code, field = e.target.dataset.field;
+    if(!field) return;
+    state.shiftTypes[key][field] = e.target.value;
     saveState();
-    renderPatternChips(); renderPatternAdd(); // 색/이름 즉시 반영
+    renderAll(); renderPatternChips(); renderPatternAdd(); // 설정 화면은 다시 안 그림(입력 포커스 유지)
   });
 
   // 패턴 칩(이동/삭제)
@@ -339,23 +361,26 @@ function wire(){
       const i = Number(e.target.dataset.i), j = i + Number(e.target.dataset.mv);
       if(j >= 0 && j < cycle.length){ [cycle[i], cycle[j]] = [cycle[j], cycle[i]]; }
     } else return;
-    saveState(); renderPatternChips();
+    saveState(); renderPatternChips(); renderAll();
   });
-  // 패턴에 근무 추가
   $('patternAdd').addEventListener('click', (e)=>{
-    const code = e.target.dataset.add;
-    if(!code) return;
-    state.pattern.cycle.push(code);
-    saveState(); renderPatternChips();
+    const key = e.target.dataset.add;
+    if(!key) return;
+    state.pattern.cycle.push(key);
+    saveState(); renderPatternChips(); renderAll();
   });
   $('btnClearPattern').onclick = () => {
-    if(confirm('반복 패턴을 모두 비울까요?')){ state.pattern.cycle = []; saveState(); renderPatternChips(); }
+    if(confirm('반복 패턴을 모두 비울까요?')){ state.pattern.cycle = []; saveState(); renderPatternChips(); renderAll(); }
+  };
+  $('btnDefaultPattern').onclick = () => {
+    state.pattern.cycle = clone(DEFAULT_CYCLE);
+    saveState(); renderPatternChips(); renderAll();
   };
 
   // 패턴 시작일
   $('startDate').addEventListener('change', (e)=>{
     state.pattern.startDate = e.target.value || todayStr();
-    saveState();
+    saveState(); renderAll();
   });
 
   // 데이터

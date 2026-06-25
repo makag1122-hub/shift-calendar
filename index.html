@@ -72,7 +72,7 @@
 
       <section class="set-section">
         <h3>근무 종류 · 시간 · 색상</h3>
-        <p class="set-desc">근무명, 시작·종료 시간, 색을 본인 일정에 맞게 바꾸세요.</p>
+        <p class="set-desc">달력 뱃지(D·S·G…), 이름, 시간, 색을 자유롭게 바꾸세요. 맨 아래 <b>＋ 근무 종류 추가</b>로 새 근무를, 🗑 로 삭제할 수 있어요. (시간을 비우면 ‘쉬는 날’로 취급)</p>
         <div class="st-list" id="setShiftTypes"></div>
       </section>
 
@@ -81,7 +81,10 @@
         <p class="set-desc">한 주기(사이클)를 순서대로 만드세요. 이 패턴이 자동으로 반복 적용됩니다. 달력에서 특정 날을 탭해 따로 바꾸면 그 날만 수동 변경됩니다.</p>
         <div class="pattern-chips" id="patternChips"></div>
         <div class="pattern-add" id="patternAdd"></div>
-        <button class="btn-text-danger" id="btnClearPattern">패턴 모두 비우기</button>
+        <div class="pattern-actions">
+          <button class="btn-soft" id="btnDefaultPattern">기본 패턴 넣기 (D·S·G)</button>
+          <button class="btn-text-danger" id="btnClearPattern">패턴 모두 비우기</button>
+        </div>
       </section>
 
       <section class="set-section">
