@@ -71,7 +71,7 @@ const DEFAULT_STATE = {
   },
   groupOverrides: { A:{}, B:{}, C:{}, D:{} }, // { A: { 'YYYY-MM-DD': shiftKey }, ... }
   overrides: {},  // legacy: A조 수동 변경
-  memos: {},      // { 'YYYY-MM-DD': '메모' }
+  groupMemos: { A:{}, B:{}, C:{}, D:{} },     // 조별 메모 { A: { 'YYYY-MM-DD': '메모' }, ... }
 };
 const DEFAULT_CYCLE = ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'];
 
@@ -115,7 +115,14 @@ function migrate(s){
       out.groupOverrides.A = s.overrides;
     }
     out.overrides = out.groupOverrides.A;
-    out.memos = s.memos || {};
+    out.groupMemos = clone(base.groupMemos);
+    if(s.groupMemos && typeof s.groupMemos === 'object'){
+      for(const group of GROUPS){
+        if(s.groupMemos[group] && typeof s.groupMemos[group] === 'object') out.groupMemos[group] = s.groupMemos[group];
+      }
+    } else if(s.memos && typeof s.memos === 'object'){
+      out.groupMemos.A = s.memos; // 레거시 전역 메모 → A조
+    }
   }
   out.version = base.version;
   out.activeGroup = GROUPS.includes(out.activeGroup) ? out.activeGroup : base.activeGroup;
@@ -124,6 +131,10 @@ function migrate(s){
     if(!out.groupOverrides[group] || typeof out.groupOverrides[group] !== 'object'){
       out.groupOverrides[group] = {};
     }
+  }
+  if(!out.groupMemos || typeof out.groupMemos !== 'object') out.groupMemos = clone(base.groupMemos);
+  for(const group of GROUPS){
+    if(!out.groupMemos[group] || typeof out.groupMemos[group] !== 'object') out.groupMemos[group] = {};
   }
   out.overrides = out.groupOverrides.A;
   out.shiftOrder = out.shiftOrder.filter(k => out.shiftTypes[k]);
@@ -171,6 +182,12 @@ function groupOverrideMap(group = currentGroup()){
   if(!state.groupOverrides) state.groupOverrides = { A:{}, B:{}, C:{}, D:{} };
   if(!state.groupOverrides[g]) state.groupOverrides[g] = {};
   return state.groupOverrides[g];
+}
+function memosFor(group = currentGroup()){
+  const g = normalizeGroup(group);
+  if(!state.groupMemos) state.groupMemos = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupMemos[g]) state.groupMemos[g] = {};
+  return state.groupMemos[g];
 }
 function isOverride(dateStr, group = currentGroup()){
   return Object.prototype.hasOwnProperty.call(groupOverrideMap(group), dateStr);
@@ -229,9 +246,14 @@ function canPlace(key, dateStr, group = currentGroup()){
   if(t.special === 'desigWork') return !baseWork;  // 지근: 휴무일에만
   return true;
 }
-// 특근: 빨간날(공휴일)에 '근무'하면 자동 특근
+// 오피스 기준 휴무일: 주말(토·일) 또는 공휴일
+function isOfficeOff(dateStr){
+  const dow = parseYmd(dateStr).getDay();
+  return dow === 0 || dow === 6 || isHoliday(dateStr);
+}
+// 특근: 오피스 휴무일(주말·공휴일)에 변형교대 근무자가 실제 '근무'하면 자동 특근
 function isSpecialWork(dateStr, group = currentGroup()){
-  if(!isHoliday(dateStr)) return false;
+  if(!isOfficeOff(dateStr)) return false;
   const t = state.shiftTypes[shiftFor(dateStr, group)];
   return !!(t && t.kind === 'work');
 }
@@ -319,6 +341,7 @@ function renderCalendar(){
   const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
   const todayS = todayStr();
   const rangeSet = sheetRange ? new Set(rangeDays(sheetRange.start, sheetRange.end)) : null;
+  const memos = memosFor(group);
   let html = '';
   for(let i=0; i<startDow; i++) html += `<div class="cell empty"></div>`;
   for(let d=1; d<=daysInMonth; d++){
@@ -330,7 +353,7 @@ function renderCalendar(){
       ? `<span class="badge" style="background:${t.color}">${t.short || t.label}</span>`
       : `<span class="badge none">-</span>`;
     const dnumCls = holidayName(dateStr) ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
-    const memo = state.memos[dateStr];
+    const memo = memos[dateStr];
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     html += `<button class="cell ${dateStr===todayS?'today':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dnumCls}">${d}</span>
@@ -441,7 +464,7 @@ function openDaySheet(dateStr){
       <span class="opt-time">${note}</span></span>
     </button>`;
   }).join('');
-  $('sheetMemo').value = state.memos[dateStr] || '';
+  $('sheetMemo').value = memosFor(group)[dateStr] || '';
   $('btnRevert').textContent = '↺ 패턴 값으로 되돌리기';
   $('btnRevert').hidden = !isOverride(dateStr, group);
   $('dayBackdrop').hidden = false;
@@ -636,8 +659,8 @@ function wire(){
   $('btnRevert').onclick = () => {
     const group = currentGroup();
     if(sheetRange){
-      const ov = groupOverrideMap(group);
-      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ delete ov[ds]; delete state.memos[ds]; });
+      const ov = groupOverrideMap(group), mm = memosFor(group);
+      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ delete ov[ds]; delete mm[ds]; });
       saveState(); renderCalendar(); renderTodayBanner(); renderTeamBoard();
       openRangeSheet(sheetRange.start, sheetRange.end);
       return;
@@ -653,13 +676,14 @@ function wire(){
   });
   $('sheetMemo').addEventListener('input', (e)=>{
     const v = e.target.value.trim();
+    const memos = memosFor();
     if(sheetRange){
-      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ if(v) state.memos[ds]=v; else delete state.memos[ds]; });
+      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ if(v) memos[ds]=v; else delete memos[ds]; });
       saveState(); renderCalendar();
       return;
     }
     if(!selectedDate) return;
-    if(v) state.memos[selectedDate] = v; else delete state.memos[selectedDate];
+    if(v) memos[selectedDate] = v; else delete memos[selectedDate];
     saveState(); renderCalendar();
   });
 
