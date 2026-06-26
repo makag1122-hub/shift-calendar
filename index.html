@@ -6,7 +6,7 @@
   <title>교대 캘린더</title>
   <meta name="theme-color" content="#4f46e5" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20260628" />
+  <link rel="stylesheet" href="style.css?v=20260629" />
 </head>
 <body>
   <div class="app">
@@ -57,6 +57,9 @@
       <p class="cal-hint">💡 날짜를 <b>길게 누르면</b> 여러 날을 한꺼번에 선택할 수 있어요</p>
     </main>
 
+    <!-- 월별 자동지정 개수 -->
+    <section class="desig-control" id="desigControl"></section>
+
     <!-- 월 요약 -->
     <section class="summary" id="summary"></section>
 
@@ -79,6 +82,7 @@
     <div class="sheet-holiday" id="sheetHoliday" hidden></div>
     <p class="sheet-hint">이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시됩니다)</p>
     <div class="options" id="sheetOptions"></div>
+    <div class="sheet-desig" id="sheetDesig" hidden></div>
     <button class="btn-revert" id="btnRevert" hidden>↺ 패턴 값으로 되돌리기</button>
     <label class="memo-label" for="sheetMemo">메모</label>
     <input class="memo-input" id="sheetMemo" type="text" placeholder="예: 교육, 비번, 연차…" maxlength="40" />
@@ -131,6 +135,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260628"></script>
+  <script src="app.js?v=20260629"></script>
 </body>
 </html>

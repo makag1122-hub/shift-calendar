@@ -49,9 +49,9 @@ function isHoliday(dateStr){ return !!HOLIDAYS[dateStr]; }
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
 const DEFAULT_STATE = {
-  version: 5,
+  version: 6,
   activeGroup: 'A',
-  shiftOrder: ['D','S','G','O','D2','G2','OFF','JG','JH'],
+  shiftOrder: ['D','S','G','O','D2','G2','OFF'],
   shiftTypes: {
     D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b', kind:'work' },
     S:   { label:'SW',   short:'S',  start:'14:00', end:'22:00', color:'#10b981', kind:'work' },
@@ -60,9 +60,6 @@ const DEFAULT_STATE = {
     D2:  { label:'DAY2', short:'D2', start:'06:00', end:'18:00', color:'#fb923c', kind:'work' },
     G2:  { label:'GY2',  short:'G2', start:'18:00', end:'06:00', color:'#a78bfa', kind:'work' },
     OFF: { label:'휴무', short:'휴', start:'',      end:'',      color:'#94a3b8', kind:'off'  },
-    // 특수근무: 배치 규칙 있음 (special)
-    JG:  { label:'지정근무', short:'지근', start:'', end:'', color:'#ef4444', kind:'work', special:'desigWork' }, // 휴무일에만
-    JH:  { label:'지정휴무', short:'지휴', start:'', end:'', color:'#0d9488', kind:'off',  special:'desigOff'  }, // 근무일에만
   },
   pattern: {
     // 20일 주기: D×5 · 휴×2 · S×5 · 휴×1 · G×5 · 휴×2
@@ -72,8 +69,15 @@ const DEFAULT_STATE = {
   groupOverrides: { A:{}, B:{}, C:{}, D:{} }, // { A: { 'YYYY-MM-DD': shiftKey }, ... }
   overrides: {},  // legacy: A조 수동 변경
   groupMemos: { A:{}, B:{}, C:{}, D:{} },     // 조별 메모 { A: { 'YYYY-MM-DD': '메모' }, ... }
+  groupDesig: { A:{}, B:{}, C:{}, D:{} },     // 조별 수동 지정태그 { A: { 'YYYY-MM-DD': 'JG'|'JH' }, ... }
+  groupDesigCount: { A:{}, B:{}, C:{}, D:{} },// 조별 월별 자동배치 개수 { A: { 'YYYY-MM': { jg, jh } }, ... }
 };
 const DEFAULT_CYCLE = ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'];
+// 지정 태그(근무 위에 덧붙는 태그)
+const DESIG = {
+  JG: { label:'지정근무', short:'지근', color:'#ef4444' },
+  JH: { label:'지정휴무', short:'지휴', color:'#0d9488' },
+};
 
 /* ---------- 상태 로드/저장 ---------- */
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -123,6 +127,16 @@ function migrate(s){
     } else if(s.memos && typeof s.memos === 'object'){
       out.groupMemos.A = s.memos; // 레거시 전역 메모 → A조
     }
+    if(s.groupDesig && typeof s.groupDesig === 'object'){
+      for(const group of GROUPS){
+        if(s.groupDesig[group] && typeof s.groupDesig[group] === 'object') out.groupDesig[group] = s.groupDesig[group];
+      }
+    }
+    if(s.groupDesigCount && typeof s.groupDesigCount === 'object'){
+      for(const group of GROUPS){
+        if(s.groupDesigCount[group] && typeof s.groupDesigCount[group] === 'object') out.groupDesigCount[group] = s.groupDesigCount[group];
+      }
+    }
   }
   out.version = base.version;
   out.activeGroup = GROUPS.includes(out.activeGroup) ? out.activeGroup : base.activeGroup;
@@ -136,6 +150,16 @@ function migrate(s){
   for(const group of GROUPS){
     if(!out.groupMemos[group] || typeof out.groupMemos[group] !== 'object') out.groupMemos[group] = {};
   }
+  // 지정 태그 안전장치 + 레거시 JG/JH 근무(override) → 태그로 전환
+  if(!out.groupDesig || typeof out.groupDesig !== 'object') out.groupDesig = clone(base.groupDesig);
+  if(!out.groupDesigCount || typeof out.groupDesigCount !== 'object') out.groupDesigCount = clone(base.groupDesigCount);
+  for(const group of GROUPS){
+    if(!out.groupDesig[group] || typeof out.groupDesig[group] !== 'object') out.groupDesig[group] = {};
+    if(!out.groupDesigCount[group] || typeof out.groupDesigCount[group] !== 'object') out.groupDesigCount[group] = {};
+    const ov = out.groupOverrides[group];
+    for(const dt in ov){ if(ov[dt] === 'JG' || ov[dt] === 'JH'){ out.groupDesig[group][dt] = ov[dt]; delete ov[dt]; } }
+  }
+  delete out.shiftTypes.JG; delete out.shiftTypes.JH;  // 이제 태그 → 근무 종류에서 제거
   out.overrides = out.groupOverrides.A;
   out.shiftOrder = out.shiftOrder.filter(k => out.shiftTypes[k]);
   if(!out.shiftOrder.length){ out.shiftTypes = base.shiftTypes; out.shiftOrder = base.shiftOrder.slice(); }
@@ -257,6 +281,60 @@ function isSpecialWork(dateStr, group = currentGroup()){
   const t = state.shiftTypes[shiftFor(dateStr, group)];
   return !!(t && t.kind === 'work');
 }
+
+/* ---------- 지정 태그(지근/지휴): 근무 위에 덧붙는 태그 ---------- */
+function desigMapFor(group = currentGroup()){
+  const g = normalizeGroup(group);
+  if(!state.groupDesig) state.groupDesig = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupDesig[g]) state.groupDesig[g] = {};
+  return state.groupDesig[g];
+}
+function desigCountFor(group, ym){
+  const g = normalizeGroup(group);
+  if(!state.groupDesigCount) state.groupDesigCount = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupDesigCount[g]) state.groupDesigCount[g] = {};
+  if(!state.groupDesigCount[g][ym]) state.groupDesigCount[g][ym] = { jg:0, jh:0 };
+  return state.groupDesigCount[g][ym];
+}
+function isWorkerOff(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !t || t.kind === 'off'; }
+function jgEligible(dateStr, group){ return isOfficeOff(dateStr) && isWorkerOff(dateStr, group); } // 지근: 주말·공휴일 중 내가 쉬는 날
+function jhEligible(dateStr, group){ return isWorkerOff(dateStr, group); }                          // 지휴: 내 교대 휴무일
+// 월별 자동배치: 가장 앞 날짜부터, 수동 지정·중복 제외
+function computeAutoDesig(group, year, month){
+  const ym = `${year}-${pad(month+1)}`;
+  const counts = desigCountFor(group, ym);
+  const gd = desigMapFor(group);
+  const dim = new Date(year, month+1, 0).getDate();
+  const taken = new Set();
+  let manJG = 0, manJH = 0;
+  for(let d=1; d<=dim; d++){
+    const ds = `${ym}-${pad(d)}`;
+    if(gd[ds] === 'JG'){ manJG++; taken.add(ds); }
+    else if(gd[ds] === 'JH'){ manJH++; taken.add(ds); }
+    else if(gd[ds] === 'NONE'){ taken.add(ds); } // 사용자가 '없음'으로 비운 날 → 자동 제외
+  }
+  const result = {};
+  let needJG = Math.max(0, (counts.jg||0) - manJG);
+  for(let d=1; d<=dim && needJG>0; d++){
+    const ds = `${ym}-${pad(d)}`;
+    if(taken.has(ds)) continue;
+    if(jgEligible(ds, group)){ result[ds] = 'JG'; taken.add(ds); needJG--; }
+  }
+  let needJH = Math.max(0, (counts.jh||0) - manJH);
+  for(let d=1; d<=dim && needJH>0; d++){
+    const ds = `${ym}-${pad(d)}`;
+    if(taken.has(ds)) continue;
+    if(jhEligible(ds, group)){ result[ds] = 'JH'; taken.add(ds); needJH--; }
+  }
+  return result;
+}
+function designationFor(dateStr, group = currentGroup()){
+  const gd = desigMapFor(group);
+  if(gd[dateStr] === 'JG' || gd[dateStr] === 'JH') return gd[dateStr];
+  if(gd[dateStr] === 'NONE') return null;
+  const [y, m] = dateStr.split('-').map(Number);
+  return computeAutoDesig(group, y, m-1)[dateStr] || null;
+}
 function hexToTint(hex, alpha = 0.14){
   const h = (hex || '#000000').replace('#','');
   const r = parseInt(h.substring(0,2),16) || 0;
@@ -342,6 +420,8 @@ function renderCalendar(){
   const todayS = todayStr();
   const rangeSet = sheetRange ? new Set(rangeDays(sheetRange.start, sheetRange.end)) : null;
   const memos = memosFor(group);
+  const gd = desigMapFor(group);
+  const autoDesig = computeAutoDesig(group, view.year, view.month);
   let html = '';
   for(let i=0; i<startDow; i++) html += `<div class="cell empty"></div>`;
   for(let d=1; d<=daysInMonth; d++){
@@ -355,10 +435,14 @@ function renderCalendar(){
     const dnumCls = holidayName(dateStr) ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
     const memo = memos[dateStr];
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
+    const desig = gd[dateStr] || autoDesig[dateStr] || null;
+    const tagHtml = desig
+      ? `<span class="cell-tag" style="background:${DESIG[desig].color}">${DESIG[desig].short}</span>`
+      : (isSpecialWork(dateStr, group) ? '<span class="cell-tag" style="background:#dc2626">특근</span>' : '');
     html += `<button class="cell ${dateStr===todayS?'today':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dnumCls}">${d}</span>
       ${badge}
-      ${isSpecialWork(dateStr, group) ? '<span class="tag-teuk">특근</span>' : ''}
+      ${tagHtml}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
       ${memo ? `<span class="cell-memo">${escapeHtml(memo)}</span>` : ''}
     </button>`;
@@ -378,15 +462,16 @@ function renderLegend(){
 function renderSummary(){
   const group = currentGroup();
   const dim = new Date(view.year, view.month+1, 0).getDate();
+  const gd = desigMapFor(group);
+  const autoDesig = computeAutoDesig(group, view.year, view.month);
   let work=0, off=0, jg=0, jh=0, teuk=0;
   for(let d=1; d<=dim; d++){
     const ds = `${view.year}-${pad(view.month+1)}-${pad(d)}`;
-    const key = shiftFor(ds, group);
-    const t = state.shiftTypes[key];
-    if(key === 'JG') jg++;
-    if(key === 'JH') jh++;
+    const t = state.shiftTypes[shiftFor(ds, group)];
     if(t && t.kind === 'work') work++; else off++;
     if(isSpecialWork(ds, group)) teuk++;
+    const desig = gd[ds] || autoDesig[ds] || null;
+    if(desig === 'JG') jg++; else if(desig === 'JH') jh++;
   }
   $('summary').innerHTML =
     `<span class="sm sm-group">${group}조</span>` +
@@ -397,7 +482,7 @@ function renderSummary(){
     `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`;
 }
 
-function renderAll(){ renderGroupSwitcher(); renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderLegend(); }
+function renderAll(){ renderGroupSwitcher(); renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderDesigControl(); renderLegend(); }
 
 /* ---------- 범위(여러 날) 선택 ---------- */
 function rangeDays(a, b){
@@ -434,6 +519,7 @@ function openRangeSheet(a, b){
       <span class="opt-time">${timeText(t)}</span></span>
     </button>`;
   }).join('');
+  $('sheetDesig').hidden = true;
   $('sheetMemo').value = '';
   $('btnRevert').textContent = '↺ 이 기간 수동변경·메모 지우기';
   $('btnRevert').hidden = false;
@@ -464,6 +550,7 @@ function openDaySheet(dateStr){
       <span class="opt-time">${note}</span></span>
     </button>`;
   }).join('');
+  renderSheetDesig(dateStr, group);
   $('sheetMemo').value = memosFor(group)[dateStr] || '';
   $('btnRevert').textContent = '↺ 패턴 값으로 되돌리기';
   $('btnRevert').hidden = !isOverride(dateStr, group);
@@ -501,6 +588,46 @@ function setShift(key){
   renderCalendar();
   renderTodayBanner();
   renderTeamBoard();
+}
+
+function renderSheetDesig(dateStr, group){
+  const el = $('sheetDesig');
+  el.hidden = false;
+  const cur = designationFor(dateStr, group);
+  const jgOk = jgEligible(dateStr, group), jhOk = jhEligible(dateStr, group);
+  el.innerHTML = `
+    <div class="desig-label">지정 태그</div>
+    <div class="desig-opts">
+      <button class="desig-opt ${!cur?'sel':''}" data-desig="">없음</button>
+      <button class="desig-opt jg ${cur==='JG'?'sel':''}" data-desig="JG" ${jgOk?'':'disabled'}>지근</button>
+      <button class="desig-opt jh ${cur==='JH'?'sel':''}" data-desig="JH" ${jhOk?'':'disabled'}>지휴</button>
+    </div>
+    <div class="desig-hint">지근=쉬는 주말·공휴일 / 지휴=교대 휴무일에만 지정돼요</div>`;
+}
+function setDesig(tag){
+  if(!selectedDate) return;
+  const group = currentGroup();
+  if(tag === 'JG' && !jgEligible(selectedDate, group)) return;
+  if(tag === 'JH' && !jhEligible(selectedDate, group)) return;
+  const gd = desigMapFor(group);
+  if(tag === '') gd[selectedDate] = 'NONE';  // 없음 = 자동배치도 이 날만 끔
+  else gd[selectedDate] = tag;
+  saveState();
+  openDaySheet(selectedDate);
+  renderCalendar(); renderTodayBanner(); renderTeamBoard();
+}
+
+function renderDesigControl(){
+  const el = $('desigControl'); if(!el) return;
+  const group = currentGroup();
+  const ym = `${view.year}-${pad(view.month+1)}`;
+  const c = desigCountFor(group, ym);
+  el.innerHTML =
+    `<span class="dc-title">${view.month+1}월 자동지정 · ${group}조</span>` +
+    `<label class="dc-field"><span class="dc-dot" style="background:${DESIG.JG.color}"></span>지근` +
+    `<input type="number" min="0" max="31" id="dcJG" value="${c.jg||0}" /></label>` +
+    `<label class="dc-field"><span class="dc-dot" style="background:${DESIG.JH.color}"></span>지휴` +
+    `<input type="number" min="0" max="31" id="dcJH" value="${c.jh||0}" /></label>`;
 }
 
 /* ---------- 설정: 근무 종류 ---------- */
@@ -617,9 +744,9 @@ function wire(){
   });
 
   // 월 이동
-  $('btnPrev').onclick = () => { if(--view.month < 0){ view.month=11; view.year--; } renderCalendar(); };
-  $('btnNext').onclick = () => { if(++view.month > 11){ view.month=0; view.year++; } renderCalendar(); };
-  $('btnToday').onclick = () => { const n=new Date(); view={year:n.getFullYear(), month:n.getMonth()}; renderCalendar(); };
+  $('btnPrev').onclick = () => { if(--view.month < 0){ view.month=11; view.year--; } renderCalendar(); renderDesigControl(); };
+  $('btnNext').onclick = () => { if(++view.month > 11){ view.month=0; view.year++; } renderCalendar(); renderDesigControl(); };
+  $('btnToday').onclick = () => { const n=new Date(); view={year:n.getFullYear(), month:n.getMonth()}; renderCalendar(); renderDesigControl(); };
 
   // 날짜 셀: 짧게 탭 = 하루 편집 / 길게 누르기 = 기간 선택 시작
   const grid = $('grid');
@@ -673,6 +800,19 @@ function wire(){
   $('sheetOptions').addEventListener('click', (e)=>{
     const opt = e.target.closest('.opt');
     if(opt) setShift(opt.dataset.code);
+  });
+  $('sheetDesig').addEventListener('click', (e)=>{
+    const b = e.target.closest('.desig-opt');
+    if(b && !b.disabled) setDesig(b.dataset.desig);
+  });
+  $('desigControl').addEventListener('input', (e)=>{
+    if(e.target.id !== 'dcJG' && e.target.id !== 'dcJH') return;
+    const ym = `${view.year}-${pad(view.month+1)}`;
+    const c = desigCountFor(currentGroup(), ym);
+    const val = Math.max(0, Math.min(31, parseInt(e.target.value, 10) || 0));
+    if(e.target.id === 'dcJG') c.jg = val; else c.jh = val;
+    saveState();
+    renderCalendar(); renderTodayBanner(); renderTeamBoard();
   });
   $('sheetMemo').addEventListener('input', (e)=>{
     const v = e.target.value.trim();

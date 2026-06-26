@@ -204,6 +204,8 @@ body{
 .tag-teuk{ display:inline-block; white-space:nowrap;
   font-size:9px; font-weight:800; color:#fff; background:#dc2626;
   padding:0 6px; border-radius:6px; line-height:1.6; letter-spacing:-.3px; }
+.cell-tag{ display:inline-block; white-space:nowrap; font-size:9px; font-weight:800;
+  color:#fff; padding:0 6px; border-radius:6px; line-height:1.6; letter-spacing:-.3px; }
 .cell-memo{ font-size:8.5px; line-height:1.2; color:var(--ink-soft);
   max-width:100%; padding:0 2px; text-align:center;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -211,6 +213,16 @@ body{
 .cell.range-sel{ outline: 2px dashed var(--brand); outline-offset:-2px; background: rgba(79,70,229,.14); }
 
 /* 범례 */
+/* 월별 자동지정 개수 */
+.desig-control{ display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow-sm); padding:10px 12px; margin:12px 0 0; }
+.dc-title{ font-size:12px; font-weight:700; color:var(--ink-soft); }
+.dc-field{ display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; }
+.dc-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+.dc-field input{ width:46px; border:2px solid var(--line); border-radius:9px; padding:5px; font-size:13px; font-family:inherit; text-align:center; }
+.dc-field input:focus{ outline:none; border-color:var(--brand); }
+
 .summary{ display:flex; flex-wrap:wrap; gap:7px; justify-content:center; padding: 14px 4px 0; }
 .sm{ font-size:12px; color:var(--ink-soft); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 11px; box-shadow:var(--shadow-sm); }
 .sm b{ color:var(--ink); font-weight:800; margin-left:1px; }
@@ -272,6 +284,18 @@ body{
 .opt-label{ font-weight: 700; font-size: 12.5px; line-height:1.15; }
 .opt-time{ font-size: 9.5px; color: var(--ink-soft); display:block; line-height:1.15; white-space:nowrap; }
 .opt-textwrap{ display:flex; flex-direction:column; align-items:center; gap:1px; min-width:0; width:100%; }
+
+/* 지정 태그 선택 (시트) */
+.sheet-desig{ margin-top:16px; }
+.desig-label{ font-size:12.5px; color:var(--ink-soft); font-weight:600; margin-bottom:7px; }
+.desig-opts{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.desig-opt{ border:2px solid var(--line); background:var(--card); border-radius:12px; padding:11px; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; color:var(--ink); }
+.desig-opt:active{ transform:scale(.97); }
+.desig-opt.sel{ border-color:var(--brand); background:color-mix(in srgb, var(--brand) 8%, white); }
+.desig-opt.jg.sel{ border-color:#ef4444; background:#fdecec; color:#dc2626; }
+.desig-opt.jh.sel{ border-color:#0d9488; background:#e6f6f4; color:#0d9488; }
+.desig-opt:disabled{ opacity:.4; cursor:not-allowed; }
+.desig-hint{ font-size:11px; color:var(--ink-soft); margin-top:8px; }
 
 .btn-revert{
   width:100%; margin-top: 12px; border:none; background:#fff3f1; color:#d9402a;
