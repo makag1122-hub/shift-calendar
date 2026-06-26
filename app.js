@@ -284,7 +284,7 @@ function desigMapFor(group = currentGroup()){
   return state.groupDesig[g];
 }
 function isWorkerOff(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !t || t.kind === 'off'; }
-function tgEligible(d, g){ return !isWorkerOff(d, g) && isWeekday(d) && isHoliday(d); }  // 특근: 평일 공휴일 근무
+function tgEligible(d, g){ return !isWorkerOff(d, g) && (isWeekend(d) || isHoliday(d)); } // 특근: 주말·공휴일 근무
 function jgEligible(d, g){ return !isWorkerOff(d, g) && isWeekend(d); }                   // 지근: 주말 근무
 function jhEligible(d, g){ return  isWorkerOff(d, g) && isWeekday(d) && !isHoliday(d); }  // 지휴: 평일 휴무
 
@@ -292,16 +292,19 @@ function computeAutoTags(group, year, month){
   const ym = `${year}-${pad(month+1)}`;
   const dim = new Date(year, month+1, 0).getDate();
   const out = {};
-  const jgDays = [], weekdayOff = [];
+  const weekendWork = [], weekdayOff = [], weekdayHolidayWork = [];
   for(let d=1; d<=dim; d++){
     const ds = `${ym}-${pad(d)}`;
     const off = isWorkerOff(ds, group);
-    if(!off && isWeekend(ds)) jgDays.push(ds);                       // 주말 근무 → 지근
-    else if(!off && isWeekday(ds) && isHoliday(ds)) out[ds] = 'TG';  // 평일 공휴일 근무 → 특근
-    if(off && isWeekday(ds) && !isHoliday(ds)) weekdayOff.push(ds);  // 평일 휴무 → 지휴 후보
+    if(!off && isWeekend(ds)) weekendWork.push(ds);                              // 주말 근무
+    else if(!off && isWeekday(ds) && isHoliday(ds)) weekdayHolidayWork.push(ds); // 평일 공휴일 근무
+    if(off && isWeekday(ds) && !isHoliday(ds)) weekdayOff.push(ds);              // 평일 휴무
   }
-  jgDays.forEach(ds => { out[ds] = 'JG'; });
-  weekdayOff.slice(0, jgDays.length).forEach(ds => { out[ds] = 'JH'; }); // 지근 수만큼, 가장 앞부터
+  const W = weekdayOff.length;                                  // 지휴 = 평일 휴무 전부 → 지근 개수의 기준
+  weekdayOff.forEach(ds => { out[ds] = 'JH'; });               // 지휴
+  weekendWork.slice(0, W).forEach(ds => { out[ds] = 'JG'; });  // 지근 = 지휴 개수만큼, 가장 앞 주말근무부터
+  weekdayHolidayWork.forEach(ds => { out[ds] = 'TG'; });       // 특근: 평일 공휴일 근무
+  weekendWork.slice(W).forEach(ds => { out[ds] = 'TG'; });     // 특근: 지근으로 못 쓴 나머지 주말근무
   return out;
 }
 // 자동 + 수동(우선) 병합 후 종류별 번호 부여 → { date: {tag, n} }
