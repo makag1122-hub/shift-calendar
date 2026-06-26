@@ -36,7 +36,7 @@ const HOLIDAYS = {
   '2026-03-01':'삼일절','2026-03-02':'삼일절 대체',
   '2026-05-05':'어린이날',
   '2026-05-24':'부처님오신날','2026-05-25':'부처님오신날 대체',
-  '2026-06-06':'현충일',
+  '2026-06-03':'지방선거','2026-06-06':'현충일',
   '2026-08-15':'광복절','2026-08-17':'광복절 대체',
   '2026-09-24':'추석','2026-09-25':'추석','2026-09-26':'추석',
   '2026-10-03':'개천절','2026-10-05':'개천절 대체',
@@ -73,10 +73,11 @@ const DEFAULT_STATE = {
   groupDesigCount: { A:{}, B:{}, C:{}, D:{} },// 조별 월별 자동배치 개수 { A: { 'YYYY-MM': { jg, jh } }, ... }
 };
 const DEFAULT_CYCLE = ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'];
-// 지정 태그(근무 위에 덧붙는 태그)
+// 태그(근무 위에 덧붙는 태그): 특근/지근/지휴
 const DESIG = {
-  JG: { label:'지정근무', short:'지근', color:'#ef4444' },
-  JH: { label:'지정휴무', short:'지휴', color:'#0d9488' },
+  TG: { label:'특근', short:'특근', color:'#dc2626' },
+  JG: { label:'지근', short:'지근', color:'#ef4444' },
+  JH: { label:'지휴', short:'지휴', color:'#0d9488' },
 };
 
 /* ---------- 상태 로드/저장 ---------- */
@@ -270,71 +271,60 @@ function canPlace(key, dateStr, group = currentGroup()){
   if(t.special === 'desigWork') return !baseWork;  // 지근: 휴무일에만
   return true;
 }
-// 오피스 기준 휴무일: 주말(토·일) 또는 공휴일
-function isOfficeOff(dateStr){
-  const dow = parseYmd(dateStr).getDay();
-  return dow === 0 || dow === 6 || isHoliday(dateStr);
-}
-// 특근: 오피스 휴무일(주말·공휴일)에 변형교대 근무자가 실제 '근무'하면 자동 특근
-function isSpecialWork(dateStr, group = currentGroup()){
-  if(!isOfficeOff(dateStr)) return false;
-  const t = state.shiftTypes[shiftFor(dateStr, group)];
-  return !!(t && t.kind === 'work');
-}
+function isWeekend(dateStr){ const d = parseYmd(dateStr).getDay(); return d === 0 || d === 6; }
+function isWeekday(dateStr){ return !isWeekend(dateStr); }
 
-/* ---------- 지정 태그(지근/지휴): 근무 위에 덧붙는 태그 ---------- */
+/* ---------- 태그(특근/지근/지휴): 근무 위에 덧붙는 자동 태그 ----------
+   특근 = 평일 공휴일 근무 / 지근 = 주말 근무 / 지휴 = 지근 수만큼 평일 휴무(가장 앞부터)
+   수동(groupDesig: 'TG'|'JG'|'JH'|'NONE')이 자동보다 우선 */
 function desigMapFor(group = currentGroup()){
   const g = normalizeGroup(group);
   if(!state.groupDesig) state.groupDesig = { A:{}, B:{}, C:{}, D:{} };
   if(!state.groupDesig[g]) state.groupDesig[g] = {};
   return state.groupDesig[g];
 }
-function desigCountFor(group, ym){
-  const g = normalizeGroup(group);
-  if(!state.groupDesigCount) state.groupDesigCount = { A:{}, B:{}, C:{}, D:{} };
-  if(!state.groupDesigCount[g]) state.groupDesigCount[g] = {};
-  if(!state.groupDesigCount[g][ym]) state.groupDesigCount[g][ym] = { jg:0, jh:0 };
-  return state.groupDesigCount[g][ym];
-}
 function isWorkerOff(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !t || t.kind === 'off'; }
-function jgEligible(dateStr, group){ return isOfficeOff(dateStr) && isWorkerOff(dateStr, group); } // 지근: 주말·공휴일 중 내가 쉬는 날
-function jhEligible(dateStr, group){ return isWorkerOff(dateStr, group); }                          // 지휴: 내 교대 휴무일
-// 월별 자동배치: 가장 앞 날짜부터, 수동 지정·중복 제외
-function computeAutoDesig(group, year, month){
+function tgEligible(d, g){ return !isWorkerOff(d, g) && isWeekday(d) && isHoliday(d); }  // 특근: 평일 공휴일 근무
+function jgEligible(d, g){ return !isWorkerOff(d, g) && isWeekend(d); }                   // 지근: 주말 근무
+function jhEligible(d, g){ return  isWorkerOff(d, g) && isWeekday(d) && !isHoliday(d); }  // 지휴: 평일 휴무
+
+function computeAutoTags(group, year, month){
   const ym = `${year}-${pad(month+1)}`;
-  const counts = desigCountFor(group, ym);
-  const gd = desigMapFor(group);
   const dim = new Date(year, month+1, 0).getDate();
-  const taken = new Set();
-  let manJG = 0, manJH = 0;
+  const out = {};
+  const jgDays = [], weekdayOff = [];
   for(let d=1; d<=dim; d++){
     const ds = `${ym}-${pad(d)}`;
-    if(gd[ds] === 'JG'){ manJG++; taken.add(ds); }
-    else if(gd[ds] === 'JH'){ manJH++; taken.add(ds); }
-    else if(gd[ds] === 'NONE'){ taken.add(ds); } // 사용자가 '없음'으로 비운 날 → 자동 제외
+    const off = isWorkerOff(ds, group);
+    if(!off && isWeekend(ds)) jgDays.push(ds);                       // 주말 근무 → 지근
+    else if(!off && isWeekday(ds) && isHoliday(ds)) out[ds] = 'TG';  // 평일 공휴일 근무 → 특근
+    if(off && isWeekday(ds) && !isHoliday(ds)) weekdayOff.push(ds);  // 평일 휴무 → 지휴 후보
   }
-  const result = {};
-  let needJG = Math.max(0, (counts.jg||0) - manJG);
-  for(let d=1; d<=dim && needJG>0; d++){
-    const ds = `${ym}-${pad(d)}`;
-    if(taken.has(ds)) continue;
-    if(jgEligible(ds, group)){ result[ds] = 'JG'; taken.add(ds); needJG--; }
-  }
-  let needJH = Math.max(0, (counts.jh||0) - manJH);
-  for(let d=1; d<=dim && needJH>0; d++){
-    const ds = `${ym}-${pad(d)}`;
-    if(taken.has(ds)) continue;
-    if(jhEligible(ds, group)){ result[ds] = 'JH'; taken.add(ds); needJH--; }
-  }
-  return result;
+  jgDays.forEach(ds => { out[ds] = 'JG'; });
+  weekdayOff.slice(0, jgDays.length).forEach(ds => { out[ds] = 'JH'; }); // 지근 수만큼, 가장 앞부터
+  return out;
 }
-function designationFor(dateStr, group = currentGroup()){
+// 자동 + 수동(우선) 병합 후 종류별 번호 부여 → { date: {tag, n} }
+function tagsForMonth(group, year, month){
+  const ym = `${year}-${pad(month+1)}`;
+  const dim = new Date(year, month+1, 0).getDate();
   const gd = desigMapFor(group);
-  if(gd[dateStr] === 'JG' || gd[dateStr] === 'JH') return gd[dateStr];
-  if(gd[dateStr] === 'NONE') return null;
-  const [y, m] = dateStr.split('-').map(Number);
-  return computeAutoDesig(group, y, m-1)[dateStr] || null;
+  const auto = computeAutoTags(group, year, month);
+  const counts = { TG:0, JG:0, JH:0 };
+  const out = {};
+  for(let d=1; d<=dim; d++){
+    const ds = `${ym}-${pad(d)}`;
+    let tag = auto[ds] || null;
+    if(gd[ds]) tag = (gd[ds] === 'NONE') ? null : gd[ds];  // 수동 우선
+    if(tag && DESIG[tag]){ counts[tag]++; out[ds] = { tag, n: counts[tag] }; }
+  }
+  return out;
 }
+function tagInfoFor(dateStr, group = currentGroup()){
+  const [y, m] = dateStr.split('-').map(Number);
+  return tagsForMonth(group, y, m-1)[dateStr] || null;
+}
+function tagLabel(ti){ return ti ? (DESIG[ti.tag].short + (ti.tag === 'TG' ? '' : ti.n)) : ''; }
 function hexToTint(hex, alpha = 0.14){
   const h = (hex || '#000000').replace('#','');
   const r = parseInt(h.substring(0,2),16) || 0;
@@ -420,8 +410,7 @@ function renderCalendar(){
   const todayS = todayStr();
   const rangeSet = sheetRange ? new Set(rangeDays(sheetRange.start, sheetRange.end)) : null;
   const memos = memosFor(group);
-  const gd = desigMapFor(group);
-  const autoDesig = computeAutoDesig(group, view.year, view.month);
+  const tagMap = tagsForMonth(group, view.year, view.month);
   let html = '';
   for(let i=0; i<startDow; i++) html += `<div class="cell empty"></div>`;
   for(let d=1; d<=daysInMonth; d++){
@@ -435,10 +424,8 @@ function renderCalendar(){
     const dnumCls = holidayName(dateStr) ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
     const memo = memos[dateStr];
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
-    const desig = gd[dateStr] || autoDesig[dateStr] || null;
-    const tagHtml = desig
-      ? `<span class="cell-tag" style="background:${DESIG[desig].color}">${DESIG[desig].short}</span>`
-      : (isSpecialWork(dateStr, group) ? '<span class="cell-tag" style="background:#dc2626">특근</span>' : '');
+    const ti = tagMap[dateStr];
+    const tagHtml = ti ? `<span class="cell-tag" style="background:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>` : '';
     html += `<button class="cell ${dateStr===todayS?'today':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dnumCls}">${d}</span>
       ${badge}
@@ -462,16 +449,14 @@ function renderLegend(){
 function renderSummary(){
   const group = currentGroup();
   const dim = new Date(view.year, view.month+1, 0).getDate();
-  const gd = desigMapFor(group);
-  const autoDesig = computeAutoDesig(group, view.year, view.month);
+  const tagMap = tagsForMonth(group, view.year, view.month);
   let work=0, off=0, jg=0, jh=0, teuk=0;
   for(let d=1; d<=dim; d++){
     const ds = `${view.year}-${pad(view.month+1)}-${pad(d)}`;
     const t = state.shiftTypes[shiftFor(ds, group)];
     if(t && t.kind === 'work') work++; else off++;
-    if(isSpecialWork(ds, group)) teuk++;
-    const desig = gd[ds] || autoDesig[ds] || null;
-    if(desig === 'JG') jg++; else if(desig === 'JH') jh++;
+    const ti = tagMap[ds];
+    if(ti){ if(ti.tag === 'TG') teuk++; else if(ti.tag === 'JG') jg++; else if(ti.tag === 'JH') jh++; }
   }
   $('summary').innerHTML =
     `<span class="sm sm-group">${group}조</span>` +
@@ -482,7 +467,7 @@ function renderSummary(){
     `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`;
 }
 
-function renderAll(){ renderGroupSwitcher(); renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderDesigControl(); renderLegend(); }
+function renderAll(){ renderGroupSwitcher(); renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderLegend(); }
 
 /* ---------- 범위(여러 날) 선택 ---------- */
 function rangeDays(a, b){
@@ -534,9 +519,10 @@ function openDaySheet(dateStr){
   const group = currentGroup();
   const d = parseYmd(dateStr);
   $('sheetDate').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WEEK[d.getDay()]}) · ${group}조`;
-  const hol = holidayName(dateStr), teuk = isSpecialWork(dateStr, group);
+  const hol = holidayName(dateStr);
+  const ti = tagInfoFor(dateStr, group);
   const sh = $('sheetHoliday');
-  if(hol || teuk){ sh.hidden = false; sh.innerHTML = `${hol ? '🔴 ' + hol : ''}${teuk ? ' <b>특근</b>' : ''}`; }
+  if(hol || ti){ sh.hidden = false; sh.innerHTML = `${hol ? '🔴 ' + hol : ''}${ti ? ' <b>' + tagLabel(ti) + '</b>' : ''}`; }
   else { sh.hidden = true; sh.innerHTML = ''; }
   document.querySelector('.sheet-hint').innerHTML = '이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시)';
   const current = shiftFor(dateStr, group);
@@ -593,42 +579,34 @@ function setShift(key){
 function renderSheetDesig(dateStr, group){
   const el = $('sheetDesig');
   el.hidden = false;
-  const cur = designationFor(dateStr, group);
-  const jgOk = jgEligible(dateStr, group), jhOk = jhEligible(dateStr, group);
+  const ti = tagInfoFor(dateStr, group);
+  const cur = ti ? ti.tag : null;
+  const tgOk = tgEligible(dateStr, group), jgOk = jgEligible(dateStr, group), jhOk = jhEligible(dateStr, group);
   el.innerHTML = `
-    <div class="desig-label">지정 태그</div>
-    <div class="desig-opts">
+    <div class="desig-label">태그 (자동 계산 · 직접 바꾸기)</div>
+    <div class="desig-opts four">
       <button class="desig-opt ${!cur?'sel':''}" data-desig="">없음</button>
+      <button class="desig-opt tg ${cur==='TG'?'sel':''}" data-desig="TG" ${tgOk?'':'disabled'}>특근</button>
       <button class="desig-opt jg ${cur==='JG'?'sel':''}" data-desig="JG" ${jgOk?'':'disabled'}>지근</button>
       <button class="desig-opt jh ${cur==='JH'?'sel':''}" data-desig="JH" ${jhOk?'':'disabled'}>지휴</button>
     </div>
-    <div class="desig-hint">지근=쉬는 주말·공휴일 / 지휴=교대 휴무일에만 지정돼요</div>`;
+    <div class="desig-hint">특근=평일 공휴일 근무 / 지근=주말 근무 / 지휴=평일 휴무</div>`;
 }
 function setDesig(tag){
   if(!selectedDate) return;
   const group = currentGroup();
+  if(tag === 'TG' && !tgEligible(selectedDate, group)) return;
   if(tag === 'JG' && !jgEligible(selectedDate, group)) return;
   if(tag === 'JH' && !jhEligible(selectedDate, group)) return;
   const gd = desigMapFor(group);
-  if(tag === '') gd[selectedDate] = 'NONE';  // 없음 = 자동배치도 이 날만 끔
+  if(tag === '') gd[selectedDate] = 'NONE';  // 없음 = 이 날 태그 끔(자동도)
   else gd[selectedDate] = tag;
   saveState();
   openDaySheet(selectedDate);
   renderCalendar(); renderTodayBanner(); renderTeamBoard();
 }
 
-function renderDesigControl(){
-  const el = $('desigControl'); if(!el) return;
-  const group = currentGroup();
-  const ym = `${view.year}-${pad(view.month+1)}`;
-  const c = desigCountFor(group, ym);
-  el.innerHTML =
-    `<span class="dc-title">${view.month+1}월 자동지정 · ${group}조</span>` +
-    `<label class="dc-field"><span class="dc-dot" style="background:${DESIG.JG.color}"></span>지근` +
-    `<input type="number" min="0" max="31" id="dcJG" value="${c.jg||0}" /></label>` +
-    `<label class="dc-field"><span class="dc-dot" style="background:${DESIG.JH.color}"></span>지휴` +
-    `<input type="number" min="0" max="31" id="dcJH" value="${c.jh||0}" /></label>`;
-}
+// 특근/지근/지휴는 전부 자동 계산 (개수 입력칸 제거)
 
 /* ---------- 설정: 근무 종류 ---------- */
 function renderSettings(){
@@ -744,9 +722,9 @@ function wire(){
   });
 
   // 월 이동
-  $('btnPrev').onclick = () => { if(--view.month < 0){ view.month=11; view.year--; } renderCalendar(); renderDesigControl(); };
-  $('btnNext').onclick = () => { if(++view.month > 11){ view.month=0; view.year++; } renderCalendar(); renderDesigControl(); };
-  $('btnToday').onclick = () => { const n=new Date(); view={year:n.getFullYear(), month:n.getMonth()}; renderCalendar(); renderDesigControl(); };
+  $('btnPrev').onclick = () => { if(--view.month < 0){ view.month=11; view.year--; } renderCalendar(); };
+  $('btnNext').onclick = () => { if(++view.month > 11){ view.month=0; view.year++; } renderCalendar(); };
+  $('btnToday').onclick = () => { const n=new Date(); view={year:n.getFullYear(), month:n.getMonth()}; renderCalendar(); };
 
   // 날짜 셀: 짧게 탭 = 하루 편집 / 길게 누르기 = 기간 선택 시작
   const grid = $('grid');
@@ -804,15 +782,6 @@ function wire(){
   $('sheetDesig').addEventListener('click', (e)=>{
     const b = e.target.closest('.desig-opt');
     if(b && !b.disabled) setDesig(b.dataset.desig);
-  });
-  $('desigControl').addEventListener('input', (e)=>{
-    if(e.target.id !== 'dcJG' && e.target.id !== 'dcJH') return;
-    const ym = `${view.year}-${pad(view.month+1)}`;
-    const c = desigCountFor(currentGroup(), ym);
-    const val = Math.max(0, Math.min(31, parseInt(e.target.value, 10) || 0));
-    if(e.target.id === 'dcJG') c.jg = val; else c.jh = val;
-    saveState();
-    renderCalendar(); renderTodayBanner(); renderTeamBoard();
   });
   $('sheetMemo').addEventListener('input', (e)=>{
     const v = e.target.value.trim();

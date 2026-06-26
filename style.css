@@ -289,9 +289,12 @@ body{
 .sheet-desig{ margin-top:16px; }
 .desig-label{ font-size:12.5px; color:var(--ink-soft); font-weight:600; margin-bottom:7px; }
 .desig-opts{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-.desig-opt{ border:2px solid var(--line); background:var(--card); border-radius:12px; padding:11px; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; color:var(--ink); }
+.desig-opts.four{ grid-template-columns:repeat(4,1fr); gap:6px; }
+.desig-opt{ border:2px solid var(--line); background:var(--card); border-radius:12px; padding:11px 6px; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; color:var(--ink); }
+.desig-opts.four .desig-opt{ padding:10px 3px; font-size:13px; }
 .desig-opt:active{ transform:scale(.97); }
 .desig-opt.sel{ border-color:var(--brand); background:color-mix(in srgb, var(--brand) 8%, white); }
+.desig-opt.tg.sel{ border-color:#dc2626; background:#fdecec; color:#dc2626; }
 .desig-opt.jg.sel{ border-color:#ef4444; background:#fdecec; color:#dc2626; }
 .desig-opt.jh.sel{ border-color:#0d9488; background:#e6f6f4; color:#0d9488; }
 .desig-opt:disabled{ opacity:.4; cursor:not-allowed; }
