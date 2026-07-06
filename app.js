@@ -437,7 +437,9 @@ function renderCalendar(){
     const hasMemo = !!memo;
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const ti = tagMap[dateStr];
-    const tagHtml = ti ? `<span class="cell-tag" style="background:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>` : '';
+    const tagHtml = ti
+      ? `<span class="cell-tag" style="background:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
+      : '<span class="cell-tag-slot" aria-hidden="true"></span>';
     html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dnumCls}">${d}</span>
       ${badge}

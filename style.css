@@ -94,16 +94,19 @@ body{
   background: var(--card);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 14px 16px;
+  padding: 13px 16px;
   margin: 4px 0 10px;
-  display:flex; align-items:center; justify-content:space-between;
+  display:grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
   border-left: 6px solid var(--accent);
 }
 .tb-left{ display:flex; flex-direction:column; gap:6px; }
 .tb-date{ font-size: 12.5px; color: var(--ink-soft); }
 .tb-shift{ font-size: 16px; font-weight: 700; }
 .tb-badge{ color:#fff; padding: 3px 12px; border-radius: 999px; font-size: 15px; }
-.tb-time{ font-size: 13.5px; color: var(--ink); font-weight:600; text-align:right; }
+.tb-time{ font-size: 13px; color: var(--ink); font-weight:800; text-align:right; white-space:nowrap; }
 
 /* 오늘 조별 배치 */
 .team-board{
@@ -122,6 +125,7 @@ body{
 .team-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
 .team-item{
   min-width: 0;
+  min-height: 62px;
   border: 1px solid color-mix(in srgb, var(--c) 30%, var(--line));
   font-family: inherit;
   cursor: pointer;
@@ -129,13 +133,23 @@ body{
   border-left: 4px solid var(--c);
   border-radius: 10px;
   padding: 8px 7px;
-  display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+  display:grid;
+  grid-template-rows: 17px 14px 14px;
+  align-content:center;
+  align-items:center;
+  gap:1px;
   text-align: left;
 }
 .team-item.active{ outline: 2px solid var(--brand); outline-offset: -2px; }
 .team-item:active{ transform: scale(.97); }
+.team-shift, .team-day{
+  width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 .team-shift{ font-size: 11px; color: var(--ink-soft); font-weight:700; line-height:1.1; }
-.team-item strong{ font-size: 15px; color: var(--ink); line-height:1.15; }
+.team-item strong{ width:100%; font-size: 15px; color: var(--ink); line-height:1.15; }
 .team-day{ font-size: 10.5px; color: var(--ink-soft); font-weight:700; line-height:1.1; }
 
 @media (max-width: 380px){
@@ -171,7 +185,7 @@ body{
 .wd.sat{ color: var(--sat); }
 
 .grid{
-  --cell-h: 78px;
+  --cell-h: 76px;
   display:grid;
   grid-template-columns: repeat(7,1fr);
   grid-auto-rows: var(--cell-h);
@@ -183,8 +197,12 @@ body{
   border-radius: 10px;
   min-height: 0;
   height: var(--cell-h);
-  padding: 5px 3px 4px;
-  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding: 5px 3px 20px;
+  display:grid;
+  grid-template-rows: 15px 20px 15px;
+  align-content:start;
+  justify-items:center;
+  gap:2px;
   cursor:pointer; font-family: inherit;
   transition: transform .06s;
   overflow:hidden;
@@ -193,17 +211,24 @@ body{
 .cell:active{ transform: scale(.95); }
 .cell.empty{ background: transparent; pointer-events:none; }
 .cell.has-memo{
-  padding-bottom:22px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.46), rgba(255,255,255,0) 48%),
     var(--tint, transparent);
 }
-.dnum{ font-size: 12.5px; font-weight:600; color: var(--ink); }
+.dnum{
+  align-self:center;
+  font-size: 12px;
+  line-height:15px;
+  font-weight:700;
+  color: var(--ink);
+}
 .dnum.sun{ color: var(--sun); }
 .dnum.sat{ color: var(--sat); }
 .badge{
-  color:#fff; font-size: 11.5px; font-weight: 700;
-  padding: 2px 0; width: 100%; max-width: 38px; text-align:center;
+  align-self:center;
+  color:#fff; font-size: 11px; font-weight: 800;
+  line-height:18px;
+  padding: 0; width: 100%; max-width: 36px; height:18px; text-align:center;
   border-radius: 7px; letter-spacing: -.2px;
 }
 .badge.none{ background: #eef0f4; color:#b6bccb; }
@@ -224,8 +249,17 @@ body{
 .tag-teuk{ display:inline-block; white-space:nowrap;
   font-size:9px; font-weight:800; color:#fff; background:#dc2626;
   padding:0 6px; border-radius:6px; line-height:1.6; letter-spacing:-.3px; }
-.cell-tag{ display:inline-block; white-space:nowrap; font-size:9px; font-weight:800;
-  color:#fff; padding:0 6px; border-radius:6px; line-height:1.6; letter-spacing:-.3px; }
+.cell-tag, .cell-tag-slot{
+  display:block;
+  width:max-content;
+  max-width:100%;
+  min-height:14px;
+}
+.cell-tag{
+  white-space:nowrap; font-size:8.5px; font-weight:800;
+  color:#fff; padding:0 5px; border-radius:6px; line-height:14px; letter-spacing:-.3px;
+  overflow:hidden; text-overflow:ellipsis;
+}
 .cell-memo{
   position:absolute;
   left:4px; right:4px; bottom:4px;
@@ -243,11 +277,17 @@ body{
 .cell.range-sel{ outline: 2px dashed var(--brand); outline-offset:-2px; background: rgba(79,70,229,.14); }
 
 @media (max-width: 380px){
-  .grid{ --cell-h: 74px; gap:2px; }
+  .app{ padding-left:10px; padding-right:10px; }
+  .today-banner{ grid-template-columns:1fr; gap:7px; }
+  .tb-time{ text-align:left; font-size:12.5px; }
+  .team-board{ padding:10px; }
+  .team-grid{ gap:5px; }
+  .team-item{ min-height:58px; padding:7px 6px; }
+  .grid{ --cell-h: 72px; gap:2px; }
   .cell{ border-radius:9px; padding-inline:2px; }
-  .cell.has-memo{ padding-bottom:20px; }
-  .badge{ font-size:10.5px; max-width:34px; }
-  .cell-tag{ font-size:8px; padding:0 4px; }
+  .badge{ font-size:10.5px; max-width:34px; height:17px; line-height:17px; }
+  .cell-tag{ font-size:8px; padding:0 4px; line-height:13px; min-height:13px; }
+  .cell-tag-slot{ min-height:13px; }
   .cell-memo{ left:3px; right:3px; height:14px; line-height:12px; font-size:8px; }
 }
 
@@ -335,8 +375,9 @@ body{
 }
 .btn-soft:active{ transform: scale(.97); }
 .app-version{
-  display:inline-block;
-  margin-top:10px;
+  display:block;
+  width:max-content;
+  margin:10px auto 0;
   color:#a0a7b5;
   font-size:11px;
   font-weight:800;
