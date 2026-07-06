@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
-  <link rel="stylesheet" href="style.css?v=20260706" />
+  <link rel="stylesheet" href="style.css?v=20260706b" />
 </head>
 <body>
   <div class="app">
@@ -86,9 +86,6 @@
     </div>
     <div class="sheet-holiday" id="sheetHoliday" hidden></div>
     <p class="sheet-hint">이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시됩니다)</p>
-    <div class="options" id="sheetOptions"></div>
-    <div class="sheet-desig" id="sheetDesig" hidden></div>
-    <button class="btn-revert" id="btnRevert" hidden>↺ 패턴 값으로 되돌리기</button>
     <div class="memo-editor">
       <div class="memo-head">
         <label class="memo-label" for="sheetMemo">메모</label>
@@ -102,6 +99,10 @@
         <button type="button" data-memo="병원">병원</button>
       </div>
     </div>
+    <div class="sheet-section-label">근무 선택</div>
+    <div class="options" id="sheetOptions"></div>
+    <div class="sheet-desig" id="sheetDesig" hidden></div>
+    <button class="btn-revert" id="btnRevert" hidden>↺ 패턴 값으로 되돌리기</button>
   </div>
 
   <!-- 설정 화면 -->
@@ -151,11 +152,18 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260706"></script>
+  <script src="app.js?v=20260706b"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
+        let refreshed = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (refreshed) return;
+          refreshed = true;
+          window.location.reload();
+        });
         navigator.serviceWorker.register('./service-worker.js')
+          .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });
     }

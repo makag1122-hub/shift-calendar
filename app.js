@@ -464,13 +464,21 @@ function renderMemoPanel(){
     items.push({ dateStr, memo, shift: t });
   }
 
+  el.hidden = false;
+
   if(!items.length){
-    el.hidden = true;
-    el.innerHTML = '';
+    el.innerHTML = `
+      <div class="memo-panel-head">
+        <div>
+          <span class="memo-eyebrow">${group}조 메모</span>
+          <h2>이번 달 체크할 일</h2>
+        </div>
+        <b>0개</b>
+      </div>
+      <div class="memo-empty">날짜를 누르면 메모를 바로 남길 수 있어요.</div>`;
     return;
   }
 
-  el.hidden = false;
   el.innerHTML = `
     <div class="memo-panel-head">
       <div>
