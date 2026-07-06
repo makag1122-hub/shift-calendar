@@ -339,6 +339,10 @@ function shortDateText(dateStr){
   const d = parseYmd(dateStr);
   return `${d.getMonth()+1}/${d.getDate()}(${WEEK[d.getDay()]})`;
 }
+function memoPreview(text, limit = 6){
+  const s = String(text || '').trim();
+  return s.length > limit ? `${s.slice(0, limit)}...` : s;
+}
 
 /* ---------- 렌더링 ---------- */
 const $ = (id) => document.getElementById(id);
@@ -439,7 +443,7 @@ function renderCalendar(){
       ${badge}
       ${tagHtml}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
-      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo">${escapeHtml(memo)}</span>` : ''}
+      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : ''}
     </button>`;
   }
   $('grid').innerHTML = html;
