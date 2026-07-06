@@ -335,6 +335,10 @@ function hexToTint(hex, alpha = 0.14){
   const b = parseInt(h.substring(4,6),16) || 0;
   return `rgba(${r},${g},${b},${alpha})`;
 }
+function shortDateText(dateStr){
+  const d = parseYmd(dateStr);
+  return `${d.getMonth()+1}/${d.getDate()}(${WEEK[d.getDay()]})`;
+}
 
 /* ---------- 렌더링 ---------- */
 const $ = (id) => document.getElementById(id);
@@ -426,19 +430,66 @@ function renderCalendar(){
       : `<span class="badge none">-</span>`;
     const dnumCls = holidayName(dateStr) ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
     const memo = memos[dateStr];
+    const hasMemo = !!memo;
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const ti = tagMap[dateStr];
     const tagHtml = ti ? `<span class="cell-tag" style="background:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>` : '';
-    html += `<button class="cell ${dateStr===todayS?'today':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
+    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="dnum ${dnumCls}">${d}</span>
       ${badge}
       ${tagHtml}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
-      ${memo ? `<span class="cell-memo">${escapeHtml(memo)}</span>` : ''}
+      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo">${escapeHtml(memo)}</span>` : ''}
     </button>`;
   }
   $('grid').innerHTML = html;
+  renderMemoPanel();
   renderSummary();
+}
+
+function renderMemoPanel(){
+  const el = $('memoPanel');
+  if(!el) return;
+  const group = currentGroup();
+  const memos = memosFor(group);
+  const ym = `${view.year}-${pad(view.month+1)}`;
+  const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
+  const items = [];
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${ym}-${pad(d)}`;
+    const memo = (memos[dateStr] || '').trim();
+    if(!memo) continue;
+    const key = shiftFor(dateStr, group);
+    const t = st(key);
+    items.push({ dateStr, memo, shift: t });
+  }
+
+  if(!items.length){
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="memo-panel-head">
+      <div>
+        <span class="memo-eyebrow">${group}조 메모</span>
+        <h2>이번 달 체크할 일</h2>
+      </div>
+      <b>${items.length}개</b>
+    </div>
+    <div class="memo-list">
+      ${items.map(({ dateStr, memo, shift }) => {
+        const color = shift ? shift.color : '#94a3b8';
+        const label = shift ? (shift.short || shift.label) : '-';
+        return `<button class="memo-item" data-date="${dateStr}" style="--c:${color}">
+          <span class="memo-date">${shortDateText(dateStr)}</span>
+          <span class="memo-shift">${label}</span>
+          <span class="memo-text">${escapeHtml(memo)}</span>
+        </button>`;
+      }).join('')}
+    </div>`;
 }
 
 function renderLegend(){
@@ -509,6 +560,7 @@ function openRangeSheet(a, b){
   }).join('');
   $('sheetDesig').hidden = true;
   $('sheetMemo').value = '';
+  updateMemoCount('');
   $('btnRevert').textContent = '↺ 이 기간 수동변경·메모 지우기';
   $('btnRevert').hidden = false;
   $('dayBackdrop').hidden = false;
@@ -541,6 +593,7 @@ function openDaySheet(dateStr){
   }).join('');
   renderSheetDesig(dateStr, group);
   $('sheetMemo').value = memosFor(group)[dateStr] || '';
+  updateMemoCount($('sheetMemo').value);
   $('btnRevert').textContent = '↺ 패턴 값으로 되돌리기';
   $('btnRevert').hidden = !isOverride(dateStr, group);
   $('dayBackdrop').hidden = false;
@@ -610,6 +663,25 @@ function setDesig(tag){
 }
 
 // 특근/지근/지휴는 전부 자동 계산 (개수 입력칸 제거)
+
+function updateMemoCount(value = $('sheetMemo').value){
+  const el = $('memoCount');
+  if(!el) return;
+  el.textContent = `${String(value || '').length}/80`;
+}
+
+function saveMemoValue(value){
+  const v = String(value || '').trim();
+  const memos = memosFor();
+  if(sheetRange){
+    rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ if(v) memos[ds]=v; else delete memos[ds]; });
+    saveState(); renderCalendar();
+    return;
+  }
+  if(!selectedDate) return;
+  if(v) memos[selectedDate] = v; else delete memos[selectedDate];
+  saveState(); renderCalendar();
+}
 
 /* ---------- 설정: 근무 종류 ---------- */
 function renderSettings(){
@@ -787,16 +859,27 @@ function wire(){
     if(b && !b.disabled) setDesig(b.dataset.desig);
   });
   $('sheetMemo').addEventListener('input', (e)=>{
-    const v = e.target.value.trim();
-    const memos = memosFor();
-    if(sheetRange){
-      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ if(v) memos[ds]=v; else delete memos[ds]; });
-      saveState(); renderCalendar();
-      return;
-    }
-    if(!selectedDate) return;
-    if(v) memos[selectedDate] = v; else delete memos[selectedDate];
-    saveState(); renderCalendar();
+    updateMemoCount(e.target.value);
+    saveMemoValue(e.target.value);
+  });
+  $('memoPresets').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-memo]');
+    if(!btn) return;
+    const input = $('sheetMemo');
+    const memo = btn.dataset.memo;
+    const current = input.value.trim();
+    const max = Number(input.getAttribute('maxlength')) || 80;
+    const next = current
+      ? (current.includes(memo) ? current : `${current} · ${memo}`)
+      : memo;
+    input.value = next.slice(0, max);
+    updateMemoCount(input.value);
+    saveMemoValue(input.value);
+    input.focus();
+  });
+  $('memoPanel').addEventListener('click', (e)=>{
+    const item = e.target.closest('[data-date]');
+    if(item) openDaySheet(item.dataset.date);
   });
 
   // 설정 열기/닫기

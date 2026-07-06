@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
-  <link rel="stylesheet" href="style.css?v=20260702" />
+  <link rel="stylesheet" href="style.css?v=20260706" />
 </head>
 <body>
   <div class="app">
@@ -62,6 +62,9 @@
       <p class="cal-hint">💡 날짜를 <b>길게 누르면</b> 여러 날을 한꺼번에 선택할 수 있어요</p>
     </main>
 
+    <!-- 이번 달 메모 -->
+    <section class="memo-panel" id="memoPanel" hidden></section>
+
     <!-- 월 요약 -->
     <section class="summary" id="summary"></section>
 
@@ -86,8 +89,19 @@
     <div class="options" id="sheetOptions"></div>
     <div class="sheet-desig" id="sheetDesig" hidden></div>
     <button class="btn-revert" id="btnRevert" hidden>↺ 패턴 값으로 되돌리기</button>
-    <label class="memo-label" for="sheetMemo">메모</label>
-    <input class="memo-input" id="sheetMemo" type="text" placeholder="예: 교육, 비번, 연차…" maxlength="40" />
+    <div class="memo-editor">
+      <div class="memo-head">
+        <label class="memo-label" for="sheetMemo">메모</label>
+        <span class="memo-count" id="memoCount">0/80</span>
+      </div>
+      <textarea class="memo-input" id="sheetMemo" rows="3" placeholder="예: 교육, 비번, 연차…" maxlength="80"></textarea>
+      <div class="memo-presets" id="memoPresets" aria-label="빠른 메모">
+        <button type="button" data-memo="교육">교육</button>
+        <button type="button" data-memo="비번">비번</button>
+        <button type="button" data-memo="연차">연차</button>
+        <button type="button" data-memo="병원">병원</button>
+      </div>
+    </div>
   </div>
 
   <!-- 설정 화면 -->
@@ -137,7 +151,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260702"></script>
+  <script src="app.js?v=20260706"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
