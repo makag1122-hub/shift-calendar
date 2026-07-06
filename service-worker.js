@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'shift-calendar-v20260706-square-labels';
+const CACHE_NAME = 'shift-calendar-v20260706-label-grid2';
 const APP_SHELL = [
   './',
   './index.html',
