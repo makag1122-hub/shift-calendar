@@ -273,6 +273,9 @@ body{
   word-break:keep-all; overflow-wrap:normal;
   box-shadow:0 1px 4px rgba(120,53,15,.05);
 }
+.cell.has-memo:not(.has-tag) .cell-memo{
+  bottom:20px;
+}
 .cell.range-anchor{ outline: 2px solid var(--brand); outline-offset:-2px; }
 .cell.range-sel{ outline: 2px dashed var(--brand); outline-offset:-2px; background: rgba(79,70,229,.14); }
 
@@ -289,6 +292,7 @@ body{
   .cell-tag{ font-size:8px; padding:0 4px; line-height:13px; min-height:13px; }
   .cell-tag-slot{ min-height:13px; }
   .cell-memo{ left:3px; right:3px; height:14px; line-height:12px; font-size:8px; }
+  .cell.has-memo:not(.has-tag) .cell-memo{ bottom:19px; }
 }
 
 /* 메모 */
