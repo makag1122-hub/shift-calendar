@@ -334,6 +334,14 @@ body{
   box-shadow: var(--shadow-sm); cursor:pointer;
 }
 .btn-soft:active{ transform: scale(.97); }
+.app-version{
+  display:inline-block;
+  margin-top:10px;
+  color:#a0a7b5;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.2px;
+}
 
 /* 백드롭 + 시트 */
 .backdrop{
