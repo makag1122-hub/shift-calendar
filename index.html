@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
-  <link rel="stylesheet" href="style.css?v=20260706k" />
+  <link rel="stylesheet" href="style.css?v=20260712a" />
 </head>
 <body>
   <div class="app">
@@ -26,6 +26,9 @@
       </div>
       <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
     </header>
+
+    <!-- 공유 보기(읽기 전용) 배너 -->
+    <div class="sync-banner" id="syncBanner" hidden></div>
 
     <!-- 내 조 선택 -->
     <section class="group-switcher" aria-label="내 조 선택">
@@ -73,7 +76,7 @@
 
     <footer class="app-footer">
       <button class="btn-soft" id="btnToday">오늘로 이동</button>
-      <div class="app-version">ver 2026.07.06.11</div>
+      <div class="app-version">ver 2026.07.12.1</div>
     </footer>
   </div>
 
@@ -87,7 +90,7 @@
     </div>
     <div class="sheet-holiday" id="sheetHoliday" hidden></div>
     <p class="sheet-hint">이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시됩니다)</p>
-    <div class="memo-editor">
+    <div class="memo-editor" id="memoEditor">
       <div class="memo-head">
         <label class="memo-label" for="sheetMemo">메모</label>
         <span class="memo-count" id="memoCount">0/80</span>
@@ -138,6 +141,12 @@
         <input class="date-input" id="startDate" type="date" />
       </section>
 
+      <section class="set-section" id="syncSection">
+        <h3>💛 여자친구와 공유 · 실시간 동기화</h3>
+        <p class="set-desc">내 근무표를 여자친구와 공유해요. <b>내가 수정하면 여친 폰에 자동 반영</b>되고, 여친은 <b>보기 전용</b>입니다. 무료 Firebase(내 구글계정)로 1회만 설정하면 됩니다.</p>
+        <div id="syncBox"></div>
+      </section>
+
       <section class="set-section">
         <h3>데이터</h3>
         <p class="set-desc">데이터는 이 브라우저에 저장됩니다. 백업하거나 다른 기기로 옮길 때 사용하세요.</p>
@@ -149,11 +158,12 @@
         <input id="importFile" type="file" accept="application/json" hidden />
       </section>
 
-      <p class="set-foot">교대 캘린더 · ver 2026.07.06.11</p>
+      <p class="set-foot">교대 캘린더 · ver 2026.07.12.1</p>
     </div>
   </div>
 
-  <script src="app.js?v=20260706k"></script>
+  <script src="sync.js?v=20260712a"></script>
+  <script src="app.js?v=20260712a"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {

@@ -24,6 +24,7 @@ function dayDiff(aStr, bStr){
   const ub = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
   return Math.round((ub - ua) / 86400000);
 }
+function addDays(dateStr, n){ const d = parseYmd(dateStr); d.setDate(d.getDate()+n); return ymd(d); }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 const WEEK = ['일','월','화','수','목','금','토'];
@@ -45,6 +46,26 @@ const HOLIDAYS = {
 };
 function holidayName(dateStr){ return HOLIDAYS[dateStr] || null; }
 function isHoliday(dateStr){ return !!HOLIDAYS[dateStr]; }
+// 달력 칸에 넣을 짧은 공휴일 이름(칸이 좁아 이름이 길면 줄임)
+const HOLIDAY_SHORT = {
+  '부처님오신날':'석탄일', '어린이날':'어린이', '크리스마스':'성탄절',
+  '삼일절 대체':'대체', '광복절 대체':'대체', '개천절 대체':'대체', '부처님오신날 대체':'대체',
+};
+function holidayShort(dateStr){
+  const n = HOLIDAYS[dateStr];
+  return n ? (HOLIDAY_SHORT[n] || n) : '';
+}
+
+/* ---------- 명절(설날·추석) 특별 근무표 ----------
+   설날·추석엔 휴무가 길게 편성돼 정규 패턴과 달라집니다(6일 연속근무가 생기기도 함).
+   조별 { 'YYYY-MM-DD': 근무키 } — 정규 패턴 위에 덮어써지고, 달력에서 직접 바꾸면 그게 더 우선합니다.
+   ※ 2026 추석(9/24~26) 편성 — 다음 명절이 정해지면 여기에 이어서 추가하면 됩니다. */
+const SPECIAL_SCHEDULE = {
+  A: { '2026-09-23':'D', '2026-09-24':'OFF', '2026-09-25':'OFF', '2026-09-26':'OFF', '2026-09-27':'OFF', '2026-09-28':'S' },
+  B: { '2026-10-11':'D', '2026-10-12':'OFF', '2026-10-13':'OFF', '2026-10-14':'OFF', '2026-10-15':'S' },
+  C: { '2026-10-05':'D', '2026-10-06':'OFF', '2026-10-07':'OFF', '2026-10-08':'OFF', '2026-10-09':'S' },
+  D: { '2026-09-29':'D', '2026-09-30':'OFF', '2026-10-01':'OFF', '2026-10-02':'OFF', '2026-10-03':'S' },
+};
 
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
@@ -183,9 +204,12 @@ function saveState(){
   try{
     state.overrides = groupOverrideMap('A');
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if(window.Sync && Sync.onLocalSave) Sync.onLocalSave();  // 공유 중이면 클라우드에 자동 반영
   }
   catch(e){ console.warn('저장 실패', e); }
 }
+// 공유 '보기 전용'(여자친구)일 때 편집 차단
+function canEdit(){ return !(window.Sync && Sync.readonly && Sync.readonly()); }
 
 let state = loadState();
 let view = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
@@ -228,9 +252,32 @@ function cycleIndexFor(dateStr, offset = 0){
   if(!cycle || !cycle.length) return null;
   return mod(dayDiff(state.pattern.startDate, dateStr) + offset, cycle.length);
 }
+// 명절 특별근무: 정규 패턴 위에 덮어쓰는 '기본 근무'로 취급(사용자 수동변경이 최우선)
+function specialShiftFor(dateStr, group){
+  const m = SPECIAL_SCHEDULE[normalizeGroup(group)];
+  const key = m && m[dateStr];
+  return (key && state.shiftTypes[key]) ? key : null;
+}
+function isSpecialSchedule(dateStr, group = currentGroup()){ return !!specialShiftFor(dateStr, group); }
 function groupShiftFor(dateStr, group){
+  const sp = specialShiftFor(dateStr, group);
+  if(sp) return sp;
   const idx = cycleIndexFor(dateStr, groupOffset(group));
   return idx === null ? null : state.pattern.cycle[idx];
+}
+// 실제 근무표(수동변경·명절 포함) 기준 '연속근무' 계산
+function isWorkDay(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !!(t && t.kind !== 'off'); }
+function workRunDayFor(dateStr, group){       // 이 날 포함, 연속근무 며칠째(휴무면 0)
+  if(!isWorkDay(dateStr, group)) return 0;
+  let day = 1, d = dateStr;
+  for(let i=0; i<20; i++){ d = addDays(d, -1); if(isWorkDay(d, group)) day++; else break; }
+  return day;
+}
+function workRunTotalFor(dateStr, group){      // 이 날이 속한 연속근무의 총 길이
+  if(!isWorkDay(dateStr, group)) return 0;
+  let total = workRunDayFor(dateStr, group), d = dateStr;
+  for(let i=0; i<20; i++){ d = addDays(d, 1); if(isWorkDay(d, group)) total++; else break; }
+  return total;
 }
 function runDayAtIndex(idx){
   const cycle = state.pattern.cycle;
@@ -249,6 +296,7 @@ function groupRunDayFor(dateStr, group){
 }
 function shiftDayText(dateStr, group){
   if(isOverride(dateStr, group)) return '수동 변경';
+  if(isSpecialSchedule(dateStr, group)) return '명절 편성';
   const runDay = groupRunDayFor(dateStr, group);
   return runDay ? `${runDay}일차` : '';
 }
@@ -432,17 +480,21 @@ function renderCalendar(){
     const badge = t
       ? `<span class="badge" style="background:${t.color}">${t.short || t.label}</span>`
       : `<span class="badge none">-</span>`;
-    const dnumCls = holidayName(dateStr) ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
+    const hol = holidayName(dateStr);
+    const dnumCls = hol ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
+    const holHtml = hol ? `<span class="cell-hol" title="${escapeHtml(hol)}">${escapeHtml(holidayShort(dateStr))}</span>` : '';
     const memo = memos[dateStr];
     const hasMemo = !!memo;
+    const special = isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group);
+    const longRun = workRunTotalFor(dateStr, group) >= 6;
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const ti = tagMap[dateStr];
     const hasTag = !!ti;
     const tagHtml = ti
       ? `<span class="cell-tag" style="background:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
       : '<span class="cell-tag-slot" aria-hidden="true"></span>';
-    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
-      <span class="dnum ${dnumCls}">${d}</span>
+    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${special?' is-special':''}${longRun?' long-run':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
+      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}</span>
       ${badge}
       ${tagHtml}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
@@ -508,11 +560,16 @@ function renderMemoPanel(){
 }
 
 function renderLegend(){
-  $('legend').innerHTML = state.shiftOrder.map(key=>{
+  const shifts = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
     if(!t) return '';
     return `<span class="lg"><span class="lg-dot" style="background:${t.color}"></span>${t.label}</span>`;
   }).join('');
+  const marks = `
+    <span class="lg lg-mark"><span class="lg-bar sun"></span>공휴일</span>
+    <span class="lg lg-mark"><span class="lg-bar top"></span>명절 편성</span>
+    <span class="lg lg-mark"><span class="lg-bar bottom"></span>6일+ 연속근무</span>`;
+  $('legend').innerHTML = shifts + marks;
 }
 
 function renderSummary(){
@@ -547,6 +604,7 @@ function rangeDays(a, b){
   return out;
 }
 function startRange(dateStr){
+  if(!canEdit()) return;
   rangeAnchor = dateStr;
   const d = parseYmd(dateStr);
   $('rangeBannerText').textContent = `시작 ${d.getMonth()+1}/${d.getDate()} — 끝 날짜를 탭하세요`;
@@ -592,25 +650,40 @@ function openDaySheet(dateStr){
   const hol = holidayName(dateStr);
   const ti = tagInfoFor(dateStr, group);
   const sh = $('sheetHoliday');
-  if(hol || ti){ sh.hidden = false; sh.innerHTML = `${hol ? '🔴 ' + hol : ''}${ti ? ' <b>' + tagLabel(ti) + '</b>' : ''}`; }
+  const infoParts = [];
+  if(hol) infoParts.push(`<span class="sh-hol">🔴 ${escapeHtml(hol)}</span>`);
+  if(isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group)) infoParts.push('<span class="sh-special">🎎 명절 편성</span>');
+  const runTotal = workRunTotalFor(dateStr, group);
+  if(runTotal >= 6) infoParts.push(`<span class="sh-run">🔺 ${runTotal}일 연속근무 (오늘 ${workRunDayFor(dateStr, group)}일차)</span>`);
+  if(ti) infoParts.push(`<b>${tagLabel(ti)}</b>`);
+  if(infoParts.length){ sh.hidden = false; sh.innerHTML = infoParts.join(' '); }
   else { sh.hidden = true; sh.innerHTML = ''; }
-  document.querySelector('.sheet-hint').innerHTML = '이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시)';
+  const ro = !canEdit();
   const current = shiftFor(dateStr, group);
+  $('daySheet').classList.toggle('sheet-ro', ro);
+  document.querySelector('.sheet-hint').innerHTML = ro
+    ? '👀 여자친구 공유 · <b>읽기 전용</b>입니다. 근무·메모는 소유자만 바꿀 수 있어요.'
+    : '이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시)';
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
-    const allowed = canPlace(key, dateStr, group);
-    const note = allowed ? timeText(t) : (t.special === 'desigOff' ? '근무일에만' : '휴무일에만');
-    return `<button class="opt ${key===current?'selected':''} ${allowed?'':'opt-disabled'}" data-code="${key}" ${allowed?'':'disabled'} style="--c:${t.color}">
+    const allowed = !ro && canPlace(key, dateStr, group);
+    const note = ro ? timeText(t) : (allowed ? timeText(t) : (t.special === 'desigOff' ? '근무일에만' : '휴무일에만'));
+    const disabled = ro || !allowed;
+    return `<button class="opt ${key===current?'selected':''} ${disabled?'opt-disabled':''}" data-code="${key}" ${disabled?'disabled':''} style="--c:${t.color}">
       <span class="opt-badge" style="background:${t.color}">${t.short || t.label}</span>
       <span class="opt-textwrap"><span class="opt-label">${t.label}</span>
       <span class="opt-time">${note}</span></span>
     </button>`;
   }).join('');
-  renderSheetDesig(dateStr, group);
-  $('sheetMemo').value = memosFor(group)[dateStr] || '';
-  updateMemoCount($('sheetMemo').value);
+  if(ro){ $('sheetDesig').hidden = true; }
+  else { renderSheetDesig(dateStr, group); }
+  const memoText = memosFor(group)[dateStr] || '';
+  $('sheetMemo').value = memoText;
+  $('sheetMemo').readOnly = ro;
+  $('memoEditor').style.display = (ro && !memoText) ? 'none' : '';
+  updateMemoCount(memoText);
   $('btnRevert').textContent = '↺ 패턴 값으로 되돌리기';
-  $('btnRevert').hidden = !isOverride(dateStr, group);
+  $('btnRevert').hidden = ro || !isOverride(dateStr, group);
   $('dayBackdrop').hidden = false;
   $('daySheet').hidden = false;
 }
@@ -622,6 +695,7 @@ function closeDaySheet(){
   renderAll();
 }
 function setShift(key){
+  if(!canEdit()) return;
   const group = currentGroup();
   if(sheetRange){  // 범위 모드: 기간 내 모든 날에 적용(가능한 날만)
     const overrides = groupOverrideMap(group);
@@ -664,6 +738,7 @@ function renderSheetDesig(dateStr, group){
     <div class="desig-hint">특근=평일 공휴일 근무 / 지근=주말 근무 / 지휴=평일 휴무</div>`;
 }
 function setDesig(tag){
+  if(!canEdit()) return;
   if(!selectedDate) return;
   const group = currentGroup();
   if(tag === 'TG' && !tgEligible(selectedDate, group)) return;
@@ -686,6 +761,7 @@ function updateMemoCount(value = $('sheetMemo').value){
 }
 
 function saveMemoValue(value){
+  if(!canEdit()) return;
   const v = String(value || '').trim();
   const memos = memosFor();
   if(sheetRange){
@@ -720,9 +796,129 @@ function renderSettings(){
   renderPatternChips();
   renderPatternAdd();
   $('startDate').value = state.pattern.startDate;
+  renderSyncBox();
 }
 
+/* ---------- 설정: 여자친구 공유(실시간 동기화) ---------- */
+const FIRESTORE_RULES =
+`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /calendars/{code} {
+      allow read, write: if true;
+    }
+  }
+}`;
+
+function syncStatusText(s){
+  return ({ connecting:'⏳ 연결 중…', live:'🟢 실시간 공유 중', readonly:'👀 공유 보기 중 · 읽기 전용', error:'⚠️ 오류', off:'꺼짐' })[s] || s;
+}
+
+let syncForceSetup = false;   // owner가 'Firebase 설정 다시 넣기' 눌렀을 때
+function renderSyncBox(){
+  const box = $('syncBox');
+  if(!box || !window.Sync) return;
+  const st = Sync.getStatus();
+  if(Sync.role() === 'viewer'){
+    box.innerHTML = `
+      <div class="sync-status on">${syncStatusText(st.status)}</div>
+      <p class="sync-note">소유자(내 여자친구/파트너)가 수정하면 이 화면에 <b>자동으로 반영</b>됩니다. 여기서는 근무·메모를 바꿀 수 없어요.</p>
+      ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
+      <button class="btn-text-danger" id="syncDisableBtn">공유 해제(내 폰에서 이 공유 끄기)</button>`;
+    return;
+  }
+  if(Sync.isOn() && !syncForceSetup){  // owner
+    const link = Sync.shareLink();
+    box.innerHTML = `
+      <div class="sync-status ${st.status==='error'?'err':'on'}">${syncStatusText(st.status)}</div>
+      ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
+      <label class="sync-lbl">여자친구에게 보낼 공유 링크</label>
+      <div class="sync-link-row">
+        <input id="syncLink" class="sync-link" readonly value="${escapeHtml(link)}" />
+        <button class="btn-soft" id="syncCopyBtn">복사</button>
+      </div>
+      <p class="sync-note">이 링크를 카카오톡 등으로 보내세요. 여친이 링크를 열면 내 근무표가 <b>실시간(보기 전용)</b>으로 보입니다. 내가 수정할 때마다 자동 반영돼요.</p>
+      <div class="sync-actions">
+        <button class="btn-soft" id="syncReconfigBtn">Firebase 설정 다시 넣기</button>
+        <button class="btn-text-danger" id="syncDisableBtn">공유 끄기</button>
+      </div>`;
+    return;
+  }
+  // 미설정(owner 설정 폼)
+  box.innerHTML = `
+    <label class="sync-lbl">1) Firebase 설정(firebaseConfig) 붙여넣기</label>
+    <textarea id="syncConfigInput" class="sync-config" rows="7" placeholder='{\n  "apiKey": "AIza...",\n  "authDomain": "myapp.firebaseapp.com",\n  "projectId": "myapp",\n  "appId": "1:..."\n}'></textarea>
+    <button class="btn-primary" id="syncEnableBtn">공유 시작하기</button>
+    <div class="sync-msg" id="syncMsg"></div>
+    <details class="sync-guide">
+      <summary>📖 Firebase 설정 방법 (처음 1회 · 약 10분 · 무료)</summary>
+      <ol class="sync-steps">
+        <li><b>firebase.google.com</b> 접속 → 구글 로그인 → <b>Go to console</b> → <b>프로젝트 만들기</b>(이름 아무거나, 애널리틱스는 꺼도 됩니다).</li>
+        <li>왼쪽 메뉴 <b>빌드 › Firestore Database</b> → <b>데이터베이스 만들기</b> → 위치 <b>asia-northeast3(서울)</b> → <b>테스트 모드로 시작</b> → 완료.</li>
+        <li>Firestore의 <b>규칙(Rules)</b> 탭에서 아래 내용으로 바꾸고 <b>게시</b>:
+          <div class="sync-link-row">
+            <textarea class="sync-rules" id="syncRules" rows="7" readonly>${escapeHtml(FIRESTORE_RULES)}</textarea>
+          </div>
+          <button class="btn-soft sm" id="syncCopyRules">규칙 복사</button>
+        </li>
+        <li>⚙ <b>프로젝트 설정</b> → 아래로 스크롤 <b>내 앱</b> → 웹 아이콘 <b>&lt;/&gt;</b> 클릭 → 앱 등록(호스팅 체크 안 해도 됨) → 화면에 나오는 <b>firebaseConfig</b>의 <b>{ … }</b> 부분을 통째로 복사.</li>
+        <li>복사한 걸 위 1)번 칸에 붙여넣고 <b>공유 시작하기</b>. 그다음 나오는 링크를 여자친구에게 보내면 끝!</li>
+      </ol>
+    </details>`;
+}
+
+async function enableOwnerSync(){
+  const input = $('syncConfigInput');
+  const msg = $('syncMsg');
+  if(!input) return;
+  if(msg){ msg.className = 'sync-msg'; msg.textContent = '연결 중…'; }
+  try{
+    await Sync.enableOwner(input.value);
+    renderSyncBox();
+  }catch(e){
+    if(msg){ msg.className = 'sync-msg err'; msg.textContent = e.message || String(e); }
+  }
+}
+
+function copyToClipboard(text, okEl){
+  const done = () => { if(okEl){ const o = okEl.textContent; okEl.textContent = '✓ 복사됨'; setTimeout(()=>{ okEl.textContent = o; }, 1400); } };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done){
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); done && done(); }catch(e){}
+  document.body.removeChild(ta);
+}
+
+function renderSyncBanner(){
+  const el = $('syncBanner');
+  if(!el || !window.Sync) return;
+  if(Sync.role() === 'viewer'){
+    const st = Sync.getStatus();
+    el.hidden = false;
+    el.className = 'sync-banner' + (st.status==='error' ? ' err' : '');
+    el.innerHTML = st.status==='error'
+      ? `⚠️ 공유 연결 오류 — ${escapeHtml(st.error)}`
+      : `👀 여자친구 공유 · <b>읽기 전용</b> · 소유자가 바꾸면 실시간 반영`;
+    document.body.classList.add('readonly-mode');
+  } else {
+    el.hidden = true;
+    document.body.classList.remove('readonly-mode');
+  }
+}
+
+// sync.js가 상태 변화 때 호출
+window.onSyncStatus = function(){
+  renderSyncBanner();
+  if($('settingsModal') && !$('settingsModal').hidden) renderSyncBox();
+};
+
 function addShiftType(){
+  if(!canEdit()) return;
   let n = 1, key = 'C1';
   while(state.shiftTypes[key]){ n++; key = 'C' + n; }
   state.shiftTypes[key] = { label:'새 근무', short:'?', start:'09:00', end:'18:00', color:'#64748b' };
@@ -730,6 +926,7 @@ function addShiftType(){
   saveState(); renderSettings(); renderAll();
 }
 function removeShiftType(key){
+  if(!canEdit()) return;
   if(state.shiftOrder.length <= 1) return;
   const t = state.shiftTypes[key];
   if(!confirm(`'${t ? t.label : key}' 근무를 삭제할까요?\n(달력에서 이 근무로 지정된 날은 비워집니다)`)) return;
@@ -779,6 +976,7 @@ function exportData(){
   URL.revokeObjectURL(url);
 }
 function importData(file){
+  if(!canEdit()) return;
   const reader = new FileReader();
   reader.onload = () => {
     try{
@@ -901,12 +1099,27 @@ function wire(){
   $('btnSettings').onclick = openSettings;
   $('btnCloseSettings').onclick = closeSettings;
 
+  // 공유(실시간 동기화) 버튼
+  $('syncBox').addEventListener('click', (e)=>{
+    const t = e.target.closest('button'); if(!t) return;
+    if(t.id === 'syncEnableBtn'){ syncForceSetup = false; enableOwnerSync(); }
+    else if(t.id === 'syncReconfigBtn'){ syncForceSetup = true; renderSyncBox(); }
+    else if(t.id === 'syncCopyBtn'){ copyToClipboard($('syncLink').value, t); }
+    else if(t.id === 'syncCopyRules'){ copyToClipboard(FIRESTORE_RULES, t); }
+    else if(t.id === 'syncDisableBtn'){
+      if(confirm('공유를 끌까요? (여자친구에게 보낸 링크는 더 이상 갱신되지 않습니다)')){
+        Sync.disable(); syncForceSetup = false; renderSyncBox(); renderSyncBanner(); renderAll();
+      }
+    }
+  });
+
   // 근무 종류: 추가/삭제(클릭) + 수정(입력)
   $('setShiftTypes').addEventListener('click', (e)=>{
     if(e.target.id === 'btnAddType') addShiftType();
     else if(e.target.dataset.del !== undefined) removeShiftType(e.target.dataset.del);
   });
   function onShiftTypeEdit(e){
+    if(!canEdit()) return;
     const card = e.target.closest('.st-card'); if(!card) return;
     const key = card.dataset.code, field = e.target.dataset.field;
     if(!field) return;
@@ -920,6 +1133,7 @@ function wire(){
 
   // 패턴 칩(이동/삭제)
   $('patternChips').addEventListener('click', (e)=>{
+    if(!canEdit()) return;
     const cycle = state.pattern.cycle;
     if(e.target.dataset.x !== undefined){
       cycle.splice(Number(e.target.dataset.x), 1);
@@ -930,21 +1144,25 @@ function wire(){
     saveState(); renderPatternChips(); renderAll();
   });
   $('patternAdd').addEventListener('click', (e)=>{
+    if(!canEdit()) return;
     const key = e.target.dataset.add;
     if(!key) return;
     state.pattern.cycle.push(key);
     saveState(); renderPatternChips(); renderAll();
   });
   $('btnClearPattern').onclick = () => {
+    if(!canEdit()) return;
     if(confirm('반복 패턴을 모두 비울까요?')){ state.pattern.cycle = []; saveState(); renderPatternChips(); renderAll(); }
   };
   $('btnDefaultPattern').onclick = () => {
+    if(!canEdit()) return;
     state.pattern.cycle = clone(DEFAULT_CYCLE);
     saveState(); renderPatternChips(); renderAll();
   };
 
   // 패턴 시작일
   $('startDate').addEventListener('change', (e)=>{
+    if(!canEdit()) return;
     state.pattern.startDate = e.target.value || todayStr();
     saveState(); renderAll();
   });
@@ -954,6 +1172,7 @@ function wire(){
   $('btnImport').onclick = () => $('importFile').click();
   $('importFile').addEventListener('change', (e)=>{ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
   $('btnReset').onclick = () => {
+    if(!canEdit()) return;
     if(confirm('모든 데이터를 지우고 처음 상태로 되돌릴까요?')){
       localStorage.removeItem(STORAGE_KEY);
       state = clone(DEFAULT_STATE);
@@ -973,3 +1192,4 @@ function wire(){
 renderWeekdays();
 renderAll();
 wire();
+if(window.Sync && Sync.init){ renderSyncBanner(); Sync.init(); }  // 공유 링크 감지 + 실시간 연결

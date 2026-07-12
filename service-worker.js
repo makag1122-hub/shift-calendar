@@ -1,10 +1,11 @@
 'use strict';
 
-const CACHE_NAME = 'shift-calendar-v20260706-label-grid2';
+const CACHE_NAME = 'shift-calendar-v20260712-holiday-special';
 const APP_SHELL = [
   './',
   './index.html',
   './style.css',
+  './sync.js',
   './app.js',
   './manifest.json',
   './icons/icon-180.png',
