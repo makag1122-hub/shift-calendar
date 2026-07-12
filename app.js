@@ -57,15 +57,56 @@ function holidayShort(dateStr){
 }
 
 /* ---------- 명절(설날·추석) 특별 근무표 ----------
-   설날·추석엔 휴무가 길게 편성돼 정규 패턴과 달라집니다(6일 연속근무가 생기기도 함).
-   조별 { 'YYYY-MM-DD': 근무키 } — 정규 패턴 위에 덮어써지고, 달력에서 직접 바꾸면 그게 더 우선합니다.
-   ※ 2026 추석(9/24~26) 편성 — 다음 명절이 정해지면 여기에 이어서 추가하면 됩니다. */
+   명절엔 로테이션 전체가 재편성됩니다(6일 연속근무·12시간 D2/G2 커버 발생).
+   실제 회사 편성표(DS소방대캘린더 캡처, 2026-07-13 대조 완료 — 244건 전부 일치)를 그대로 옮긴 것.
+   조별 [시작일, 끝일, 근무키] 구간 목록 → 정규 패턴 위에 덮어써지고, 달력에서 직접 바꾸면 그게 더 우선.
+   ※ 다음 명절 편성이 나오면 여기에 구간을 이어서 추가 + 필요시 PATTERN_REANCHORS에 새 기준일 추가. */
+function expandRuns(runs){
+  const out = {};
+  for(const [from, to, key] of runs){
+    let d = from;
+    while(true){ out[d] = key; if(d === to) break; d = addDays(d, 1); }
+  }
+  return out;
+}
 const SPECIAL_SCHEDULE = {
-  A: { '2026-09-23':'D', '2026-09-24':'OFF', '2026-09-25':'OFF', '2026-09-26':'OFF', '2026-09-27':'OFF', '2026-09-28':'S' },
-  B: { '2026-10-11':'D', '2026-10-12':'OFF', '2026-10-13':'OFF', '2026-10-14':'OFF', '2026-10-15':'S' },
-  C: { '2026-10-05':'D', '2026-10-06':'OFF', '2026-10-07':'OFF', '2026-10-08':'OFF', '2026-10-09':'S' },
-  D: { '2026-09-29':'D', '2026-09-30':'OFF', '2026-10-01':'OFF', '2026-10-02':'OFF', '2026-10-03':'S' },
+  // 2026 추석 편성 (9/10 ~ 10/12)
+  A: expandRuns([
+    ['2026-09-10','2026-09-10','OFF'], ['2026-09-11','2026-09-16','G'],  ['2026-09-17','2026-09-18','OFF'],
+    ['2026-09-19','2026-09-23','D'],   ['2026-09-24','2026-09-27','OFF'],['2026-09-28','2026-10-02','S'],
+    ['2026-10-03','2026-10-03','OFF'], ['2026-10-04','2026-10-09','G'],  ['2026-10-10','2026-10-11','OFF'],
+    ['2026-10-12','2026-10-12','D'],
+  ]),
+  B: expandRuns([
+    ['2026-09-10','2026-09-10','G'],   ['2026-09-11','2026-09-12','OFF'],['2026-09-13','2026-09-18','D'],
+    ['2026-09-19','2026-09-20','OFF'], ['2026-09-21','2026-09-26','S'],  ['2026-09-27','2026-09-27','OFF'],
+    ['2026-09-28','2026-10-03','G'],   ['2026-10-04','2026-10-05','OFF'],['2026-10-06','2026-10-11','D'],
+    ['2026-10-12','2026-10-12','OFF'],
+  ]),
+  C: expandRuns([
+    ['2026-09-10','2026-09-12','D'],   ['2026-09-13','2026-09-14','OFF'],['2026-09-15','2026-09-20','S'],
+    ['2026-09-21','2026-09-21','OFF'], ['2026-09-22','2026-09-26','G'],  ['2026-09-27','2026-09-27','G2'],
+    ['2026-09-28','2026-09-29','OFF'], ['2026-09-30','2026-10-05','D'],  ['2026-10-06','2026-10-08','OFF'],
+    ['2026-10-09','2026-10-12','S'],
+  ]),
+  D: expandRuns([
+    ['2026-09-10','2026-09-14','S'],   ['2026-09-15','2026-09-16','OFF'],['2026-09-17','2026-09-21','G'],
+    ['2026-09-22','2026-09-23','OFF'], ['2026-09-24','2026-09-26','D'],  ['2026-09-27','2026-09-27','D2'],
+    ['2026-09-28','2026-09-29','D'],   ['2026-09-30','2026-10-02','OFF'],['2026-10-03','2026-10-08','S'],
+    ['2026-10-09','2026-10-09','OFF'], ['2026-10-10','2026-10-12','G'],
+  ]),
 };
+
+/* 명절 후 로테이션 재기준일: 2026 추석을 지나며 전체 로테이션이 6일 밀림.
+   해당 날짜 이후는 이 앵커(= A조 cycle[0])로 계산. 다음 명절 때 항목 추가. */
+const PATTERN_REANCHORS = [
+  { from: '2026-10-13', anchor: '2026-10-13' },
+];
+function patternAnchorFor(dateStr){
+  let a = state.pattern.startDate;
+  for(const r of PATTERN_REANCHORS){ if(dateStr >= r.from) a = r.anchor; }
+  return a;
+}
 
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
@@ -250,7 +291,7 @@ function mod(n, m){ return ((n % m) + m) % m; }
 function cycleIndexFor(dateStr, offset = 0){
   const cycle = state.pattern.cycle;
   if(!cycle || !cycle.length) return null;
-  return mod(dayDiff(state.pattern.startDate, dateStr) + offset, cycle.length);
+  return mod(dayDiff(patternAnchorFor(dateStr), dateStr) + offset, cycle.length);
 }
 // 명절 특별근무: 정규 패턴 위에 덮어쓰는 '기본 근무'로 취급(사용자 수동변경이 최우선)
 function specialShiftFor(dateStr, group){
@@ -294,11 +335,17 @@ function runDayAtIndex(idx){
 function groupRunDayFor(dateStr, group){
   return runDayAtIndex(cycleIndexFor(dateStr, groupOffset(group)));
 }
+function offRunDayFor(dateStr, group){          // 이 날 포함, 연속휴무 며칠째(근무면 0)
+  if(isWorkDay(dateStr, group)) return 0;
+  let day = 1, d = dateStr;
+  for(let i=0; i<20; i++){ d = addDays(d, -1); if(!isWorkDay(d, group)) day++; else break; }
+  return day;
+}
 function shiftDayText(dateStr, group){
   if(isOverride(dateStr, group)) return '수동 변경';
-  if(isSpecialSchedule(dateStr, group)) return '명절 편성';
-  const runDay = groupRunDayFor(dateStr, group);
-  return runDay ? `${runDay}일차` : '';
+  // 실제 근무표(명절 편성·재기준 포함) 기준 연속 일수 — 6근이면 1~6일차로 표시됨
+  const n = isWorkDay(dateStr, group) ? workRunDayFor(dateStr, group) : offRunDayFor(dateStr, group);
+  return n ? `${n}일차` : '';
 }
 function isNextDay(t){ return !!(t && t.start && t.end && t.end <= t.start); } // 예: 22:00 → 06:00
 function timeText(t){
