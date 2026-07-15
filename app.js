@@ -917,18 +917,17 @@ function renderSyncBox(){
   if(Sync.isOn() && !syncForceSetup){  // owner
     const link = Sync.shareLink();
     const last = st.updatedAt;
-    const canShare = !!navigator.share;
     box.innerHTML = `
       <div class="sync-status ${st.status==='error'?'err':'on'}">${syncStatusText(st.status)}</div>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
       <label class="sync-lbl">여자친구에게 공유하기</label>
-      ${canShare ? `<button class="btn-primary sync-send" id="syncShareBtn">💌 카톡·문자로 링크 보내기</button>` : ''}
+      <button class="btn-primary sync-send" id="syncShareBtn">💌 카톡·문자로 보내기</button>
       <div class="sync-link-row">
         <input id="syncLink" class="sync-link" readonly value="${escapeHtml(link)}" />
         <button class="btn-soft" id="syncCopyBtn">복사</button>
       </div>
       <div class="sync-qr" id="syncQr" hidden></div>
-      <p class="sync-note">링크를 ${canShare ? '<b>보내기</b> 버튼으로 카톡·문자에 보내거나, ' : '<b>복사</b>해서 카카오톡 등으로 보내거나, '}옆에 있으면 여친 폰 카메라로 <b>QR코드를 스캔</b>하면 됩니다. 내가 수정할 때마다 실시간(보기 전용) 반영돼요.</p>
+      <p class="sync-note"><b>보내기</b> 버튼을 누르면 카톡·문자 공유창이 열립니다. (지원 안 되는 기기·PC에서는 링크가 <b>자동 복사</b>돼요.) 옆에 있으면 여친 폰 카메라로 <b>QR코드를 스캔</b>해도 됩니다. 내가 수정할 때마다 실시간(보기 전용) 반영돼요.</p>
       ${last ? `<p class="sync-synced">마지막 동기화: <span data-reltime="${last}">${relTime(last)}</span></p>` : ''}
       <div class="sync-actions">
         <button class="btn-soft" id="syncReconfigBtn">Firebase 설정 다시 넣기</button>
