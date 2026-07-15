@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
-  <link rel="stylesheet" href="style.css?v=20260715a" />
+  <link rel="stylesheet" href="style.css?v=20260715c" />
 </head>
 <body>
   <div class="app">
@@ -76,7 +76,7 @@
 
     <footer class="app-footer">
       <button class="btn-soft" id="btnToday">오늘로 이동</button>
-      <div class="app-version">ver 2026.07.15.2</div>
+      <div class="app-version">ver 2026.07.15.3</div>
     </footer>
   </div>
 
@@ -141,6 +141,12 @@
         <input class="date-input" id="startDate" type="date" />
       </section>
 
+      <section class="set-section" id="baselineSection">
+        <h3>✅ 수동 변경을 기본으로 확정</h3>
+        <p class="set-desc">달력에서 직접 바꾼 날(우측 상단 <b>빨간 네모</b>)을 현재 조의 <b>기본 근무표로 굳혀서</b> 빨간 표시를 없앱니다. 바꾼 값은 그대로 유지되고, 여자친구 화면에도 깔끔하게 반영돼요. 나중에 또 바꾸면 다시 표시되고, 언제든 다시 확정할 수 있어요.</p>
+        <div id="baselineBox"></div>
+      </section>
+
       <section class="set-section" id="syncSection">
         <h3>💛 여자친구와 공유 · 실시간 동기화</h3>
         <p class="set-desc">내 근무표를 여자친구와 공유해요. <b>내가 수정하면 여친 폰에 자동 반영</b>되고, 여친은 <b>보기 전용</b>입니다. 무료 Firebase(내 구글계정)로 1회만 설정하면 됩니다.</p>
@@ -158,13 +164,13 @@
         <input id="importFile" type="file" accept="application/json" hidden />
       </section>
 
-      <p class="set-foot">교대 캘린더 · ver 2026.07.15.2</p>
+      <p class="set-foot">교대 캘린더 · ver 2026.07.15.3</p>
     </div>
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
   <script src="sync.js?v=20260715a"></script>
-  <script src="app.js?v=20260715b"></script>
+  <script src="app.js?v=20260715c"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {

@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'shift-calendar-v20260715b-share';
+const CACHE_NAME = 'shift-calendar-v20260715c-baseline';
 const APP_SHELL = [
   './',
   './index.html',

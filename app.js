@@ -128,7 +128,8 @@ const DEFAULT_STATE = {
     cycle: ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'],
     startDate: BASE_PATTERN_START,   // 이 날짜 = A조 cycle[0] (첫 D)
   },
-  groupOverrides: { A:{}, B:{}, C:{}, D:{} }, // { A: { 'YYYY-MM-DD': shiftKey }, ... }
+  groupOverrides: { A:{}, B:{}, C:{}, D:{} }, // { A: { 'YYYY-MM-DD': shiftKey }, ... } — 수동 변경(빨간 네모 표시)
+  groupBaseline:  { A:{}, B:{}, C:{}, D:{} }, // 확정된 '기본 근무'(표시 없음). 패턴/명절보다 우선, 수동변경보다 아래
   overrides: {},  // legacy: A조 수동 변경
   groupMemos: { A:{}, B:{}, C:{}, D:{} },     // 조별 메모 { A: { 'YYYY-MM-DD': '메모' }, ... }
   groupDesig: { A:{}, B:{}, C:{}, D:{} },     // 조별 수동 지정태그 { A: { 'YYYY-MM-DD': 'JG'|'JH' }, ... }
@@ -182,6 +183,14 @@ function migrate(s){
       out.groupOverrides.A = s.overrides;
     }
     out.overrides = out.groupOverrides.A;
+    out.groupBaseline = clone(base.groupBaseline);
+    if(s.groupBaseline && typeof s.groupBaseline === 'object'){
+      for(const group of GROUPS){
+        if(s.groupBaseline[group] && typeof s.groupBaseline[group] === 'object'){
+          out.groupBaseline[group] = s.groupBaseline[group];
+        }
+      }
+    }
     out.groupMemos = clone(base.groupMemos);
     if(s.groupMemos && typeof s.groupMemos === 'object'){
       for(const group of GROUPS){
@@ -207,6 +216,12 @@ function migrate(s){
   for(const group of GROUPS){
     if(!out.groupOverrides[group] || typeof out.groupOverrides[group] !== 'object'){
       out.groupOverrides[group] = {};
+    }
+  }
+  out.groupBaseline = out.groupBaseline || clone(base.groupBaseline);
+  for(const group of GROUPS){
+    if(!out.groupBaseline[group] || typeof out.groupBaseline[group] !== 'object'){
+      out.groupBaseline[group] = {};
     }
   }
   if(!out.groupMemos || typeof out.groupMemos !== 'object') out.groupMemos = clone(base.groupMemos);
@@ -282,6 +297,16 @@ function memosFor(group = currentGroup()){
 function isOverride(dateStr, group = currentGroup()){
   return Object.prototype.hasOwnProperty.call(groupOverrideMap(group), dateStr);
 }
+function groupBaselineMap(group = currentGroup()){
+  const g = normalizeGroup(group);
+  if(!state.groupBaseline) state.groupBaseline = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupBaseline[g]) state.groupBaseline[g] = {};
+  return state.groupBaseline[g];
+}
+function isBaseline(dateStr, group = currentGroup()){
+  const key = groupBaselineMap(group)[dateStr];
+  return !!(key && state.shiftTypes[key]);   // 삭제된 근무 key 면 무시
+}
 function shiftFor(dateStr, group = currentGroup()){
   const overrides = groupOverrideMap(group);
   const key = isOverride(dateStr, group) ? overrides[dateStr] : groupShiftFor(dateStr, group);
@@ -301,6 +326,8 @@ function specialShiftFor(dateStr, group){
 }
 function isSpecialSchedule(dateStr, group = currentGroup()){ return !!specialShiftFor(dateStr, group); }
 function groupShiftFor(dateStr, group){
+  const bl = groupBaselineMap(group)[dateStr];         // 확정된 기본 근무가 최우선(패턴·명절보다)
+  if(bl && state.shiftTypes[bl]) return bl;
   const sp = specialShiftFor(dateStr, group);
   if(sp) return sp;
   const idx = cycleIndexFor(dateStr, groupOffset(group));
@@ -532,7 +559,7 @@ function renderCalendar(){
     const holHtml = hol ? `<span class="cell-hol" title="${escapeHtml(hol)}">${escapeHtml(holidayShort(dateStr))}</span>` : '';
     const memo = memos[dateStr];
     const hasMemo = !!memo;
-    const special = isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group);
+    const special = isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group) && !isBaseline(dateStr, group);
     const longRun = workRunTotalFor(dateStr, group) >= 6;
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const ti = tagMap[dateStr];
@@ -699,7 +726,7 @@ function openDaySheet(dateStr){
   const sh = $('sheetHoliday');
   const infoParts = [];
   if(hol) infoParts.push(`<span class="sh-hol">🔴 ${escapeHtml(hol)}</span>`);
-  if(isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group)) infoParts.push('<span class="sh-special">🎎 명절 편성</span>');
+  if(isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group) && !isBaseline(dateStr, group)) infoParts.push('<span class="sh-special">🎎 명절 편성</span>');
   const runTotal = workRunTotalFor(dateStr, group);
   if(runTotal >= 6) infoParts.push(`<span class="sh-run">🔺 ${runTotal}일 연속근무 (오늘 ${workRunDayFor(dateStr, group)}일차)</span>`);
   if(ti) infoParts.push(`<b>${tagLabel(ti)}</b>`);
@@ -729,7 +756,7 @@ function openDaySheet(dateStr){
   $('sheetMemo').readOnly = ro;
   $('memoEditor').style.display = (ro && !memoText) ? 'none' : '';
   updateMemoCount(memoText);
-  $('btnRevert').textContent = '↺ 패턴 값으로 되돌리기';
+  $('btnRevert').textContent = isBaseline(dateStr, group) ? '↺ 확정된 기본값으로 되돌리기' : '↺ 패턴 값으로 되돌리기';
   $('btnRevert').hidden = ro || !isOverride(dateStr, group);
   $('dayBackdrop').hidden = false;
   $('daySheet').hidden = false;
@@ -843,7 +870,47 @@ function renderSettings(){
   renderPatternChips();
   renderPatternAdd();
   $('startDate').value = state.pattern.startDate;
+  renderBaselineBox();
   renderSyncBox();
+}
+
+/* ---------- 설정: 수동 변경 → 기본 확정 ---------- */
+// 현재 조의 '수동 변경(빨간 네모)' 개수
+function overrideCount(group = currentGroup()){
+  const ov = groupOverrideMap(group);
+  let n = 0;
+  for(const dt in ov){ if(state.shiftTypes[ov[dt]]) n++; }
+  return n;
+}
+function renderBaselineBox(){
+  const box = $('baselineBox');
+  if(!box) return;
+  const group = currentGroup();
+  const n = overrideCount(group);
+  if(n === 0){
+    box.innerHTML = `<p class="baseline-empty">지금 <b>${group}조</b>에 직접 바꾼 날(빨간 네모)이 없어요. 달력에서 근무를 바꾸면 여기서 기본으로 확정할 수 있습니다.</p>`;
+    return;
+  }
+  box.innerHTML = `
+    <p class="baseline-count"><b>${group}조</b>에 직접 바꾼 날이 <b>${n}일</b> 있어요.</p>
+    <button class="btn-primary" id="baselineConfirmBtn">✅ ${group}조 수동 변경 ${n}일을 기본으로 확정</button>`;
+}
+// 현재 조의 수동 변경을 '확정된 기본 근무'로 옮겨 빨간 네모를 없앤다(값은 그대로).
+function confirmOverridesToBaseline(group = currentGroup()){
+  if(!canEdit()) return;
+  const g = normalizeGroup(group);
+  const n = overrideCount(g);
+  if(n === 0) return;
+  if(!confirm(`${g}조에서 직접 바꾼 ${n}일을 '기본 근무표'로 확정할까요?\n빨간 네모 표시가 사라지고, 바꾼 값은 그대로 유지됩니다. (나중에 다시 바꿀 수 있어요)`)) return;
+  const overrides = groupOverrideMap(g);
+  const baseline = groupBaselineMap(g);
+  for(const dt in overrides){
+    if(state.shiftTypes[overrides[dt]]) baseline[dt] = overrides[dt];
+    delete overrides[dt];
+  }
+  saveState();
+  renderSettings();
+  renderAll();
 }
 
 /* ---------- 설정: 여자친구 공유(실시간 동기화) ---------- */
@@ -1039,6 +1106,8 @@ function removeShiftType(key){
   for(const group of GROUPS){
     const overrides = groupOverrideMap(group);
     for(const dt in overrides){ if(overrides[dt] === key) delete overrides[dt]; }
+    const baseline = groupBaselineMap(group);
+    for(const dt in baseline){ if(baseline[dt] === key) delete baseline[dt]; }
   }
   saveState(); renderSettings(); renderAll();
 }
@@ -1215,6 +1284,12 @@ function wire(){
         Sync.disable(); syncForceSetup = false; renderSyncBox(); renderSyncBanner(); renderAll();
       }
     }
+  });
+
+  // 수동 변경 → 기본 확정
+  $('baselineBox').addEventListener('click', (e)=>{
+    const t = e.target.closest('button'); if(!t) return;
+    if(t.id === 'baselineConfirmBtn') confirmOverridesToBaseline();
   });
 
   // 근무 종류: 추가/삭제(클릭) + 수정(입력)

@@ -637,6 +637,12 @@ body.readonly-mode .cal-hint{ display:none; }
 .sync-steps li{ font-size:12.5px; color:var(--ink); line-height:1.6; }
 .sync-steps b{ color:var(--ink); }
 
+/* 수동 변경 → 기본 확정 */
+.baseline-empty{ font-size:12.5px; color:var(--ink-soft); margin:2px 0 0; line-height:1.55; }
+.baseline-count{ font-size:13px; color:var(--ink); margin:2px 0 10px; }
+.baseline-count b{ color:var(--ink); }
+#baselineBox .btn-primary{ margin-top:0; }
+
 /* 공유 개선: 보내기 버튼 · QR · 최신 시각 */
 .btn-primary.sync-send{ margin-top:2px; margin-bottom:10px; box-shadow:0 5px 14px rgba(79,70,229,.22); }
 .sync-qr{ display:flex; justify-content:center; margin:12px 0 2px; }
