@@ -20,6 +20,7 @@
   let pushTimer = null;
   let status = 'off';    // off | connecting | live | readonly | error
   let lastError = '';
+  let lastUpdated = 0;   // 마지막으로 클라우드에 반영된 시각(ms) — viewer는 원격, owner는 내 push
 
   /* ---------- 저장/불러오기 ---------- */
   function loadCfg(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); }catch(e){ return null; } }
@@ -78,7 +79,7 @@
       docRef = f.doc(f.db, 'calendars', cfg.code);
       if(cfg.role === 'viewer'){
         unsub = f.onSnapshot(docRef,
-          (snap)=>{ const d = snap.data(); if(d && d.state) applyRemoteState(d.state); setStatus('readonly'); },
+          (snap)=>{ const d = snap.data(); if(d){ if(d.state) applyRemoteState(d.state); if(d.updatedAt) lastUpdated = d.updatedAt; } setStatus('readonly'); },
           (err)=>{ setStatus('error', friendly(err)); });
       }else{
         await pushNow();          // 최초 1회 현재 상태 업로드(문서 생성)
@@ -114,7 +115,9 @@
   async function pushNow(){
     if(!docRef || !cfg || cfg.role === 'viewer' || !fb) return;
     const snapshot = JSON.parse(JSON.stringify(state));
-    await fb.setDoc(docRef, { state: snapshot, updatedAt: Date.now() });
+    const now = Date.now();
+    await fb.setDoc(docRef, { state: snapshot, updatedAt: now });
+    lastUpdated = now;
   }
 
   /* ---------- 공개 API ---------- */
@@ -142,7 +145,8 @@
     isOn(){ return !!cfg; },
     role(){ return cfg ? cfg.role : null; },
     code(){ return cfg ? cfg.code : null; },
-    getStatus(){ return { status, error: lastError, code: cfg?cfg.code:null, role: cfg?cfg.role:null }; },
+    lastUpdated(){ return lastUpdated || null; },
+    getStatus(){ return { status, error: lastError, code: cfg?cfg.code:null, role: cfg?cfg.role:null, updatedAt: lastUpdated || null }; },
     async enableOwner(configText){
       const config = parseConfig(configText);
       if(!validConfig(config)) throw new Error('Firebase 설정을 인식할 수 없어요. 콘솔에서 복사한 firebaseConfig 전체(apiKey·projectId 포함)를 붙여넣어 주세요.');
@@ -155,7 +159,7 @@
     },
     disable(){
       if(unsub){ unsub(); unsub = null; }
-      clearCfg(); cfg = null; docRef = null; fb = null; pushTimer && clearTimeout(pushTimer);
+      clearCfg(); cfg = null; docRef = null; fb = null; lastUpdated = 0; pushTimer && clearTimeout(pushTimer);
       setStatus('off');
     },
     shareLink(){

@@ -1,10 +1,11 @@
 'use strict';
 
-const CACHE_NAME = 'shift-calendar-v20260713-real-chuseok';
+const CACHE_NAME = 'shift-calendar-v20260715-share';
 const APP_SHELL = [
   './',
   './index.html',
   './style.css',
+  './qrcode.js',
   './sync.js',
   './app.js',
   './manifest.json',

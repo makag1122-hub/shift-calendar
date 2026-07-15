@@ -637,4 +637,22 @@ body.readonly-mode .cal-hint{ display:none; }
 .sync-steps li{ font-size:12.5px; color:var(--ink); line-height:1.6; }
 .sync-steps b{ color:var(--ink); }
 
+/* 공유 개선: 보내기 버튼 · QR · 최신 시각 */
+.btn-primary.sync-send{ margin-top:2px; margin-bottom:10px; box-shadow:0 5px 14px rgba(79,70,229,.22); }
+.sync-qr{ display:flex; justify-content:center; margin:12px 0 2px; }
+.sync-qr svg{
+  width:172px; height:172px; background:#fff;
+  border:1px solid var(--line); border-radius:14px; padding:9px;
+  box-shadow:var(--shadow-sm);
+}
+/* viewer: '방금 전 업데이트됨' 강조 배지 */
+.sync-updated{
+  font-size:13.5px; font-weight:800; color:#166534;
+  background:#dcfce7; border:1px solid #bbf7d0; border-radius:10px;
+  padding:9px 12px; margin-bottom:10px; text-align:center;
+}
+.sync-updated b{ color:#166534; }
+/* owner: 마지막 동기화 시각(작게) */
+.sync-synced{ font-size:11.5px; color:var(--ink-soft); margin:8px 0 0; text-align:right; }
+
 [hidden]{ display:none !important; }

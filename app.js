@@ -861,14 +861,54 @@ function syncStatusText(s){
   return ({ connecting:'⏳ 연결 중…', live:'🟢 실시간 공유 중', readonly:'👀 공유 보기 중 · 읽기 전용', error:'⚠️ 오류', off:'꺼짐' })[s] || s;
 }
 
+// 상대 시각: '방금 전' · 'N분 전' · 'N시간 전' · 'N일 전' · 날짜
+function relTime(ms){
+  if(!ms) return '';
+  const diff = Date.now() - Number(ms);
+  if(diff < 45000) return '방금 전';
+  const min = Math.floor(diff / 60000);
+  if(min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if(hr < 24) return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  if(day < 7) return `${day}일 전`;
+  const d = new Date(Number(ms));
+  return `${d.getMonth()+1}월 ${d.getDate()}일`;
+}
+
+// 공유 링크 QR 코드 그리기(오프라인 생성). 링크가 너무 길면 조용히 생략.
+function renderShareQr(link){
+  const el = $('syncQr');
+  if(!el) return;
+  if(!window.QRCode || !link){ el.hidden = true; return; }
+  try{
+    el.innerHTML = QRCode.svg(link, { ecl:'M', border:2, dark:'#111827', light:'#ffffff' });
+    el.hidden = false;
+  }catch(e){ el.hidden = true; }
+}
+
+// 공유 링크를 카톡·문자 등 공유 시트로 전송(모바일). 없으면 복사로 대체.
+function shareSyncLink(btn){
+  const link = Sync.shareLink();
+  if(!link) return;
+  if(navigator.share){
+    navigator.share({ title:'교대 캘린더 공유 💛', text:'내 근무표를 실시간으로 볼 수 있어요.', url: link })
+      .catch(()=>{});
+  }else{
+    copyToClipboard(link, btn);
+  }
+}
+
 let syncForceSetup = false;   // owner가 'Firebase 설정 다시 넣기' 눌렀을 때
 function renderSyncBox(){
   const box = $('syncBox');
   if(!box || !window.Sync) return;
   const st = Sync.getStatus();
   if(Sync.role() === 'viewer'){
+    const last = st.updatedAt;
     box.innerHTML = `
       <div class="sync-status on">${syncStatusText(st.status)}</div>
+      ${last ? `<div class="sync-updated">🔄 <b data-reltime="${last}">${relTime(last)}</b> 업데이트됨</div>` : ''}
       <p class="sync-note">소유자(내 여자친구/파트너)가 수정하면 이 화면에 <b>자동으로 반영</b>됩니다. 여기서는 근무·메모를 바꿀 수 없어요.</p>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
       <button class="btn-text-danger" id="syncDisableBtn">공유 해제(내 폰에서 이 공유 끄기)</button>`;
@@ -876,19 +916,25 @@ function renderSyncBox(){
   }
   if(Sync.isOn() && !syncForceSetup){  // owner
     const link = Sync.shareLink();
+    const last = st.updatedAt;
+    const canShare = !!navigator.share;
     box.innerHTML = `
       <div class="sync-status ${st.status==='error'?'err':'on'}">${syncStatusText(st.status)}</div>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
-      <label class="sync-lbl">여자친구에게 보낼 공유 링크</label>
+      <label class="sync-lbl">여자친구에게 공유하기</label>
+      ${canShare ? `<button class="btn-primary sync-send" id="syncShareBtn">💌 카톡·문자로 링크 보내기</button>` : ''}
       <div class="sync-link-row">
         <input id="syncLink" class="sync-link" readonly value="${escapeHtml(link)}" />
         <button class="btn-soft" id="syncCopyBtn">복사</button>
       </div>
-      <p class="sync-note">이 링크를 카카오톡 등으로 보내세요. 여친이 링크를 열면 내 근무표가 <b>실시간(보기 전용)</b>으로 보입니다. 내가 수정할 때마다 자동 반영돼요.</p>
+      <div class="sync-qr" id="syncQr" hidden></div>
+      <p class="sync-note">링크를 ${canShare ? '<b>보내기</b> 버튼으로 카톡·문자에 보내거나, ' : '<b>복사</b>해서 카카오톡 등으로 보내거나, '}옆에 있으면 여친 폰 카메라로 <b>QR코드를 스캔</b>하면 됩니다. 내가 수정할 때마다 실시간(보기 전용) 반영돼요.</p>
+      ${last ? `<p class="sync-synced">마지막 동기화: <span data-reltime="${last}">${relTime(last)}</span></p>` : ''}
       <div class="sync-actions">
         <button class="btn-soft" id="syncReconfigBtn">Firebase 설정 다시 넣기</button>
         <button class="btn-text-danger" id="syncDisableBtn">공유 끄기</button>
       </div>`;
+    renderShareQr(link);
     return;
   }
   // 미설정(owner 설정 폼)
@@ -950,7 +996,7 @@ function renderSyncBanner(){
     el.className = 'sync-banner' + (st.status==='error' ? ' err' : '');
     el.innerHTML = st.status==='error'
       ? `⚠️ 공유 연결 오류 — ${escapeHtml(st.error)}`
-      : `👀 여자친구 공유 · <b>읽기 전용</b> · 소유자가 바꾸면 실시간 반영`;
+      : `👀 여자친구 공유 · <b>읽기 전용</b>${st.updatedAt ? ` · <b data-reltime="${st.updatedAt}">${relTime(st.updatedAt)}</b> 업데이트` : ' · 실시간 반영'}`;
     document.body.classList.add('readonly-mode');
   } else {
     el.hidden = true;
@@ -963,6 +1009,17 @@ window.onSyncStatus = function(){
   renderSyncBanner();
   if($('settingsModal') && !$('settingsModal').hidden) renderSyncBox();
 };
+
+// '방금 전 / N분 전' 표시가 시간이 지나도 최신으로 보이도록 주기적 갱신
+// (설정 폼 입력을 지우지 않도록 전체 재렌더 대신 시각 텍스트만 갱신)
+function refreshSyncTimes(){
+  if(!(window.Sync && Sync.isOn())) return;
+  renderSyncBanner();
+  document.querySelectorAll('[data-reltime]').forEach(el=>{
+    el.textContent = relTime(el.dataset.reltime);
+  });
+}
+setInterval(refreshSyncTimes, 30000);
 
 function addShiftType(){
   if(!canEdit()) return;
@@ -1151,6 +1208,7 @@ function wire(){
     const t = e.target.closest('button'); if(!t) return;
     if(t.id === 'syncEnableBtn'){ syncForceSetup = false; enableOwnerSync(); }
     else if(t.id === 'syncReconfigBtn'){ syncForceSetup = true; renderSyncBox(); }
+    else if(t.id === 'syncShareBtn'){ shareSyncLink(t); }
     else if(t.id === 'syncCopyBtn'){ copyToClipboard($('syncLink').value, t); }
     else if(t.id === 'syncCopyRules'){ copyToClipboard(FIRESTORE_RULES, t); }
     else if(t.id === 'syncDisableBtn'){
