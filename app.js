@@ -397,8 +397,9 @@ function isWeekend(dateStr){ const d = parseYmd(dateStr).getDay(); return d === 
 function isWeekday(dateStr){ return !isWeekend(dateStr); }
 
 /* ---------- 태그(특근/지근/지휴): 근무 위에 덧붙는 자동 태그 ----------
-   특근 = 평일 공휴일 근무 / 지근 = 주말 근무 / 지휴 = 지근 수만큼 평일 휴무(가장 앞부터)
-   수동(groupDesig: 'TG'|'JG'|'JH'|'NONE')이 자동보다 우선 */
+   지근 = 주말 근무 / 지휴 = 평일 휴무 (지근·지휴는 항상 1:1 — 적은 쪽 개수에 맞춰 가장 앞부터)
+   특근 = 평일 공휴일 근무 + 지근으로 못 쓴 잔여 주말 근무
+   수동(groupDesig: 'TG'|'JG'|'JH'|'NONE')이 자동보다 우선 (단, 현재 근무에 적합할 때만) */
 function desigMapFor(group = currentGroup()){
   const g = normalizeGroup(group);
   if(!state.groupDesig) state.groupDesig = { A:{}, B:{}, C:{}, D:{} };
@@ -409,6 +410,12 @@ function isWorkerOff(dateStr, group){ const t = state.shiftTypes[shiftFor(dateSt
 function tgEligible(d, g){ return !isWorkerOff(d, g) && (isWeekend(d) || isHoliday(d)); } // 특근: 주말·공휴일 근무
 function jgEligible(d, g){ return !isWorkerOff(d, g) && isWeekend(d); }                   // 지근: 주말 근무
 function jhEligible(d, g){ return  isWorkerOff(d, g) && isWeekday(d) && !isHoliday(d); }  // 지휴: 평일 휴무
+function desigEligible(tag, d, g){                                                        // 수동 태그가 현재 근무에 적합한지
+  if(tag === 'TG') return tgEligible(d, g);
+  if(tag === 'JG') return jgEligible(d, g);
+  if(tag === 'JH') return jhEligible(d, g);
+  return false;
+}
 
 function computeAutoTags(group, year, month){
   const ym = `${year}-${pad(month+1)}`;
@@ -422,11 +429,11 @@ function computeAutoTags(group, year, month){
     else if(!off && isWeekday(ds) && isHoliday(ds)) weekdayHolidayWork.push(ds); // 평일 공휴일 근무
     if(off && isWeekday(ds) && !isHoliday(ds)) weekdayOff.push(ds);              // 평일 휴무
   }
-  const W = weekdayOff.length;                                  // 지휴 = 평일 휴무 전부 → 지근 개수의 기준
-  weekdayOff.forEach(ds => { out[ds] = 'JH'; });               // 지휴
-  weekendWork.slice(0, W).forEach(ds => { out[ds] = 'JG'; });  // 지근 = 지휴 개수만큼, 가장 앞 주말근무부터
+  const N = Math.min(weekendWork.length, weekdayOff.length);   // 지근·지휴 1:1 → 적은 쪽 개수에 맞춤
+  weekendWork.slice(0, N).forEach(ds => { out[ds] = 'JG'; });  // 지근 = 가장 앞 주말근무부터 N개
+  weekdayOff.slice(0, N).forEach(ds => { out[ds] = 'JH'; });   // 지휴 = 가장 앞 평일휴무부터 N개 (초과분은 무태그)
   weekdayHolidayWork.forEach(ds => { out[ds] = 'TG'; });       // 특근: 평일 공휴일 근무
-  weekendWork.slice(W).forEach(ds => { out[ds] = 'TG'; });     // 특근: 지근으로 못 쓴 나머지 주말근무
+  weekendWork.slice(N).forEach(ds => { out[ds] = 'TG'; });     // 특근: 지근으로 못 쓴 나머지 주말근무
   return out;
 }
 // 자동 + 수동(우선) 병합 후 종류별 번호 부여 → { date: {tag, n} }
@@ -440,7 +447,9 @@ function tagsForMonth(group, year, month){
   for(let d=1; d<=dim; d++){
     const ds = `${ym}-${pad(d)}`;
     let tag = auto[ds] || null;
-    if(gd[ds]) tag = (gd[ds] === 'NONE') ? null : gd[ds];  // 수동 우선
+    const man = gd[ds];
+    if(man === 'NONE') tag = null;                            // 'NONE' = 이 날 태그 끔(억제 마커, 항상 유효)
+    else if(man && desigEligible(man, ds, group)) tag = man;  // 수동 우선(현재 근무에 적합할 때만 · 부적격이면 자동값)
     if(tag && DESIG[tag]){ counts[tag]++; out[ds] = { tag, n: counts[tag] }; }
   }
   return out;
@@ -809,7 +818,7 @@ function renderSheetDesig(dateStr, group){
       <button class="desig-opt jg ${cur==='JG'?'sel':''}" data-desig="JG" ${jgOk?'':'disabled'}>지근</button>
       <button class="desig-opt jh ${cur==='JH'?'sel':''}" data-desig="JH" ${jhOk?'':'disabled'}>지휴</button>
     </div>
-    <div class="desig-hint">특근=평일 공휴일 근무 / 지근=주말 근무 / 지휴=평일 휴무</div>`;
+    <div class="desig-hint">특근=평일 공휴일·잔여 주말 근무 / 지근=주말 근무 / 지휴=평일 휴무(지근과 1:1)</div>`;
 }
 function setDesig(tag){
   if(!canEdit()) return;
