@@ -272,6 +272,7 @@ body{
 }
 .dot-ov{ right: 5px; background: #ef4444; }
 .dot-memo{ left: 5px; background: #f59e0b; }
+.fam-mark{ position:absolute; bottom:1px; right:2px; font-size:8px; line-height:1; pointer-events:none; z-index:2; }
 .memo-pin{
   display:none;
 }
@@ -455,6 +456,7 @@ body{
 .sheet-holiday b{ background:#dc2626; color:#fff; padding:1px 8px; border-radius:6px; }
 .sheet-holiday .sh-special{ color:#4f46e5; }
 .sheet-holiday .sh-run{ color:#b45309; background:#fff7ed; border:1px solid #fed7aa; padding:1px 8px; border-radius:6px; }
+.sheet-holiday .sh-fam{ color:#db2777; background:#fdf2f8; border:1px solid #fbcfe8; padding:1px 8px; border-radius:6px; }
 .sheet-hint{ font-size: 12.5px; color: var(--ink-soft); margin: 6px 0 14px; }
 .sheet-hint b{ color: #ef4444; }
 

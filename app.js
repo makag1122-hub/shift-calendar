@@ -113,7 +113,7 @@ function patternAnchorFor(dateStr){
 const DEFAULT_STATE = {
   version: 6,
   activeGroup: 'A',
-  shiftOrder: ['D','S','G','O','D2','G2','OFF'],
+  shiftOrder: ['D','S','G','O','D2','G2','OFF','ANN','TH','FAM'],
   shiftTypes: {
     D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b', kind:'work' },
     S:   { label:'SW',   short:'S',  start:'14:00', end:'22:00', color:'#10b981', kind:'work' },
@@ -122,6 +122,9 @@ const DEFAULT_STATE = {
     D2:  { label:'DAY2', short:'D2', start:'06:00', end:'18:00', color:'#fb923c', kind:'work' },
     G2:  { label:'GY2',  short:'G2', start:'18:00', end:'06:00', color:'#a78bfa', kind:'work' },
     OFF: { label:'휴무', short:'휴', start:'',      end:'',      color:'#94a3b8', kind:'off'  },
+    ANN: { label:'연차',       short:'연차', start:'', end:'', color:'#0891b2', kind:'off', leave:true }, // 휴가: 태그 정산 제외
+    TH:  { label:'특휴',       short:'특휴', start:'', end:'', color:'#9333ea', kind:'off', leave:true }, // 휴가: 태그 정산 제외
+    FAM: { label:'패밀리데이',  short:'패밀', start:'', end:'', color:'#db2777', kind:'off', leave:true }, // 휴가: 태그 정산 제외
   },
   pattern: {
     // 20일 주기: D×5 · 휴×2 · S×5 · 휴×1 · G×5 · 휴×2
@@ -157,6 +160,7 @@ function migrate(s){
         const b = base.shiftTypes[k];
         if(!out.shiftTypes[k].kind) out.shiftTypes[k].kind = (b && b.kind) || 'work';
         if(b && b.special) out.shiftTypes[k].special = b.special; // 내장 특수근무 규칙 유지
+        if(b && b.leave) out.shiftTypes[k].leave = b.leave;       // 내장 휴가(연차/특휴/패밀리데이) 규칙 유지
       }
     }
     if(Array.isArray(s.shiftOrder) && s.shiftOrder.length){
@@ -395,10 +399,17 @@ function canPlace(key, dateStr, group = currentGroup()){
 }
 function isWeekend(dateStr){ const d = parseYmd(dateStr).getDay(); return d === 0 || d === 6; }
 function isWeekday(dateStr){ return !isWeekend(dateStr); }
+/* 패밀리데이 가능일 = 급여일(21일)이 속한 주의 2주 전 주 금요일 (회사 규정). 매월 5~11일 사이 금요일. */
+function familyDayDom(year, month0){ const dow21 = new Date(year, month0, 21).getDay(); return 11 - ((dow21 + 6) % 7); }
+function familyDayStr(year, month0){ return `${year}-${pad(month0+1)}-${pad(familyDayDom(year, month0))}`; }
+function isFamilyDayCandidate(dateStr){ const [y,m] = dateStr.split('-').map(Number); return dateStr === familyDayStr(y, m-1); }
 
 /* ---------- 태그(특근/지근/지휴): 근무 위에 덧붙는 자동 태그 ----------
    지근 = 주말 근무 / 지휴 = 평일 휴무 (지근·지휴는 항상 1:1 — 적은 쪽 개수에 맞춰 가장 앞부터)
    특근 = 평일 공휴일 근무 + 지근으로 못 쓴 잔여 주말 근무
+   연차·특휴·패밀리데이(leave:true)는 근무도 휴무도 아닌 '휴가' → 지근·지휴·특근 정산에서 완전히 제외.
+     · 특휴를 주말근무일에 쓰면 → 그 날이 주말근무에서 빠져 지근이 다음 주말근무일로 이동
+     · 패밀리데이를 평일휴무일에 쓰면 → 지휴 짝이 하나 줄어 지근 하나가 특근으로 전환
    수동(groupDesig: 'TG'|'JG'|'JH'|'NONE')이 자동보다 우선 (단, 현재 근무에 적합할 때만) */
 function desigMapFor(group = currentGroup()){
   const g = normalizeGroup(group);
@@ -407,9 +418,10 @@ function desigMapFor(group = currentGroup()){
   return state.groupDesig[g];
 }
 function isWorkerOff(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !t || t.kind === 'off'; }
+function isLeaveDay(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !!(t && t.leave); } // 연차/특휴/패밀리데이 = 태그 정산 제외
 function tgEligible(d, g){ return !isWorkerOff(d, g) && (isWeekend(d) || isHoliday(d)); } // 특근: 주말·공휴일 근무
 function jgEligible(d, g){ return !isWorkerOff(d, g) && isWeekend(d); }                   // 지근: 주말 근무
-function jhEligible(d, g){ return  isWorkerOff(d, g) && isWeekday(d) && !isHoliday(d); }  // 지휴: 평일 휴무
+function jhEligible(d, g){ return  isWorkerOff(d, g) && !isLeaveDay(d, g) && isWeekday(d) && !isHoliday(d); }  // 지휴: 평일 휴무(휴가 제외)
 function desigEligible(tag, d, g){                                                        // 수동 태그가 현재 근무에 적합한지
   if(tag === 'TG') return tgEligible(d, g);
   if(tag === 'JG') return jgEligible(d, g);
@@ -427,7 +439,7 @@ function computeAutoTags(group, year, month){
     const off = isWorkerOff(ds, group);
     if(!off && isWeekend(ds)) weekendWork.push(ds);                              // 주말 근무
     else if(!off && isWeekday(ds) && isHoliday(ds)) weekdayHolidayWork.push(ds); // 평일 공휴일 근무
-    if(off && isWeekday(ds) && !isHoliday(ds)) weekdayOff.push(ds);              // 평일 휴무
+    if(off && !isLeaveDay(ds, group) && isWeekday(ds) && !isHoliday(ds)) weekdayOff.push(ds); // 평일 휴무(휴가 제외)
   }
   const N = Math.min(weekendWork.length, weekdayOff.length);   // 지근·지휴 1:1 → 적은 쪽 개수에 맞춤
   weekendWork.slice(0, N).forEach(ds => { out[ds] = 'JG'; });  // 지근 = 가장 앞 주말근무부터 N개
@@ -553,6 +565,7 @@ function renderCalendar(){
   const rangeSet = sheetRange ? new Set(rangeDays(sheetRange.start, sheetRange.end)) : null;
   const memos = memosFor(group);
   const tagMap = tagsForMonth(group, view.year, view.month);
+  const famDayStr = familyDayStr(view.year, view.month);
   let html = '';
   for(let i=0; i<startDow; i++) html += `<div class="cell empty"></div>`;
   for(let d=1; d<=daysInMonth; d++){
@@ -573,14 +586,16 @@ function renderCalendar(){
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const ti = tagMap[dateStr];
     const hasTag = !!ti;
+    const isFam = dateStr === famDayStr;
     const tagHtml = ti
       ? `<span class="cell-tag" style="background:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
       : '<span class="cell-tag-slot" aria-hidden="true"></span>';
-    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${special?' is-special':''}${longRun?' long-run':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
+    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}</span>
       ${badge}
       ${tagHtml}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
+      ${isFam ? '<span class="fam-mark" title="패밀리데이 가능일 (급여일 2주 전 금)">💛</span>' : ''}
       ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : ''}
     </button>`;
   }
@@ -739,6 +754,7 @@ function openDaySheet(dateStr){
   const runTotal = workRunTotalFor(dateStr, group);
   if(runTotal >= 6) infoParts.push(`<span class="sh-run">🔺 ${runTotal}일 연속근무 (오늘 ${workRunDayFor(dateStr, group)}일차)</span>`);
   if(ti) infoParts.push(`<b>${tagLabel(ti)}</b>`);
+  if(isFamilyDayCandidate(dateStr)) infoParts.push('<span class="sh-fam">💛 패밀리데이 가능일</span>');
   if(infoParts.length){ sh.hidden = false; sh.innerHTML = infoParts.join(' '); }
   else { sh.hidden = true; sh.innerHTML = ''; }
   const ro = !canEdit();
@@ -818,7 +834,7 @@ function renderSheetDesig(dateStr, group){
       <button class="desig-opt jg ${cur==='JG'?'sel':''}" data-desig="JG" ${jgOk?'':'disabled'}>지근</button>
       <button class="desig-opt jh ${cur==='JH'?'sel':''}" data-desig="JH" ${jhOk?'':'disabled'}>지휴</button>
     </div>
-    <div class="desig-hint">특근=평일 공휴일·잔여 주말 근무 / 지근=주말 근무 / 지휴=평일 휴무(지근과 1:1)</div>`;
+    <div class="desig-hint">특근=평일 공휴일·잔여 주말 근무 / 지근=주말 근무 / 지휴=평일 휴무(지근과 1:1) · 연차·특휴·패밀리데이는 태그 정산 제외</div>`;
 }
 function setDesig(tag){
   if(!canEdit()) return;
