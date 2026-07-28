@@ -30,11 +30,13 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<
 const WEEK = ['일','월','화','수','목','금','토'];
 
 /* ---------- 공휴일(빨간날) ----------
-   출처: publicholidays.co.kr / gyesan.co.kr — 2026년 20일 + 2027년 22일. 제헌절 상시 공휴일(2026-05-11 재지정, 법률 제21338호). 해마다 갱신 필요. */
+   출처: 우주항공청 2026·2027년 월력요항 / 국가법령정보센터 관공서공휴일규정.
+   2026년 22일 + 2027년 24일(노동절·제헌절 및 대체공휴일 포함). 해마다 갱신 필요. */
 const HOLIDAYS = {
   '2026-01-01':'신정',
   '2026-02-16':'설날','2026-02-17':'설날','2026-02-18':'설날',
   '2026-03-01':'삼일절','2026-03-02':'삼일절 대체',
+  '2026-05-01':'노동절',
   '2026-05-05':'어린이날',
   '2026-05-24':'부처님오신날','2026-05-25':'부처님오신날 대체',
   '2026-06-03':'지방선거','2026-06-06':'현충일',
@@ -44,10 +46,11 @@ const HOLIDAYS = {
   '2026-10-03':'개천절','2026-10-05':'개천절 대체',
   '2026-10-09':'한글날',
   '2026-12-25':'크리스마스',
-  // 2027년 (22일 — 제헌절 상시 공휴일·대체공휴일 포함). 설날/추석·부처님오신날은 음력 기준.
+  // 2027년 (24일 — 노동절·제헌절 상시 공휴일 및 대체공휴일 포함). 설날/추석·부처님오신날은 음력 기준.
   '2027-01-01':'신정',
   '2027-02-06':'설날','2027-02-07':'설날','2027-02-08':'설날','2027-02-09':'설날 대체',
   '2027-03-01':'삼일절',
+  '2027-05-01':'노동절','2027-05-03':'노동절 대체',
   '2027-05-05':'어린이날',
   '2027-05-13':'부처님오신날',
   '2027-06-06':'현충일',
@@ -420,10 +423,10 @@ function familyDayStr(year, month0){ return `${year}-${pad(month0+1)}-${pad(fami
 function isFamilyDayCandidate(dateStr){ const [y,m] = dateStr.split('-').map(Number); return dateStr === familyDayStr(y, m-1); }
 
 /* ---------- 태그(특근/지근/지휴): 근무 위에 덧붙는 자동 태그 ----------
-   지근 = 주말 근무 / 지휴 = 평일 휴무 (지근·지휴는 항상 1:1 — 적은 쪽 개수에 맞춰 가장 앞부터)
-   특근 = 평일 공휴일 근무 + 지근으로 못 쓴 잔여 주말 근무
+   지근 = 휴일(주말·공휴일) 근무 / 지휴 = 평일 휴무 (지근·지휴는 항상 1:1 — 적은 쪽 개수에 맞춰 가장 앞부터)
+   특근 = 지근으로 못 쓴 잔여 휴일 근무
    연차·특휴·패밀리데이(leave:true)는 근무도 휴무도 아닌 '휴가' → 지근·지휴·특근 정산에서 완전히 제외.
-     · 특휴를 주말근무일에 쓰면 → 그 날이 주말근무에서 빠져 지근이 다음 주말근무일로 이동
+     · 특휴를 휴일근무일에 쓰면 → 그 날이 휴일근무에서 빠져 지근이 다음 휴일근무일로 이동
      · 패밀리데이를 평일휴무일에 쓰면 → 지휴 짝이 하나 줄어 지근 하나가 특근으로 전환
    수동(groupDesig: 'TG'|'JG'|'JH'|'NONE')이 자동보다 우선 (단, 현재 근무에 적합할 때만) */
 function desigMapFor(group = currentGroup()){
@@ -435,7 +438,7 @@ function desigMapFor(group = currentGroup()){
 function isWorkerOff(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !t || t.kind === 'off'; }
 function isLeaveDay(dateStr, group){ const t = state.shiftTypes[shiftFor(dateStr, group)]; return !!(t && t.leave); } // 연차/특휴/패밀리데이 = 태그 정산 제외
 function tgEligible(d, g){ return !isWorkerOff(d, g) && (isWeekend(d) || isHoliday(d)); } // 특근: 주말·공휴일 근무
-function jgEligible(d, g){ return !isWorkerOff(d, g) && isWeekend(d); }                   // 지근: 주말 근무
+function jgEligible(d, g){ return !isWorkerOff(d, g) && (isWeekend(d) || isHoliday(d)); } // 지근: 주말·공휴일 근무
 function jhEligible(d, g){ return  isWorkerOff(d, g) && !isLeaveDay(d, g) && isWeekday(d) && !isHoliday(d); }  // 지휴: 평일 휴무(휴가 제외)
 function desigEligible(tag, d, g){                                                        // 수동 태그가 현재 근무에 적합한지
   if(tag === 'TG') return tgEligible(d, g);
@@ -448,19 +451,17 @@ function computeAutoTags(group, year, month){
   const ym = `${year}-${pad(month+1)}`;
   const dim = new Date(year, month+1, 0).getDate();
   const out = {};
-  const weekendWork = [], weekdayOff = [], weekdayHolidayWork = [];
+  const holidayWork = [], weekdayOff = [];
   for(let d=1; d<=dim; d++){
     const ds = `${ym}-${pad(d)}`;
     const off = isWorkerOff(ds, group);
-    if(!off && isWeekend(ds)) weekendWork.push(ds);                              // 주말 근무
-    else if(!off && isWeekday(ds) && isHoliday(ds)) weekdayHolidayWork.push(ds); // 평일 공휴일 근무
+    if(!off && (isWeekend(ds) || isHoliday(ds))) holidayWork.push(ds); // 휴일(주말·공휴일) 근무
     if(off && !isLeaveDay(ds, group) && isWeekday(ds) && !isHoliday(ds)) weekdayOff.push(ds); // 평일 휴무(휴가 제외)
   }
-  const N = Math.min(weekendWork.length, weekdayOff.length);   // 지근·지휴 1:1 → 적은 쪽 개수에 맞춤
-  weekendWork.slice(0, N).forEach(ds => { out[ds] = 'JG'; });  // 지근 = 가장 앞 주말근무부터 N개
+  const N = Math.min(holidayWork.length, weekdayOff.length);   // 지근·지휴 1:1 → 적은 쪽 개수에 맞춤
+  holidayWork.slice(0, N).forEach(ds => { out[ds] = 'JG'; });  // 지근 = 가장 앞 휴일근무부터 N개
   weekdayOff.slice(0, N).forEach(ds => { out[ds] = 'JH'; });   // 지휴 = 가장 앞 평일휴무부터 N개 (초과분은 무태그)
-  weekdayHolidayWork.forEach(ds => { out[ds] = 'TG'; });       // 특근: 평일 공휴일 근무
-  weekendWork.slice(N).forEach(ds => { out[ds] = 'TG'; });     // 특근: 지근으로 못 쓴 나머지 주말근무
+  holidayWork.slice(N).forEach(ds => { out[ds] = 'TG'; });     // 특근: 지근으로 못 쓴 나머지 휴일근무
   return out;
 }
 // 자동 + 수동(우선) 병합 후 종류별 번호 부여 → { date: {tag, n} }
@@ -849,7 +850,7 @@ function renderSheetDesig(dateStr, group){
       <button class="desig-opt jg ${cur==='JG'?'sel':''}" data-desig="JG" ${jgOk?'':'disabled'}>지근</button>
       <button class="desig-opt jh ${cur==='JH'?'sel':''}" data-desig="JH" ${jhOk?'':'disabled'}>지휴</button>
     </div>
-    <div class="desig-hint">특근=평일 공휴일·잔여 주말 근무 / 지근=주말 근무 / 지휴=평일 휴무(지근과 1:1) · 연차·특휴·패밀리데이는 태그 정산 제외</div>`;
+    <div class="desig-hint">지근=휴일(주말·공휴일) 근무 / 지휴=평일 휴무(지근과 1:1) / 특근=잔여 휴일 근무 · 연차·특휴·패밀리데이는 태그 정산 제외</div>`;
 }
 function setDesig(tag){
   if(!canEdit()) return;
