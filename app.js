@@ -464,20 +464,45 @@ function computeAutoTags(group, year, month){
   holidayWork.slice(N).forEach(ds => { out[ds] = 'TG'; });     // 특근: 지근으로 못 쓴 나머지 휴일근무
   return out;
 }
-// 자동 + 수동(우선) 병합 후 종류별 번호 부여 → { date: {tag, n} }
+// 자동 + 수동(우선) 병합 후 지근·지휴를 다시 1:1로 맞추고 종류별 번호 부여 → { date: {tag, n} }
 function tagsForMonth(group, year, month){
   const ym = `${year}-${pad(month+1)}`;
   const dim = new Date(year, month+1, 0).getDate();
   const gd = desigMapFor(group);
   const auto = computeAutoTags(group, year, month);
-  const counts = { TG:0, JG:0, JH:0 };
-  const out = {};
+  const merged = {};
   for(let d=1; d<=dim; d++){
     const ds = `${ym}-${pad(d)}`;
     let tag = auto[ds] || null;
     const man = gd[ds];
     if(man === 'NONE') tag = null;                            // 'NONE' = 이 날 태그 끔(억제 마커, 항상 유효)
     else if(man && desigEligible(man, ds, group)) tag = man;  // 수동 우선(현재 근무에 적합할 때만 · 부적격이면 자동값)
+    if(tag && DESIG[tag]) merged[ds] = tag;
+  }
+
+  // 수동 태그나 특휴로 한쪽 개수만 달라져도 지근·지휴는 항상 1:1.
+  // 초과분 제거 시 수동 지정일은 최대한 보존하고, 날짜가 늦은 자동 태그부터 조정한다.
+  const jgDates = Object.keys(merged).filter(ds => merged[ds] === 'JG');
+  const jhDates = Object.keys(merged).filter(ds => merged[ds] === 'JH');
+  const pairCount = Math.min(jgDates.length, jhDates.length);
+  function trimPaired(dates, tag, replacement){
+    const excess = dates.length - pairCount;
+    if(excess <= 0) return;
+    const automatic = dates.filter(ds => gd[ds] !== tag).reverse();
+    const manual = dates.filter(ds => gd[ds] === tag).reverse();
+    automatic.concat(manual).slice(0, excess).forEach(ds => {
+      if(replacement) merged[ds] = replacement;
+      else delete merged[ds];
+    });
+  }
+  trimPaired(jgDates, 'JG', 'TG'); // 초과 지근은 특근으로
+  trimPaired(jhDates, 'JH', null); // 초과 지휴는 무태그로
+
+  const counts = { TG:0, JG:0, JH:0 };
+  const out = {};
+  for(let d=1; d<=dim; d++){
+    const ds = `${ym}-${pad(d)}`;
+    const tag = merged[ds] || null;
     if(tag && DESIG[tag]){ counts[tag]++; out[ds] = { tag, n: counts[tag] }; }
   }
   return out;

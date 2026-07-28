@@ -24,7 +24,8 @@ vm.runInNewContext(
     globalThis.calendarApi = {
       HOLIDAYS, holidayName, isHoliday, isWeekend, isWeekday,
       shiftFor, isWorkerOff, isLeaveDay,
-      tgEligible, jgEligible, jhEligible, tagsForMonth
+      tgEligible, jgEligible, jhEligible, tagsForMonth,
+      state, groupOverrideMap, desigMapFor
     };
   `,
   sandbox
@@ -152,6 +153,21 @@ const aAugust2026 = api.tagsForMonth('A', 2026, 7);
 assert(aAugust2026['2026-08-17']?.tag === 'JG', '2026-08-17 A조가 지근이 아닙니다.');
 assert(aAugust2026['2026-08-17']?.n === 7, '2026-08-17 A조 지근 번호가 7이 아닙니다.');
 assert(aAugust2026['2026-08-22']?.tag === 'TG', '2026-08-22 A조가 특근으로 순연되지 않았습니다.');
+
+// 실제 발견 사례: 8/7 특휴로 자동 지근·지휴가 6개가 된 상태에서
+// 8/17 수동 지근이 남아도, 수동 날짜는 보존하면서 다른 자동 지근을 특근으로 넘겨 1:1 유지.
+api.groupOverrideMap('A')['2026-08-07'] = 'TH';
+api.desigMapFor('A')['2026-08-17'] = 'JG';
+const specialLeaveWithManualJg = api.tagsForMonth('A', 2026, 7);
+const specialLeaveJgCount = Object.values(specialLeaveWithManualJg).filter(value => value.tag === 'JG').length;
+const specialLeaveJhCount = Object.values(specialLeaveWithManualJg).filter(value => value.tag === 'JH').length;
+assert(specialLeaveJgCount === 6, `특휴+수동 지근 상태의 지근이 6개가 아닙니다: ${specialLeaveJgCount}`);
+assert(specialLeaveJhCount === 6, `특휴+수동 지근 상태의 지휴가 6개가 아닙니다: ${specialLeaveJhCount}`);
+assert(specialLeaveWithManualJg['2026-08-17']?.tag === 'JG', '수동 지정한 2026-08-17 지근이 보존되지 않았습니다.');
+assert(specialLeaveWithManualJg['2026-08-17']?.n === 6, '2026-08-17 지근 번호가 6으로 재정렬되지 않았습니다.');
+assert(specialLeaveWithManualJg['2026-08-16']?.tag === 'TG', '초과 자동 지근이 특근으로 조정되지 않았습니다.');
+delete api.groupOverrideMap('A')['2026-08-07'];
+delete api.desigMapFor('A')['2026-08-17'];
 
 console.log('교대 캘린더 전수 검사 통과');
 console.log(`공휴일: 2026년 22일, 2027년 24일`);

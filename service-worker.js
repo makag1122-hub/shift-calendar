@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'shift-calendar-v20260729b-holiday-audit';
+const CACHE_NAME = 'shift-calendar-v20260729c-balanced-manual-tags';
 const APP_SHELL = [
   './',
   './index.html',
