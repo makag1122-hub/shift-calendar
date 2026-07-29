@@ -28,5 +28,13 @@ assert(
   css.includes('grid-template-columns:auto minmax(0,1fr) auto;'),
   '날짜·정산 태그의 고정 행 구조가 없습니다.'
 );
+assert(
+  !css.includes('border-left:2px solid rgba(182,107,22,.58)'),
+  '달력 메모에 장식성 세로선이 다시 생겼습니다.'
+);
+assert(
+  !css.includes('box-shadow:inset 3px 0 0 #4d9b8f'),
+  '공동 메모 입력창에 장식성 세로선이 다시 생겼습니다.'
+);
 
 console.log('달력 카드 정보 구조 검사 통과');

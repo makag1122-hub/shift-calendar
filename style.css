@@ -7,7 +7,6 @@
   --brand: #4654c5;
   --sun: #d9513b;
   --sat: #376fc3;
-  --memo: #b66b16;
   --radius: 18px;
   --shadow: 0 14px 38px rgba(42,53,85,.09);
   --shadow-sm: 0 4px 14px rgba(42,53,85,.065);
@@ -330,15 +329,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   justify-self:stretch;
   width:auto; max-width:none; min-width:0;
   height:100%;
-  background:rgba(255,255,255,.7);
-  border:1px solid rgba(182,107,22,.16);
-  border-left:2px solid rgba(182,107,22,.58);
-  color:#7a4a17;
-  border-radius:4px;
+  background:rgba(255,255,255,.34);
+  border:0;
+  color:#596274;
+  border-radius:3px;
   font-size:8px;
   line-height:10.5px;
   font-weight:750;
-  padding:3px 3px 2px 4px;
+  padding:3px 2px 2px;
   text-align:left;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -386,37 +384,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 }
 .memo-panel-head h2{ margin:1px 0 0; font-size:15px; letter-spacing:-.2px; }
 .memo-panel-head b{
-  background:#fff7ed; color:#b45309; border:1px solid #fed7aa;
-  border-radius:999px; padding:4px 9px; font-size:12px; white-space:nowrap;
+  color:var(--ink-soft);
+  padding:2px 0;
+  font-size:12px;
+  white-space:nowrap;
 }
 .memo-eyebrow{
   display:block; color:var(--ink-soft); font-size:11.5px; font-weight:800;
 }
-.memo-list{ display:flex; flex-direction:column; gap:7px; }
+.memo-list{
+  display:flex;
+  flex-direction:column;
+  border-top:1px solid var(--line);
+}
 .memo-item{
   width:100%; min-width:0;
-  border:1px solid color-mix(in srgb, var(--c) 28%, var(--line));
-  background:linear-gradient(90deg, color-mix(in srgb, var(--c) 12%, white), #fff 58%);
-  border-radius:12px;
-  padding:9px 10px;
+  border:0;
+  border-bottom:1px solid var(--line);
+  background:transparent;
+  border-radius:0;
+  padding:10px 2px;
   display:grid; grid-template-columns:auto auto 1fr; align-items:center; gap:8px;
   font-family:inherit; text-align:left; color:var(--ink); cursor:pointer;
 }
-.memo-item:active{ transform:scale(.98); }
+.memo-item:hover{ background:#f5f7fa; }
+.memo-item:active{ background:#eef1f5; transform:none; }
 .memo-date{ color:var(--ink); font-size:12.5px; font-weight:800; white-space:nowrap; }
 .memo-shift{
   min-width:28px; text-align:center; color:#fff; background:var(--c);
-  border-radius:8px; padding:2px 6px; font-size:11px; font-weight:900;
+  border-radius:4px; padding:2px 6px; font-size:11px; font-weight:900;
 }
 .memo-text{
   min-width:0; color:var(--ink-soft); font-size:12.5px; font-weight:700;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .memo-empty{
-  border:1px dashed #fed7aa;
-  background:#fffaf3;
-  color:#9a6a24;
-  border-radius:12px;
+  border:0;
+  background:#f5f7fa;
+  color:var(--ink-soft);
+  border-radius:8px;
   padding:11px 12px;
   font-size:12.5px;
   font-weight:800;
@@ -549,7 +555,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .memo-editor.memo-shared{
   background:#f3f8f7;
   border-color:#b9ddd7;
-  box-shadow:inset 3px 0 0 #4d9b8f;
+  box-shadow:none;
 }
 .memo-editor.memo-shared .memo-label::after{
   content:" · 공동 작성";
