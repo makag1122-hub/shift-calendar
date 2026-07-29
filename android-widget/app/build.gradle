@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.application'
+}
+
+def keystorePath = System.getenv('ANDROID_KEYSTORE_FILE')
+
+android {
+    namespace 'kr.co.shiftcalendar.widget'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'kr.co.shiftcalendar.widget'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    if (keystorePath) {
+        signingConfigs {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv('ANDROID_STORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                storeType 'PKCS12'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystorePath) {
+                signingConfig signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

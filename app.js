@@ -723,7 +723,89 @@ function renderSummary(){
     `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`;
 }
 
-function renderAll(){ renderGroupSwitcher(); renderTodayBanner(); renderTeamBoard(); renderCalendar(); renderLegend(); }
+/* ---------- Android 홈 화면 위젯 연결 ----------
+   네이티브 앱의 WebView가 제공하는 AndroidWidget 브리지에 달력 스냅샷을 전달합니다.
+   브라우저/PWA에서는 브리지가 없으므로 아무 작업도 하지 않습니다. */
+let androidWidgetTimer = null;
+function buildAndroidWidgetPayload(referenceDate = new Date()){
+  const currentYear = referenceDate.getFullYear();
+  const firstYear = Math.min(2026, currentYear - 1);
+  const lastYear = Math.max(2027, currentYear + 2);
+  const shifts = {};
+  for(const [key, type] of Object.entries(state.shiftTypes)){
+    shifts[key] = {
+      label: type.label || key,
+      short: type.short || type.label || key,
+      start: type.start || '',
+      end: type.end || '',
+      color: type.color || '#94a3b8',
+      kind: type.kind || 'work',
+    };
+  }
+
+  const months = {};
+  for(let year = firstYear; year <= lastYear; year++){
+    for(let month = 0; month < 12; month++){
+      const monthKey = `${year}-${pad(month+1)}`;
+      const daysInMonth = new Date(year, month+1, 0).getDate();
+      const groups = {};
+      for(const group of GROUPS){
+        const tagMap = tagsForMonth(group, year, month);
+        const memos = memosFor(group);
+        const days = [];
+        for(let day = 1; day <= daysInMonth; day++){
+          const dateStr = `${monthKey}-${pad(day)}`;
+          const tag = tagMap[dateStr];
+          days.push([
+            shiftFor(dateStr, group) || '',
+            tag ? tag.tag : '',
+            tag ? tag.n : 0,
+            memos[dateStr] ? 1 : 0,
+            isHoliday(dateStr) ? 1 : 0,
+          ]);
+        }
+        groups[group] = days;
+      }
+      months[monthKey] = groups;
+    }
+  }
+
+  return {
+    schema: 1,
+    generatedAt: Date.now(),
+    activeGroup: currentGroup(),
+    firstYear,
+    lastYear,
+    shifts,
+    months,
+  };
+}
+
+function publishAndroidWidgetSnapshot(){
+  const bridge = window.AndroidWidget;
+  if(!bridge || typeof bridge.updateCalendar !== 'function') return;
+  try{
+    bridge.updateCalendar(JSON.stringify(buildAndroidWidgetPayload()));
+  }catch(error){
+    console.warn('Android 위젯 갱신 실패', error);
+  }
+}
+
+function queueAndroidWidgetSnapshot(){
+  if(!window.AndroidWidget || typeof window.AndroidWidget.updateCalendar !== 'function') return;
+  clearTimeout(androidWidgetTimer);
+  androidWidgetTimer = setTimeout(publishAndroidWidgetSnapshot, 250);
+}
+window.publishAndroidWidgetSnapshot = publishAndroidWidgetSnapshot;
+
+function renderAll(){
+  renderGroupSwitcher();
+  renderTodayBanner();
+  renderTeamBoard();
+  renderCalendar();
+  renderLegend();
+  queueAndroidWidgetSnapshot();
+}
 
 /* ---------- 범위(여러 날) 선택 ---------- */
 function rangeDays(a, b){

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">교대 캘린더</string>
+    <string name="widget_description">근무와 지근·지휴·특근을 보여주는 월간 교대 달력</string>
+    <string name="widget_default_title">교대 캘린더 · A조</string>
+    <string name="widget_calendar_description">월간 교대근무 달력</string>
+    <string name="widget_open_hint">앱을 열어 달력을 동기화하세요</string>
+</resources>

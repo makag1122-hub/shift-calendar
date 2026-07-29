@@ -8,3 +8,8 @@ Thumbs.db
 # 브라우저 UI 검증 결과
 .playwright-cli/
 output/
+
+# Android 빌드 산출물·로컬 서명키
+android-widget/.gradle/
+android-widget/**/build/
+android-widget/app/*.p12
