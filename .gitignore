@@ -4,3 +4,7 @@
 # OS 부산물
 Thumbs.db
 .DS_Store
+
+# 브라우저 UI 검증 결과
+.playwright-cli/
+output/

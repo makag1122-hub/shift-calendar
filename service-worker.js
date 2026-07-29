@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'shift-calendar-v20260729c-balanced-manual-tags';
+const CACHE_NAME = 'shift-calendar-v20260729d-shared-memo-ui';
 const APP_SHELL = [
   './',
   './index.html',

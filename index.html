@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
-  <link rel="stylesheet" href="style.css?v=20260718a" />
+  <link rel="stylesheet" href="style.css?v=20260729d" />
 </head>
 <body>
   <div class="app">
@@ -28,7 +28,7 @@
       <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
     </header>
 
-    <!-- 공유 보기(읽기 전용) 배너 -->
+    <!-- 공유 보기 + 공동 메모 배너 -->
     <div class="sync-banner" id="syncBanner" hidden></div>
 
     <!-- 내 조 선택 -->
@@ -77,7 +77,7 @@
 
     <footer class="app-footer">
       <button class="btn-soft" id="btnToday">오늘로 이동</button>
-      <div class="app-version">ver 2026.07.29.3</div>
+      <div class="app-version">ver 2026.07.29.4</div>
     </footer>
   </div>
 
@@ -93,7 +93,7 @@
     <p class="sheet-hint">이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시됩니다)</p>
     <div class="memo-editor" id="memoEditor">
       <div class="memo-head">
-        <label class="memo-label" for="sheetMemo">메모</label>
+        <label class="memo-label" for="sheetMemo">함께 보는 메모</label>
         <span class="memo-count" id="memoCount">0/80</span>
       </div>
       <textarea class="memo-input" id="sheetMemo" rows="3" placeholder="예: 교육, 비번, 연차…" maxlength="80"></textarea>
@@ -150,7 +150,7 @@
 
       <section class="set-section" id="syncSection">
         <h3>💛 여자친구와 공유 · 실시간 동기화</h3>
-        <p class="set-desc">내 근무표를 여자친구와 공유해요. <b>내가 수정하면 여친 폰에 자동 반영</b>되고, 여친은 <b>보기 전용</b>입니다. 무료 Firebase(내 구글계정)로 1회만 설정하면 됩니다.</p>
+        <p class="set-desc">내 근무표를 여자친구와 공유해요. 근무표 편집은 나만 할 수 있고, 날짜별 <b>메모는 둘이 함께 작성</b>할 수 있습니다. 무료 Firebase(내 구글계정)로 1회만 설정하면 됩니다.</p>
         <div id="syncBox"></div>
       </section>
 
@@ -165,13 +165,13 @@
         <input id="importFile" type="file" accept="application/json" hidden />
       </section>
 
-      <p class="set-foot">교대 캘린더 · ver 2026.07.29.3</p>
+      <p class="set-foot">교대 캘린더 · ver 2026.07.29.4</p>
     </div>
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync.js?v=20260715a"></script>
-  <script src="app.js?v=20260729c"></script>
+  <script src="sync.js?v=20260729d"></script>
+  <script src="app.js?v=20260729d"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {

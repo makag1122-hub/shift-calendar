@@ -278,16 +278,19 @@ function loadState(){
     return clone(DEFAULT_STATE);
   }
 }
-function saveState(){
+function saveState(notifySync = true){
   try{
     state.overrides = groupOverrideMap('A');
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if(window.Sync && Sync.onLocalSave) Sync.onLocalSave();  // 공유 중이면 클라우드에 자동 반영
+    if(notifySync && window.Sync && Sync.onLocalSave) Sync.onLocalSave();  // 근무표 변경만 전체 상태 동기화
   }
   catch(e){ console.warn('저장 실패', e); }
 }
-// 공유 '보기 전용'(여자친구)일 때 편집 차단
+// 공유 상대는 근무표 편집은 차단하고 메모만 작성 가능
 function canEdit(){ return !(window.Sync && Sync.readonly && Sync.readonly()); }
+function canEditMemo(){
+  return canEdit() || !!(window.Sync && Sync.canWriteMemo && Sync.canWriteMemo());
+}
 
 let state = loadState();
 let view = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
@@ -523,9 +526,9 @@ function shortDateText(dateStr){
   const d = parseYmd(dateStr);
   return `${d.getMonth()+1}/${d.getDate()}(${WEEK[d.getDay()]})`;
 }
-function memoPreview(text, limit = 6){
+function memoPreview(text, limit = 18){
   const s = String(text || '').trim();
-  return s.length > limit ? `${s.slice(0, limit)}...` : s;
+  return s.length > limit ? `${s.slice(0, limit)}…` : s;
 }
 
 /* ---------- 렌더링 ---------- */
@@ -629,15 +632,14 @@ function renderCalendar(){
     const hasTag = !!ti;
     const isFam = dateStr === famDayStr;
     const tagHtml = ti
-      ? `<span class="cell-tag" style="background:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
-      : '<span class="cell-tag-slot" aria-hidden="true"></span>';
+      ? `<span class="cell-tag" style="--tag:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
+      : '';
     html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
-      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}</span>
+      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}</span>
       ${badge}
-      ${tagHtml}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
       ${isFam ? '<span class="fam-mark" title="패밀리데이 가능일 (급여일 2주 전 금)">💛</span>' : ''}
-      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : ''}
+      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : '<span class="cell-memo-slot" aria-hidden="true"></span>'}
     </button>`;
   }
   $('grid').innerHTML = html;
@@ -799,10 +801,11 @@ function openDaySheet(dateStr){
   if(infoParts.length){ sh.hidden = false; sh.innerHTML = infoParts.join(' '); }
   else { sh.hidden = true; sh.innerHTML = ''; }
   const ro = !canEdit();
+  const memoWritable = canEditMemo();
   const current = shiftFor(dateStr, group);
   $('daySheet').classList.toggle('sheet-ro', ro);
   document.querySelector('.sheet-hint').innerHTML = ro
-    ? '👀 여자친구 공유 · <b>읽기 전용</b>입니다. 근무·메모는 소유자만 바꿀 수 있어요.'
+    ? '👀 공유 화면입니다. 근무표는 보기 전용이고 <b>메모는 함께 작성</b>할 수 있어요.'
     : '이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시)';
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
@@ -819,8 +822,11 @@ function openDaySheet(dateStr){
   else { renderSheetDesig(dateStr, group); }
   const memoText = memosFor(group)[dateStr] || '';
   $('sheetMemo').value = memoText;
-  $('sheetMemo').readOnly = ro;
-  $('memoEditor').style.display = (ro && !memoText) ? 'none' : '';
+  $('sheetMemo').readOnly = !memoWritable;
+  $('sheetMemo').placeholder = ro ? '함께 볼 메모를 남겨보세요' : '예: 교육, 비번, 연차…';
+  $('memoPresets').hidden = !memoWritable;
+  $('memoEditor').style.display = (!memoWritable && !memoText) ? 'none' : '';
+  $('memoEditor').classList.toggle('memo-shared', ro && memoWritable);
   updateMemoCount(memoText);
   $('btnRevert').textContent = isBaseline(dateStr, group) ? '↺ 확정된 기본값으로 되돌리기' : '↺ 패턴 값으로 되돌리기';
   $('btnRevert').hidden = ro || !isOverride(dateStr, group);
@@ -901,17 +907,22 @@ function updateMemoCount(value = $('sheetMemo').value){
 }
 
 function saveMemoValue(value){
-  if(!canEdit()) return;
+  if(!canEditMemo()) return;
   const v = String(value || '').trim();
-  const memos = memosFor();
+  const group = currentGroup();
+  const memos = memosFor(group);
   if(sheetRange){
-    rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ if(v) memos[ds]=v; else delete memos[ds]; });
-    saveState(); renderCalendar();
+    rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{
+      if(v) memos[ds]=v; else delete memos[ds];
+      if(window.Sync && Sync.saveMemo) Sync.saveMemo(group, ds, v);
+    });
+    saveState(false); renderCalendar();
     return;
   }
   if(!selectedDate) return;
   if(v) memos[selectedDate] = v; else delete memos[selectedDate];
-  saveState(); renderCalendar();
+  if(window.Sync && Sync.saveMemo) Sync.saveMemo(group, selectedDate, v);
+  saveState(false); renderCalendar();
 }
 
 /* ---------- 설정: 근무 종류 ---------- */
@@ -991,7 +1002,7 @@ service cloud.firestore {
 }`;
 
 function syncStatusText(s){
-  return ({ connecting:'⏳ 연결 중…', live:'🟢 실시간 공유 중', readonly:'👀 공유 보기 중 · 읽기 전용', error:'⚠️ 오류', off:'꺼짐' })[s] || s;
+  return ({ connecting:'⏳ 연결 중…', live:'🟢 실시간 공유 중', readonly:'💬 공유 연결됨 · 메모 작성 가능', error:'⚠️ 오류', off:'꺼짐' })[s] || s;
 }
 
 // 상대 시각: '방금 전' · 'N분 전' · 'N시간 전' · 'N일 전' · 날짜
@@ -1042,7 +1053,7 @@ function renderSyncBox(){
     box.innerHTML = `
       <div class="sync-status on">${syncStatusText(st.status)}</div>
       ${last ? `<div class="sync-updated">🔄 <b data-reltime="${last}">${relTime(last)}</b> 업데이트됨</div>` : ''}
-      <p class="sync-note">소유자(내 여자친구/파트너)가 수정하면 이 화면에 <b>자동으로 반영</b>됩니다. 여기서는 근무·메모를 바꿀 수 없어요.</p>
+      <p class="sync-note">근무표는 소유자만 바꿀 수 있고 자동으로 반영됩니다. 날짜를 누르면 <b>메모는 함께 작성</b>할 수 있어요.</p>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
       <button class="btn-text-danger" id="syncDisableBtn">공유 해제(내 폰에서 이 공유 끄기)</button>`;
     return;
@@ -1060,7 +1071,7 @@ function renderSyncBox(){
         <button class="btn-soft" id="syncCopyBtn">복사</button>
       </div>
       <div class="sync-qr" id="syncQr" hidden></div>
-      <p class="sync-note"><b>보내기</b> 버튼을 누르면 카톡·문자 공유창이 열립니다. (지원 안 되는 기기·PC에서는 링크가 <b>자동 복사</b>돼요.) 옆에 있으면 여친 폰 카메라로 <b>QR코드를 스캔</b>해도 됩니다. 내가 수정할 때마다 실시간(보기 전용) 반영돼요.</p>
+      <p class="sync-note"><b>보내기</b> 버튼을 누르면 카톡·문자 공유창이 열립니다. (지원 안 되는 기기·PC에서는 링크가 <b>자동 복사</b>돼요.) 상대방은 근무표를 볼 수 있고, 날짜별 <b>메모는 함께 작성</b>할 수 있습니다.</p>
       ${last ? `<p class="sync-synced">마지막 동기화: <span data-reltime="${last}">${relTime(last)}</span></p>` : ''}
       <div class="sync-actions">
         <button class="btn-soft" id="syncReconfigBtn">Firebase 설정 다시 넣기</button>
@@ -1128,7 +1139,7 @@ function renderSyncBanner(){
     el.className = 'sync-banner' + (st.status==='error' ? ' err' : '');
     el.innerHTML = st.status==='error'
       ? `⚠️ 공유 연결 오류 — ${escapeHtml(st.error)}`
-      : `👀 여자친구 공유 · <b>읽기 전용</b>${st.updatedAt ? ` · <b data-reltime="${st.updatedAt}">${relTime(st.updatedAt)}</b> 업데이트` : ' · 실시간 반영'}`;
+      : `💬 여자친구 공유 · <b>메모 작성 가능</b>${st.updatedAt ? ` · <b data-reltime="${st.updatedAt}">${relTime(st.updatedAt)}</b> 업데이트` : ' · 실시간 반영'}`;
     document.body.classList.add('readonly-mode');
   } else {
     el.hidden = true;
@@ -1314,6 +1325,7 @@ function wire(){
     saveMemoValue(e.target.value);
   });
   $('memoPresets').addEventListener('click', (e)=>{
+    if(!canEditMemo()) return;
     const btn = e.target.closest('[data-memo]');
     if(!btn) return;
     const input = $('sheetMemo');
