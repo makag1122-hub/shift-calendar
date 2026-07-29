@@ -46,12 +46,25 @@ jobs:
         run: |
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-widget/app/shift-calendar.p12
 
+      - name: Resolve signing alias
+        env:
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          ALIAS="$(keytool -list -v \
+            -keystore android-widget/app/shift-calendar.p12 \
+            -storetype PKCS12 \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            | sed -n 's/^Alias name: //p' \
+            | head -n 1)"
+          test -n "$ALIAS"
+          echo "ANDROID_RESOLVED_ALIAS=$ALIAS" >> "$GITHUB_ENV"
+
       - name: Build signed APK
         working-directory: android-widget
         env:
           ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/android-widget/app/shift-calendar.p12
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_ALIAS: ${{ env.ANDROID_RESOLVED_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle :app:assembleRelease --stacktrace
 
