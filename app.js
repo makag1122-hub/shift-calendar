@@ -617,8 +617,13 @@ function renderCalendar(){
     const dow = new Date(view.year, view.month, d).getDay();
     const t = st(shiftFor(dateStr, group));
     const tint = t ? hexToTint(t.color) : 'transparent';
+    const ti = tagMap[dateStr];
+    const hasTag = !!ti;
+    const tagHtml = ti
+      ? `<span class="cell-tag" title="${tagLabel(ti)}" style="--tag:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
+      : '';
     const badge = t
-      ? `<span class="badge" style="background:${t.color}">${t.short || t.label}</span>`
+      ? `<span class="badge${hasTag ? ' badge-tagged' : ''}" style="--shift:${t.color}"><span class="badge-shift">${t.short || t.label}</span>${tagHtml}</span>`
       : `<span class="badge none">-</span>`;
     const hol = holidayName(dateStr);
     const dnumCls = hol ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
@@ -628,14 +633,9 @@ function renderCalendar(){
     const special = isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group) && !isBaseline(dateStr, group);
     const longRun = workRunTotalFor(dateStr, group) >= 6;
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
-    const ti = tagMap[dateStr];
-    const hasTag = !!ti;
     const isFam = dateStr === famDayStr;
-    const tagHtml = ti
-      ? `<span class="cell-tag" style="--tag:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
-      : '';
     html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
-      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}</span>
+      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}</span>
       ${badge}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
       ${isFam ? '<span class="fam-mark" title="패밀리데이 가능일 (급여일 2주 전 금)">💛</span>' : ''}
