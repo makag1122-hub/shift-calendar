@@ -1,13 +1,14 @@
 'use strict';
 
-const CACHE_NAME = 'shift-calendar-v20260729e-integrated-tags';
+const ASSET_VERSION = '20260729f';
+const CACHE_NAME = `shift-calendar-v${ASSET_VERSION}-cache-safe`;
 const APP_SHELL = [
   './',
   './index.html',
-  './style.css',
-  './qrcode.js',
-  './sync.js',
-  './app.js',
+  `./style.css?v=${ASSET_VERSION}`,
+  './qrcode.js?v=20260715a',
+  './sync.js?v=20260729d',
+  `./app.js?v=${ASSET_VERSION}`,
   './manifest.json',
   './icons/icon-180.png',
   './icons/icon-192.png',
@@ -18,7 +19,10 @@ const APP_SHELL = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
+      // GitHub Pages의 HTTP 캐시가 남아 있어도 설치 시 최신 파일을 다시 받습니다.
+      .then((cache) => cache.addAll(
+        APP_SHELL.map((url) => new Request(url, { cache:'reload' }))
+      ))
       .then(() => self.skipWaiting())
   );
 });
@@ -43,7 +47,7 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache:'no-store' })
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copy));
@@ -55,7 +59,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(request, { ignoreSearch: true })
+    // 버전 쿼리를 정확히 일치시켜 이전 CSS/JS가 새 화면에 섞이지 않게 합니다.
+    caches.match(request)
       .then((cached) => {
         if (cached) return cached;
         return fetch(request).then((response) => {
