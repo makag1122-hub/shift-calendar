@@ -63,16 +63,6 @@ const HOLIDAYS = {
 };
 function holidayName(dateStr){ return HOLIDAYS[dateStr] || null; }
 function isHoliday(dateStr){ return !!HOLIDAYS[dateStr]; }
-// 달력 칸에 넣을 짧은 공휴일 이름(칸이 좁아 이름이 길면 줄임)
-const HOLIDAY_SHORT = {
-  '부처님오신날':'석탄일', '어린이날':'어린이', '크리스마스':'성탄절',
-  '삼일절 대체':'대체', '광복절 대체':'대체', '개천절 대체':'대체', '부처님오신날 대체':'대체',
-  '설날 대체':'대체', '제헌절 대체':'대체', '한글날 대체':'대체', '크리스마스 대체':'대체',
-};
-function holidayShort(dateStr){
-  const n = HOLIDAYS[dateStr];
-  return n ? (HOLIDAY_SHORT[n] || n) : '';
-}
 
 /* ---------- 명절(설날·추석) 특별 근무표 ----------
    명절엔 로테이션 전체가 재편성됩니다(6일 연속근무·12시간 D2/G2 커버 발생).
@@ -620,14 +610,13 @@ function renderCalendar(){
     const ti = tagMap[dateStr];
     const hasTag = !!ti;
     const tagHtml = ti
-      ? `<span class="cell-tag" title="${tagLabel(ti)}" style="--tag:${DESIG[ti.tag].color}">${tagLabel(ti)}</span>`
+      ? `<span class="cell-tag" title="${tagLabel(ti)}" style="--tag:${DESIG[ti.tag].color}">${DESIG[ti.tag].short}</span>`
       : '';
     const badge = t
-      ? `<span class="badge${hasTag ? ' badge-tagged' : ''}" style="--shift:${t.color}"><span class="badge-shift">${t.short || t.label}</span>${tagHtml}</span>`
+      ? `<span class="badge" style="--shift:${t.color}">${t.short || t.label}</span>`
       : `<span class="badge none">-</span>`;
     const hol = holidayName(dateStr);
     const dnumCls = hol ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
-    const holHtml = hol ? `<span class="cell-hol" title="${escapeHtml(hol)}">${escapeHtml(holidayShort(dateStr))}</span>` : '';
     const memo = memos[dateStr];
     const hasMemo = !!memo;
     const special = isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group) && !isBaseline(dateStr, group);
@@ -635,7 +624,7 @@ function renderCalendar(){
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const isFam = dateStr === famDayStr;
     html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
-      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}</span>
+      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${tagHtml}</span>
       ${badge}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
       ${isFam ? '<span class="fam-mark" title="패밀리데이 가능일 (급여일 2주 전 금)">💛</span>' : ''}

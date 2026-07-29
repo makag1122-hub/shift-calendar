@@ -252,17 +252,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .cell-top{
   grid-row:1; grid-column:1;
   display:grid;
-  grid-template-columns:auto minmax(0,1fr);
+  grid-template-columns:auto minmax(0,1fr) auto;
   align-items:center;
-  gap:3px;
+  gap:2px;
   width:100%; min-width:0; height:16px;
-}
-.cell-hol{
-  min-width:0;
-  justify-self:start;
-  font-size:7.5px; font-weight:850; line-height:1;
-  color:var(--sun); letter-spacing:-.3px;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 /* 명절 편성(정규 패턴과 다른 날): 위쪽 보라 라인 */
 .cell.is-special{ box-shadow:inset 0 3px 0 rgba(70,84,197,.52); }
@@ -287,24 +280,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   border-radius:4px; letter-spacing:-.15px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.badge-shift{
-  min-width:0;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-.badge.badge-tagged{
-  display:grid;
-  grid-template-columns:minmax(12px, .85fr) minmax(0, 1.7fr);
-  padding:0;
-}
-.badge-tagged .badge-shift{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  height:100%;
-  padding-left:1px;
-}
 .badge.none{ background: #eef0f4; color:#b6bccb; }
 .cell.today{ outline: 2px solid var(--brand); outline-offset: -2px; }
 .cell.today .dnum{ color: var(--brand); font-weight: 800; }
@@ -327,19 +302,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   font-size:9px; font-weight:800; color:#fff; background:#dc2626;
   padding:0 6px; border-radius:0; line-height:1.6; letter-spacing:-.3px; }
 .cell-tag{
+  grid-column:3;
+  justify-self:end;
   display:flex;
   align-items:center;
   justify-content:center;
-  min-width:0;
-  width:100%;
-  height:100%;
+  min-width:18px;
+  max-width:23px;
+  height:13px;
   white-space:nowrap;
   font-size:7.5px;
   font-weight:900;
   color:var(--tag);
   background:color-mix(in srgb, var(--tag) 12%, white);
-  border-left:1px solid color-mix(in srgb, var(--tag) 35%, white);
-  padding:0 1px;
+  border:1px solid color-mix(in srgb, var(--tag) 35%, white);
+  padding:0 2px;
+  border-radius:4px;
   line-height:1;
   letter-spacing:-.45px;
   overflow:hidden; text-overflow:ellipsis;
@@ -390,7 +368,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   .cell{ border-radius:6px; padding-inline:2px; }
   .badge{ font-size:8.5px; }
   .cell-tag{ font-size:7px; }
-  .cell-hol{ font-size:7px; }
   .cell-memo{ font-size:7.5px; line-height:10px; padding-inline:3px 2px; }
 }
 
