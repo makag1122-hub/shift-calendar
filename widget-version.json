@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0",
+  "versionCode": 3,
+  "versionName": "1.2.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "앱을 열 때 새 버전을 자동으로 확인합니다.\n달력 내용은 이 앱을 열 때마다 웹에서 최신으로 갱신되므로 따로 받지 않아도 됩니다."
+  "notes": "설정에서 백업 불러오기·내보내기가 되도록 고쳤습니다.\n이전 폰에서 내보낸 백업 JSON을 불러오면 메모와 직접 바꾼 날이 그대로 옮겨집니다."
 }

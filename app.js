@@ -1289,10 +1289,21 @@ function closeSettings(){ $('settingsModal').hidden = true; renderAll(); }
 
 /* ---------- 데이터 백업 ---------- */
 function exportData(){
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+  const json = JSON.stringify(state, null, 2);
+  const fileName = `교대캘린더-백업-${todayStr()}.json`;
+
+  /* Android 위젯 앱의 WebView는 blob: 다운로드를 처리하지 못하므로
+     네이티브 브리지로 넘겨 다운로드 폴더에 저장합니다. */
+  const bridge = window.AndroidWidget;
+  if(bridge && typeof bridge.saveBackup === 'function'){
+    bridge.saveBackup(fileName, json);
+    return;
+  }
+
+  const blob = new Blob([json], { type:'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `교대캘린더-백업-${todayStr()}.json`; a.click();
+  a.href = url; a.download = fileName; a.click();
   URL.revokeObjectURL(url);
 }
 function importData(file){

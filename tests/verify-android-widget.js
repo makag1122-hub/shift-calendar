@@ -99,5 +99,16 @@ assert(manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), '업데
 assert(mainActivity.includes('checkForUpdate()'), 'MainActivity에서 업데이트 확인을 호출하지 않습니다.');
 assert(updateChecker.includes('widget-version.json'), 'UpdateChecker가 버전 파일을 바라보지 않습니다.');
 
+/* ---------- 백업 불러오기·내보내기 ----------
+   WebView는 파일 선택창과 blob: 다운로드를 기본으로 처리하지 못합니다.
+   둘 중 하나라도 빠지면 설정 화면의 버튼이 눌러도 무반응이 됩니다. */
+assert(mainActivity.includes('onShowFileChooser'), '백업 불러오기용 파일 선택창 처리가 없습니다.');
+assert(mainActivity.includes('onActivityResult'), '파일 선택 결과를 WebView로 돌려주지 않습니다.');
+assert(mainActivity.includes('public void saveBackup('), '백업 내보내기 브리지가 없습니다.');
+assert(
+  appSource.includes("typeof bridge.saveBackup === 'function'"),
+  'app.js가 Android 백업 저장 브리지를 사용하지 않습니다.'
+);
+
 console.log('Android 월간 달력 위젯 데이터 검사 통과');
 console.log(`업데이트 버전 정보 일치: ${gradleVersionName} (versionCode ${gradleVersionCode})`);

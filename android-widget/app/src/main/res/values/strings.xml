@@ -17,4 +17,10 @@
     <string name="update_permission_title">설치 권한이 필요합니다</string>
     <string name="update_permission_message">이 앱에서 업데이트를 바로 설치하려면 \'알 수 없는 앱 설치\'를 한 번 허용해야 합니다. 설정 화면으로 이동할까요?</string>
     <string name="update_permission_action">설정 열기</string>
+
+    <string name="backup_pick_title">백업 파일 선택</string>
+    <string name="backup_pick_failed">파일 선택창을 열 수 없습니다.</string>
+    <string name="backup_saved">다운로드 폴더에 백업을 저장했습니다.</string>
+    <string name="backup_save_failed">백업을 저장하지 못했습니다.</string>
+    <string name="backup_save_unsupported">이 안드로이드 버전에서는 앱에서 백업을 저장할 수 없습니다. Chrome에서 내보내기를 사용해 주세요.</string>
 </resources>

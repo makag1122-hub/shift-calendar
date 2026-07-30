@@ -6,25 +6,33 @@ import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,7 +43,9 @@ public class MainActivity extends Activity {
     private static final String KEY_SKIPPED_VERSION = "skipped_version_code";
     private static final String APK_FILE_NAME = "shift-calendar-widget.apk";
     private static final long POLL_INTERVAL_MS = 500L;
+    private static final int REQUEST_PICK_BACKUP = 1001;
 
+    private ValueCallback<Uri[]> fileChooserCallback;
     private WebView webView;
     private ExecutorService executor;
     private Handler handler;
@@ -69,6 +79,19 @@ public class MainActivity extends Activity {
         settings.setUserAgentString(settings.getUserAgentString() + " ShiftCalendarWidget/1.0");
 
         webView.addJavascriptInterface(new WidgetBridge(getApplicationContext()), "AndroidWidget");
+
+        /* 설정 > 백업 불러오기가 쓰는 <input type="file">은 이 처리가 있어야 열립니다. */
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(
+                    WebView view,
+                    ValueCallback<Uri[]> callback,
+                    FileChooserParams params
+            ) {
+                return openBackupPicker(callback);
+            }
+        });
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -110,6 +133,51 @@ public class MainActivity extends Activity {
     /* ---------- 새 버전 확인 ----------
        달력 내용은 웹에서 바로 갱신되므로, 위젯을 그리는 네이티브 코드가
        바뀐 경우에만 여기서 안내가 뜹니다. */
+
+    private boolean openBackupPicker(ValueCallback<Uri[]> callback) {
+        /* 앞선 요청이 남아 있으면 비워야 파일 입력이 다시 열립니다. */
+        if (fileChooserCallback != null) {
+            fileChooserCallback.onReceiveValue(null);
+        }
+        fileChooserCallback = callback;
+
+        /* accept="application/json"을 그대로 쓰면 파일 관리자에 따라 백업이
+           안 보이는 경우가 있어 모든 파일을 보여줍니다. */
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+
+        try {
+            startActivityForResult(
+                    Intent.createChooser(intent, getString(R.string.backup_pick_title)),
+                    REQUEST_PICK_BACKUP
+            );
+            return true;
+        } catch (RuntimeException error) {
+            fileChooserCallback = null;
+            Toast.makeText(this, R.string.backup_pick_failed, Toast.LENGTH_LONG).show();
+            return false;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode != REQUEST_PICK_BACKUP) {
+            super.onActivityResult(requestCode, resultCode, data);
+            return;
+        }
+        if (fileChooserCallback == null) {
+            return;
+        }
+
+        /* 취소했더라도 null을 돌려줘야 다음에 버튼이 다시 동작합니다. */
+        Uri[] picked = null;
+        if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+            picked = new Uri[]{data.getData()};
+        }
+        fileChooserCallback.onReceiveValue(picked);
+        fileChooserCallback = null;
+    }
 
     private void checkForUpdate() {
         executor.execute(() -> {
@@ -291,6 +359,7 @@ public class MainActivity extends Activity {
 
     private static final class WidgetBridge {
         private final Context context;
+        private final Handler toastHandler = new Handler(Looper.getMainLooper());
 
         WidgetBridge(Context context) {
             this.context = context;
@@ -312,6 +381,59 @@ public class MainActivity extends Activity {
             AppWidgetManager manager = AppWidgetManager.getInstance(context);
             ComponentName component = new ComponentName(context, CalendarWidgetProvider.class);
             CalendarWidgetProvider.updateWidgets(context, manager, manager.getAppWidgetIds(component));
+        }
+
+        /* 설정 > 백업 내보내기. WebView는 blob: 다운로드를 처리하지 못하므로
+           웹에서 JSON 문자열을 그대로 넘겨받아 다운로드 폴더에 저장합니다. */
+        @JavascriptInterface
+        public void saveBackup(String fileName, String json) {
+            if (json == null || json.isEmpty() || json.length() > 4_000_000) {
+                return;
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                toast(R.string.backup_save_unsupported);
+                return;
+            }
+
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Downloads.DISPLAY_NAME, safeFileName(fileName));
+            values.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+            values.put(MediaStore.Downloads.IS_PENDING, 1);
+
+            ContentResolver resolver = context.getContentResolver();
+            Uri target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (target == null) {
+                toast(R.string.backup_save_failed);
+                return;
+            }
+
+            try (OutputStream out = resolver.openOutputStream(target)) {
+                if (out == null) {
+                    throw new IllegalStateException("저장 위치를 열 수 없습니다");
+                }
+                out.write(json.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception error) {
+                resolver.delete(target, null, null);
+                toast(R.string.backup_save_failed);
+                return;
+            }
+
+            values.clear();
+            values.put(MediaStore.Downloads.IS_PENDING, 0);
+            resolver.update(target, values, null, null);
+            toast(R.string.backup_saved);
+        }
+
+        private static String safeFileName(String raw) {
+            String name = raw == null ? "" : raw.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+            if (name.isEmpty()) {
+                name = "shift-calendar-backup.json";
+            }
+            return name.endsWith(".json") ? name : name + ".json";
+        }
+
+        private void toast(int messageId) {
+            toastHandler.post(() -> Toast.makeText(context, messageId, Toast.LENGTH_LONG).show());
         }
     }
 }
