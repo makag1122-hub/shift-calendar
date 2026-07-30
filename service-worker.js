@@ -1,13 +1,15 @@
 'use strict';
 
-const ASSET_VERSION = '20260730a';
+const ASSET_VERSION = '20260731a';
 const CACHE_NAME = `shift-calendar-v${ASSET_VERSION}-cache-safe`;
 const APP_SHELL = [
   './',
   './index.html',
+  './privacy.html',
   `./style.css?v=${ASSET_VERSION}`,
   './qrcode.js?v=20260715a',
-  './sync.js?v=20260729d',
+  `./sync-config.js?v=${ASSET_VERSION}`,
+  `./sync.js?v=${ASSET_VERSION}`,
   `./app.js?v=${ASSET_VERSION}`,
   './manifest.json',
   './icons/icon-180.png',

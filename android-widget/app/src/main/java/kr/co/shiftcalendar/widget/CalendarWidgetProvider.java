@@ -153,8 +153,9 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         );
         views.setTextViewText(
                 R.id.widget_title,
-                String.format(Locale.KOREA, "%d년 %d월 · %s조", year, month + 1, group)
+                String.format(Locale.KOREA, "%d년 %d월", year, month + 1)
         );
+        views.setTextViewText(R.id.widget_group, group + "조");
         views.setImageViewBitmap(R.id.widget_calendar_image, result.bitmap);
         views.setTextViewText(R.id.widget_footer, result.footer);
 
@@ -168,7 +169,11 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         );
         views.setOnClickPendingIntent(
                 R.id.widget_title,
-                broadcastIntent(context, widgetId, ACTION_GROUP, 3)
+                broadcastIntent(context, widgetId, ACTION_TODAY, 3)
+        );
+        views.setOnClickPendingIntent(
+                R.id.widget_group,
+                broadcastIntent(context, widgetId, ACTION_GROUP, 5)
         );
         views.setOnClickPendingIntent(
                 R.id.widget_footer,

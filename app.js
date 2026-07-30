@@ -1061,13 +1061,44 @@ function confirmOverridesToBaseline(group = currentGroup()){
   renderAll();
 }
 
-/* ---------- 설정: 여자친구 공유(실시간 동기화) ---------- */
+/* ---------- 설정: 친구와 공유(실시간 동기화) ---------- */
 const FIRESTORE_RULES =
 `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /calendars/{code} {
-      allow read, write: if true;
+      function signedIn() {
+        return request.auth != null;
+      }
+      function isOwner() {
+        return signedIn() && resource.data.ownerUid == request.auth.uid;
+      }
+      function isMember() {
+        return signedIn() && request.auth.uid in resource.data.memberUids;
+      }
+
+      allow create: if signedIn()
+        && code.matches('^[a-z2-9]{20}$')
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid];
+
+      allow read: if isOwner() || isMember();
+
+      allow update: if
+        (isOwner()
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.memberUids == resource.data.memberUids)
+        || (signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+          && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+          && request.resource.data.memberUids.size() <= resource.data.memberUids.size() + 1
+          && request.resource.data.memberUids.size() <= 10
+          && request.auth.uid in request.resource.data.memberUids)
+        || (isMember()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['sharedMemos', 'memoUpdatedAt']));
+
+      allow delete: if isOwner();
     }
   }
 }`;
@@ -1102,19 +1133,23 @@ function renderShareQr(link){
   }catch(e){ el.hidden = true; }
 }
 
-// 공유 링크를 카톡·문자 등 공유 시트로 전송(모바일). 없으면 복사로 대체.
+// Android 앱은 카카오톡을 바로 열고, PWA는 운영체제 공유창 또는 링크 복사를 사용합니다.
 function shareSyncLink(btn){
   const link = Sync.shareLink();
   if(!link) return;
-  if(navigator.share){
-    navigator.share({ title:'교대 캘린더 공유 💛', text:'내 근무표를 실시간으로 볼 수 있어요.', url: link })
+  const title = '교대 캘린더 친구 초대';
+  const text = '내 근무표를 같이 볼 수 있어요. 날짜별 메모도 함께 남겨보세요.';
+  const bridge = window.AndroidWidget;
+  if(bridge && typeof bridge.shareToKakao === 'function'){
+    bridge.shareToKakao(title, text, link);
+  }else if(navigator.share){
+    navigator.share({ title, text, url:link })
       .catch(()=>{});
   }else{
     copyToClipboard(link, btn);
   }
 }
 
-let syncForceSetup = false;   // owner가 'Firebase 설정 다시 넣기' 눌렀을 때
 function renderSyncBox(){
   const box = $('syncBox');
   if(!box || !window.Sync) return;
@@ -1126,61 +1161,87 @@ function renderSyncBox(){
       ${last ? `<div class="sync-updated">🔄 <b data-reltime="${last}">${relTime(last)}</b> 업데이트됨</div>` : ''}
       <p class="sync-note">근무표는 소유자만 바꿀 수 있고 자동으로 반영됩니다. 날짜를 누르면 <b>메모는 함께 작성</b>할 수 있어요.</p>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
-      <button class="btn-text-danger" id="syncDisableBtn">공유 해제(내 폰에서 이 공유 끄기)</button>`;
+      <button class="btn-text-danger" id="syncDisableBtn">이 공유방 나가기</button>`;
     return;
   }
-  if(Sync.isOn() && !syncForceSetup){  // owner
+  if(Sync.isOn()){  // owner
     const link = Sync.shareLink();
     const last = st.updatedAt;
     box.innerHTML = `
       <div class="sync-status ${st.status==='error'?'err':'on'}">${syncStatusText(st.status)}</div>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
-      <label class="sync-lbl">여자친구에게 공유하기</label>
-      <button class="btn-primary sync-send" id="syncShareBtn">💌 카톡·문자로 보내기</button>
+      <div class="sync-ready-copy">
+        <strong>친구를 초대할 준비가 됐어요</strong>
+        <span>아래 버튼을 누르면 카카오톡으로 초대 링크를 보낼 수 있어요.</span>
+      </div>
+      <button class="btn-kakao sync-send" id="syncShareBtn">
+        <span class="kakao-mark" aria-hidden="true"></span>
+        카카오톡으로 친구 초대
+      </button>
       <div class="sync-link-row">
         <input id="syncLink" class="sync-link" readonly value="${escapeHtml(link)}" />
-        <button class="btn-soft" id="syncCopyBtn">복사</button>
+        <button class="btn-soft" id="syncCopyBtn">링크 복사</button>
       </div>
       <div class="sync-qr" id="syncQr" hidden></div>
-      <p class="sync-note"><b>보내기</b> 버튼을 누르면 카톡·문자 공유창이 열립니다. (지원 안 되는 기기·PC에서는 링크가 <b>자동 복사</b>돼요.) 상대방은 근무표를 볼 수 있고, 날짜별 <b>메모는 함께 작성</b>할 수 있습니다.</p>
+      <p class="sync-note">초대받은 친구는 근무표를 볼 수 있고, 날짜별 메모를 함께 작성할 수 있습니다.</p>
       ${last ? `<p class="sync-synced">마지막 동기화: <span data-reltime="${last}">${relTime(last)}</span></p>` : ''}
       <div class="sync-actions">
-        <button class="btn-soft" id="syncReconfigBtn">Firebase 설정 다시 넣기</button>
-        <button class="btn-text-danger" id="syncDisableBtn">공유 끄기</button>
+        <button class="btn-text-danger" id="syncDisableBtn">공유방 닫기</button>
       </div>`;
     renderShareQr(link);
     return;
   }
-  // 미설정(owner 설정 폼)
+  if(Sync.managedReady()){
+    box.innerHTML = `
+      <div class="sync-intro">
+        <div class="sync-intro-icon" aria-hidden="true">↗</div>
+        <div>
+          <strong>설정 없이 바로 공유하세요</strong>
+          <p>공유방을 만든 뒤 카카오톡으로 링크만 보내면 됩니다. 친구가 바뀌어도 같은 링크를 다시 보낼 수 있어요.</p>
+        </div>
+      </div>
+      <div class="sync-flow" aria-label="공유 순서">
+        <span><b>1</b> 공유방 만들기</span>
+        <span><b>2</b> 카카오톡으로 초대</span>
+        <span><b>3</b> 메모 함께 쓰기</span>
+      </div>
+      <button class="btn-primary" id="syncEnableBtn">공유방 만들기</button>
+      <div class="sync-msg" id="syncMsg"></div>`;
+    return;
+  }
+
+  // 배포 전 개발자 1회 설정. 출시된 앱 사용자에게는 이 화면이 보이지 않습니다.
   box.innerHTML = `
-    <label class="sync-lbl">1) Firebase 설정(firebaseConfig) 붙여넣기</label>
-    <textarea id="syncConfigInput" class="sync-config" rows="7" placeholder='{\n  "apiKey": "AIza...",\n  "authDomain": "myapp.firebaseapp.com",\n  "projectId": "myapp",\n  "appId": "1:..."\n}'></textarea>
-    <button class="btn-primary" id="syncEnableBtn">공유 시작하기</button>
-    <div class="sync-msg" id="syncMsg"></div>
+    <div class="sync-setup-alert">
+      <strong>공유 서버 연결이 필요해요</strong>
+      <p>출시 전에 운영자가 Firebase 설정을 한 번만 넣으면, 이후 사용자는 별도 설정 없이 공유할 수 있습니다.</p>
+    </div>
     <details class="sync-guide">
-      <summary>📖 Firebase 설정 방법 (처음 1회 · 약 10분 · 무료)</summary>
+      <summary>개발자용 1회 설정 열기</summary>
       <ol class="sync-steps">
-        <li><b>firebase.google.com</b> 접속 → 구글 로그인 → <b>Go to console</b> → <b>프로젝트 만들기</b>(이름 아무거나, 애널리틱스는 꺼도 됩니다).</li>
-        <li>왼쪽 메뉴 <b>빌드 › Firestore Database</b> → <b>데이터베이스 만들기</b> → 위치 <b>asia-northeast3(서울)</b> → <b>테스트 모드로 시작</b> → 완료.</li>
-        <li>Firestore의 <b>규칙(Rules)</b> 탭에서 아래 내용으로 바꾸고 <b>게시</b>:
+        <li><b>Firebase 콘솔</b>에서 프로젝트를 만들고 Firestore Database를 서울 리전에 생성합니다.</li>
+        <li><b>빌드 › Authentication › Sign-in method</b>에서 <b>익명</b> 로그인을 사용 설정합니다. 앱 사용자에게 로그인 화면은 표시되지 않습니다.</li>
+        <li>Firestore의 <b>규칙</b> 탭에 아래 규칙을 게시합니다.
           <div class="sync-link-row">
             <textarea class="sync-rules" id="syncRules" rows="7" readonly>${escapeHtml(FIRESTORE_RULES)}</textarea>
           </div>
           <button class="btn-soft sm" id="syncCopyRules">규칙 복사</button>
         </li>
-        <li>⚙ <b>프로젝트 설정</b> → 아래로 스크롤 <b>내 앱</b> → 웹 아이콘 <b>&lt;/&gt;</b> 클릭 → 앱 등록(호스팅 체크 안 해도 됨) → 화면에 나오는 <b>firebaseConfig</b>의 <b>{ … }</b> 부분을 통째로 복사.</li>
-        <li>복사한 걸 위 1)번 칸에 붙여넣고 <b>공유 시작하기</b>. 그다음 나오는 링크를 여자친구에게 보내면 끝!</li>
+        <li>프로젝트 설정 › 내 앱 › 웹 앱에서 복사한 <b>firebaseConfig</b>를 <code>sync-config.js</code>에 넣고 다시 배포합니다.</li>
       </ol>
+      <label class="sync-lbl" for="syncConfigInput">배포 전 임시 연결 테스트</label>
+      <textarea id="syncConfigInput" class="sync-config" rows="7" placeholder='{\n  "apiKey": "AIza...",\n  "authDomain": "myapp.firebaseapp.com",\n  "projectId": "myapp",\n  "appId": "1:..."\n}'></textarea>
+      <button class="btn-primary" id="syncEnableBtn">이 기기에서 테스트하기</button>
+      <div class="sync-msg" id="syncMsg"></div>
     </details>`;
 }
 
 async function enableOwnerSync(){
   const input = $('syncConfigInput');
   const msg = $('syncMsg');
-  if(!input) return;
   if(msg){ msg.className = 'sync-msg'; msg.textContent = '연결 중…'; }
   try{
-    await Sync.enableOwner(input.value);
+    await Sync.enableOwner(input ? input.value : '');
     renderSyncBox();
   }catch(e){
     if(msg){ msg.className = 'sync-msg err'; msg.textContent = e.message || String(e); }
@@ -1210,7 +1271,7 @@ function renderSyncBanner(){
     el.className = 'sync-banner' + (st.status==='error' ? ' err' : '');
     el.innerHTML = st.status==='error'
       ? `⚠️ 공유 연결 오류 — ${escapeHtml(st.error)}`
-      : `💬 여자친구 공유 · <b>메모 작성 가능</b>${st.updatedAt ? ` · <b data-reltime="${st.updatedAt}">${relTime(st.updatedAt)}</b> 업데이트` : ' · 실시간 반영'}`;
+      : `💬 친구와 공유 중 · <b>메모 작성 가능</b>${st.updatedAt ? ` · <b data-reltime="${st.updatedAt}">${relTime(st.updatedAt)}</b> 업데이트` : ' · 실시간 반영'}`;
     document.body.classList.add('readonly-mode');
   } else {
     el.hidden = true;
@@ -1434,14 +1495,20 @@ function wire(){
   // 공유(실시간 동기화) 버튼
   $('syncBox').addEventListener('click', (e)=>{
     const t = e.target.closest('button'); if(!t) return;
-    if(t.id === 'syncEnableBtn'){ syncForceSetup = false; enableOwnerSync(); }
-    else if(t.id === 'syncReconfigBtn'){ syncForceSetup = true; renderSyncBox(); }
+    if(t.id === 'syncEnableBtn'){ enableOwnerSync(); }
     else if(t.id === 'syncShareBtn'){ shareSyncLink(t); }
     else if(t.id === 'syncCopyBtn'){ copyToClipboard($('syncLink').value, t); }
     else if(t.id === 'syncCopyRules'){ copyToClipboard(FIRESTORE_RULES, t); }
     else if(t.id === 'syncDisableBtn'){
-      if(confirm('공유를 끌까요? (여자친구에게 보낸 링크는 더 이상 갱신되지 않습니다)')){
-        Sync.disable(); syncForceSetup = false; renderSyncBox(); renderSyncBanner(); renderAll();
+      const leaving = Sync.role() === 'viewer';
+      const message = leaving
+        ? '이 공유방에서 나갈까요? 내 기기의 연결만 해제됩니다.'
+        : '공유방을 닫을까요? 클라우드에 저장된 공유 데이터와 초대 링크가 삭제됩니다.';
+      if(confirm(message)){
+        t.disabled = true;
+        Sync.disable()
+          .then(()=>{ renderSyncBox(); renderSyncBanner(); renderAll(); })
+          .catch(()=>{ t.disabled = false; renderSyncBox(); });
       }
     }
   });

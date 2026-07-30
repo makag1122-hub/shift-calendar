@@ -7,7 +7,8 @@ const vm = require('vm');
 const ROOT = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(ROOT, 'sync.js'), 'utf8')
   .replace('const appMod = await import(SDK_APP);', 'const appMod = globalThis.__appMod;')
-  .replace('const fsMod  = await import(SDK_FS);', 'const fsMod  = globalThis.__fsMod;');
+  .replace('const fsMod  = await import(SDK_FS);', 'const fsMod  = globalThis.__fsMod;')
+  .replace('const authMod = await import(SDK_AUTH);', 'const authMod = globalThis.__authMod;');
 
 function assert(condition, message){
   if(!condition) throw new Error(message);
@@ -24,7 +25,7 @@ function makeSandbox(role, remoteData){
     code: 'shared-calendar',
     role,
   };
-  const storage = new Map([['shiftcal.sync', JSON.stringify(cfg)]]);
+  const storage = new Map(role ? [['shiftcal.sync', JSON.stringify(cfg)]] : []);
   const sandbox = {
     console,
     Date,
@@ -36,6 +37,12 @@ function makeSandbox(role, remoteData){
     Array,
     RegExp,
     Promise,
+    crypto: {
+      getRandomValues: array => {
+        for(let i = 0; i < array.length; i++) array[i] = i + 1;
+        return array;
+      },
+    },
     setTimeout,
     clearTimeout,
     localStorage: {
@@ -64,14 +71,48 @@ function makeSandbox(role, remoteData){
       doc: (_db, collection, code) => `${collection}/${code}`,
       setDoc: async (...args) => { calls.setDoc.push(args); },
       updateDoc: async (...args) => { calls.updateDoc.push(args); },
+      deleteDoc: async () => {},
+      arrayUnion: value => ({ arrayUnion: value }),
       onSnapshot: (_ref, onValue) => {
         if(remoteData) onValue({ data: () => remoteData });
         return () => {};
       },
     },
+    __authMod: {
+      getAuth: app => ({ app, currentUser: null, authStateReady: async () => {} }),
+      signInAnonymously: async () => ({ user: { uid: 'anonymous-test-user' } }),
+    },
   };
   sandbox.window = sandbox;
   return { sandbox, calls };
+}
+
+async function verifyManagedSetup(){
+  const { sandbox, calls } = makeSandbox(null);
+  sandbox.SHIFT_CALENDAR_FIREBASE_CONFIG = {
+    apiKey: 'managed-key',
+    projectId: 'managed-project',
+  };
+  vm.runInNewContext(source, sandbox);
+  sandbox.Sync.init();
+
+  assert(sandbox.Sync.managedReady(), '앱 공용 Firebase 설정을 인식하지 못했습니다.');
+  await sandbox.Sync.enableOwner();
+  assert(calls.setDoc.length === 1, '간편 공유방 생성 시 최초 업로드가 실행되지 않았습니다.');
+  assert(
+    calls.setDoc[0][1].ownerUid === 'anonymous-test-user',
+    '간편 공유방에 익명 인증 소유자가 기록되지 않았습니다.'
+  );
+  sandbox.Sync.onLocalSave();
+  await wait(450);
+  assert(calls.setDoc.length === 2, '공유방 생성 후 근무표 갱신이 실행되지 않았습니다.');
+  assert(
+    !Object.prototype.hasOwnProperty.call(calls.setDoc[1][1], 'memberUids'),
+    '근무표 갱신이 이미 초대한 친구 목록을 덮어쓰려고 합니다.'
+  );
+  const link = sandbox.Sync.shareLink();
+  assert(/#share=[a-z2-9]{20}$/.test(link), '간편 공유 링크가 짧은 공유 코드 형식이 아닙니다.');
+  assert(!link.includes('managed-key'), '간편 공유 링크에 Firebase 설정이 포함됐습니다.');
 }
 
 async function verifyOwner(){
@@ -103,7 +144,7 @@ async function verifyViewer(){
     sharedMemos: {
       A: {
         '2026-07-12': '',
-        '2026-08-17': '여자친구가 남긴 메모',
+        '2026-08-17': '친구가 남긴 메모',
       },
     },
     updatedAt: 100,
@@ -118,7 +159,7 @@ async function verifyViewer(){
   assert(sandbox.state.activeGroup === 'A', '공유 화면에서 사용자가 보고 있던 조가 유지되지 않았습니다.');
   assert(!sandbox.state.groupMemos.A['2026-07-12'], '원격에서 삭제한 메모가 로컬에 남았습니다.');
   assert(
-    sandbox.state.groupMemos.A['2026-08-17'] === '여자친구가 남긴 메모',
+    sandbox.state.groupMemos.A['2026-08-17'] === '친구가 남긴 메모',
     '원격 공동 메모가 공유 화면에 병합되지 않았습니다.'
   );
   assert(sandbox.Sync.lastUpdated() === 200, '공동 메모의 최신 갱신 시각이 반영되지 않았습니다.');
@@ -132,7 +173,7 @@ async function verifyViewer(){
   );
 }
 
-Promise.all([verifyOwner(), verifyViewer()])
+Promise.all([verifyOwner(), verifyViewer(), verifyManagedSetup()])
   .then(() => console.log('공동 메모 동기화 검사 통과'))
   .catch(error => {
     console.error(error.message);

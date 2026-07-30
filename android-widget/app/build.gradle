@@ -6,14 +6,26 @@ def keystorePath = System.getenv('ANDROID_KEYSTORE_FILE')
 
 android {
     namespace 'kr.co.shiftcalendar.widget'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'kr.co.shiftcalendar.widget'
         minSdk 26
-        targetSdk 35
-        versionCode 3
-        versionName '1.2.0'
+        targetSdk 36
+        versionCode 4
+        versionName '1.3.0'
+    }
+
+    flavorDimensions += 'distribution'
+    productFlavors {
+        direct {
+            dimension 'distribution'
+            buildConfigField 'boolean', 'SELF_UPDATE_ENABLED', 'true'
+        }
+        play {
+            dimension 'distribution'
+            buildConfigField 'boolean', 'SELF_UPDATE_ENABLED', 'false'
+        }
     }
 
     if (keystorePath) {
@@ -41,5 +53,9 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 }

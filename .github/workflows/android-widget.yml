@@ -42,12 +42,12 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android platform
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.13"
 
       - name: Restore signing key
         env:
@@ -68,23 +68,31 @@ jobs:
           test -n "$ALIAS"
           echo "ANDROID_RESOLVED_ALIAS=$ALIAS" >> "$GITHUB_ENV"
 
-      - name: Build signed APK
+      - name: Build signed direct APK and Play App Bundle
         working-directory: android-widget
         env:
           ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/android-widget/app/shift-calendar.p12
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ env.ANDROID_RESOLVED_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: gradle :app:assembleRelease --stacktrace
+        run: gradle :app:assembleDirectRelease :app:bundlePlayRelease --stacktrace
 
-      - name: Prepare APK
-        run: cp android-widget/app/build/outputs/apk/release/app-release.apk shift-calendar-widget.apk
+      - name: Prepare release files
+        run: |
+          cp android-widget/app/build/outputs/apk/direct/release/app-direct-release.apk shift-calendar-widget.apk
+          cp android-widget/app/build/outputs/bundle/playRelease/app-play-release.aab shift-calendar-play.aab
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: shift-calendar-widget
           path: shift-calendar-widget.apk
+
+      - name: Upload Play Console bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: shift-calendar-play
+          path: shift-calendar-play.aab
 
       - name: Publish GitHub release
         if: github.event_name == 'workflow_dispatch' && inputs.release_version != ''

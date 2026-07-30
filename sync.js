@@ -1,17 +1,18 @@
 'use strict';
 
 /* ============================================================
-   실시간 공유 (여자친구는 근무표 보기 + 메모 작성)
+   실시간 공유 (친구는 근무표 보기 + 메모 작성)
    - 소유자(owner)가 저장할 때마다 클라우드에 자동 push
    - 보기(viewer)는 근무표를 구독하고 메모만 공동 작성
-   - 저장소: 본인 소유의 무료 Firebase Firestore (구글계정)
-   - 익명 공용 저장소를 쓰지 않아 링크를 아는 사람만 접근
+   - 저장소: 앱 운영자가 한 번 설정한 Firebase Firestore
+   - 사용자는 공유방을 만들고 친구에게 링크만 보내면 됨
    app.js 보다 먼저 로드되며, 실제 동작은 app.js 로드 후 Sync.init()에서 시작됩니다.
    ============================================================ */
 (function(){
   const SYNC_KEY = 'shiftcal.sync';   // localStorage: { config, code, role }
   const SDK_APP = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   const SDK_FS  = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  const SDK_AUTH = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
   let cfg = null;        // { config:{...}, code:'xxxx', role:'owner'|'viewer' }
   let fb = null;         // { db, doc, setDoc, updateDoc, onSnapshot }
@@ -45,11 +46,15 @@
     }catch(e){ return null; }
   }
   function validConfig(c){ return !!(c && c.apiKey && c.projectId); }
+  function managedConfig(){
+    const value = window.SHIFT_CALENDAR_FIREBASE_CONFIG;
+    return validConfig(value) ? value : null;
+  }
 
   function randomCode(){
     const s = 'abcdefghijkmnpqrstuvwxyz23456789';
     let out = '';
-    const arr = crypto.getRandomValues(new Uint8Array(14));
+    const arr = crypto.getRandomValues(new Uint8Array(20));
     for(const n of arr) out += s[n % s.length];
     return out;
   }
@@ -60,7 +65,7 @@
   }
 
   /* ---------- Firebase 로드/초기화 ---------- */
-  async function ensureFirebase(config){
+  async function ensureFirebase(config, useManagedAuth){
     if(fb) return fb;
     const appMod = await import(SDK_APP);
     const fsMod  = await import(SDK_FS);
@@ -69,12 +74,24 @@
     if(apps.length && appMod.deleteApp){ try{ await appMod.deleteApp(apps[0]); }catch(e){} }
     const app = appMod.initializeApp(config);
     const db  = fsMod.getFirestore(app);
+    let uid = null;
+    if(useManagedAuth){
+      const authMod = await import(SDK_AUTH);
+      const auth = authMod.getAuth(app);
+      if(typeof auth.authStateReady === 'function') await auth.authStateReady();
+      const user = auth.currentUser || (await authMod.signInAnonymously(auth)).user;
+      uid = user ? user.uid : null;
+      if(!uid) throw new Error('공유용 익명 인증에 실패했습니다.');
+    }
     fb = {
       db,
+      uid,
       doc: fsMod.doc,
       setDoc: fsMod.setDoc,
       updateDoc: fsMod.updateDoc,
+      deleteDoc: fsMod.deleteDoc,
       onSnapshot: fsMod.onSnapshot,
+      arrayUnion: fsMod.arrayUnion,
     };
     return fb;
   }
@@ -83,9 +100,12 @@
     if(!cfg || !validConfig(cfg.config)){ setStatus('off'); return; }
     setStatus('connecting');
     try{
-      const f = await ensureFirebase(cfg.config);
+      const f = await ensureFirebase(cfg.config, !!(cfg.managed || cfg.secured));
       docRef = f.doc(f.db, 'calendars', cfg.code);
       if(cfg.role === 'viewer'){
+        if(f.uid && f.arrayUnion){
+          await f.updateDoc(docRef, { memberUids: f.arrayUnion(f.uid) });
+        }
         unsub = f.onSnapshot(docRef,
           (snap)=>{
             const d = snap.data();
@@ -169,7 +189,19 @@
     const snapshot = JSON.parse(JSON.stringify(state));
     const now = Date.now();
     // state는 통째로 교체해 삭제된 일정도 반영하되, 공동 메모 필드는 보존합니다.
-    await fb.setDoc(docRef, { state: snapshot, updatedAt: now }, { mergeFields:['state','updatedAt'] });
+    const data = { state: snapshot, updatedAt: now };
+    const mergeFields = ['state', 'updatedAt'];
+    const initializeOwnership = !!(fb.uid && !cfg.initialized);
+    if(initializeOwnership){
+      data.ownerUid = fb.uid;
+      data.memberUids = [fb.uid];
+      mergeFields.push('ownerUid', 'memberUids');
+    }
+    await fb.setDoc(docRef, data, { mergeFields });
+    if(initializeOwnership){
+      cfg.initialized = true;
+      saveCfg(cfg);
+    }
     lastUpdated = now;
   }
 
@@ -204,13 +236,27 @@
       const m = location.hash.match(/[#&]share=([^&]+)/);
       if(m){
         const decoded = decodeShare(m[1]);
-        if(decoded && decoded.config && decoded.code){
-          cfg = { config: decoded.config, code: decoded.code, role: 'viewer' };
+        const linkConfig = decoded && validConfig(decoded.config)
+          ? decoded.config
+          : managedConfig();
+        if(decoded && linkConfig && decoded.code){
+          cfg = {
+            config: linkConfig,
+            code: decoded.code,
+            role: 'viewer',
+            managed: !validConfig(decoded.config),
+            secured: !validConfig(decoded.config) || !!decoded.secured,
+          };
           saveCfg(cfg);
         }
         history.replaceState(null, '', location.pathname + location.search);
       }
       cfg = cfg || loadCfg();
+      // 앱 공용 설정이 교체되면 공용 공유방도 새 설정으로 자연스럽게 이동합니다.
+      if(cfg && cfg.managed && managedConfig()){
+        cfg.config = managedConfig();
+        saveCfg(cfg);
+      }
       if(cfg && validConfig(cfg.config)) connect(); else setStatus('off');
     },
     onLocalSave(){
@@ -226,17 +272,35 @@
     code(){ return cfg ? cfg.code : null; },
     lastUpdated(){ return lastUpdated || null; },
     getStatus(){ return { status, error: lastError, code: cfg?cfg.code:null, role: cfg?cfg.role:null, updatedAt: lastUpdated || null }; },
+    managedReady(){ return !!managedConfig(); },
     async enableOwner(configText){
-      const config = parseConfig(configText);
-      if(!validConfig(config)) throw new Error('Firebase 설정을 인식할 수 없어요. 콘솔에서 복사한 firebaseConfig 전체(apiKey·projectId 포함)를 붙여넣어 주세요.');
+      const manualText = String(configText || '').trim();
+      const config = manualText ? parseConfig(manualText) : managedConfig();
+      if(!validConfig(config)){
+        throw new Error('앱의 공유 서버 설정이 아직 끝나지 않았어요.');
+      }
       const keepCode = (cfg && cfg.code) ? cfg.code : randomCode();
       if(unsub){ unsub(); unsub = null; }
       fb = null;  // 설정이 바뀌면 재초기화
-      cfg = { config, code: keepCode, role: 'owner' };
+      cfg = {
+        config,
+        code: keepCode,
+        role: 'owner',
+        managed: !manualText && !!managedConfig(),
+        secured: true,
+      };
       saveCfg(cfg);
       await connect();
     },
-    disable(){
+    async disable(){
+      if(cfg && cfg.role === 'owner' && docRef && fb && fb.deleteDoc){
+        try{
+          await fb.deleteDoc(docRef);
+        }catch(e){
+          setStatus('error', friendly(e));
+          throw e;
+        }
+      }
       if(unsub){ unsub(); unsub = null; }
       clearCfg(); cfg = null; docRef = null; fb = null; lastUpdated = 0;
       pushTimer && clearTimeout(pushTimer);
@@ -246,7 +310,15 @@
     },
     shareLink(){
       if(!cfg || !validConfig(cfg.config)) return '';
-      const payload = JSON.stringify({ config: cfg.config, code: cfg.code });
+      if(cfg.managed && managedConfig()){
+        return location.origin + location.pathname + '#share=' + encodeURIComponent(cfg.code);
+      }
+      // 예전 사용자별 Firebase 설정으로 만든 공유방도 계속 열리도록 호환합니다.
+      const payload = JSON.stringify({
+        config: cfg.config,
+        code: cfg.code,
+        secured: !!cfg.secured,
+      });
       const b64 = btoa(unescape(encodeURIComponent(payload)))
         .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
       return location.origin + location.pathname + '#share=' + b64;
@@ -254,6 +326,9 @@
   };
 
   function decodeShare(token){
+    if(/^[abcdefghijkmnpqrstuvwxyz23456789]{14,32}$/.test(token)){
+      return { code: token };
+    }
     try{
       let s = token.replace(/-/g,'+').replace(/_/g,'/');
       while(s.length % 4) s += '=';

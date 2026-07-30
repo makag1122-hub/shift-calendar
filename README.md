@@ -61,13 +61,17 @@
 **업데이트**
 
 - **달력 내용**(근무 패턴, 공휴일, 명절 편성, 색상)은 앱이 웹사이트를 그대로 불러오는 구조라 **앱을 열 때마다 자동으로 최신**이 됩니다. APK를 다시 받을 필요가 없습니다.
-- **위젯 화면 자체를 바꾼 경우**에만 새 APK가 필요합니다. 이때는 앱을 열면 **새 버전 안내창**이 뜨고, `업데이트` 버튼을 누르면 내려받아 설치까지 이어집니다. `나중에`를 누르면 그 버전은 다시 묻지 않습니다.
+- **Google Play 설치판**은 Play 스토어에서 업데이트합니다. 외부 APK 설치 권한과 자체 업데이트 기능이 들어가지 않습니다.
+- **GitHub 직접 설치판**은 위젯 화면 자체가 바뀐 경우 앱 안의 **새 버전 안내창**에서 새 APK를 받을 수 있습니다.
 - 새 버전 판단 기준은 사이트 루트의 [`widget-version.json`](widget-version.json)이며, 여기 적힌 `versionCode`·`versionName`은 `android-widget/app/build.gradle`과 일치해야 합니다. (어긋나면 `tests/verify-android-widget.js`가 실패합니다)
 
 **빌드·배포** — GitHub Actions에서 서명까지 자동으로 처리합니다.
 
 - 코드만 검증: `android-widget/**` 변경을 main에 push
 - 릴리스 발행: Actions → *Android calendar widget* → **Run workflow** → `release_version`에 `1.1.0` 같은 버전 입력
+- Actions 산출물 `shift-calendar-play.aab`: Google Play Console 업로드용
+- Actions 산출물 `shift-calendar-widget.apk`: GitHub 직접 설치용
+- Play 배포판은 Android 16(API 36)을 대상으로 하며, 직접 설치판에만 `REQUEST_INSTALL_PACKAGES` 권한이 포함됩니다.
 
 ## 사용법
 
@@ -84,26 +88,53 @@
    - **수동 변경을 기본으로 확정**: 달력에서 직접 바꾼 날(우측 상단 **빨간 네모** 표시)을 현재 조의 **기본 근무표로 굳혀** 빨간 표시를 없앱니다. 값은 그대로 유지되고 공유 화면에도 깔끔하게 반영됩니다. 확정 후 다시 바꾸면 빨간 네모가 다시 생기고, 언제든 재확정할 수 있어요. (확정값은 패턴·명절 편성보다 우선)
    - **데이터**: 백업 내보내기 / 불러오기 / 초기화
 
-## 여자친구와 공유 (실시간 동기화)
+## 친구와 공유하기 (실시간 동기화)
 
-내 근무표를 다른 사람과 공유할 수 있습니다. **내가 수정하면 상대방 화면에 자동 반영**되고, 상대방은 근무표를 보면서 **날짜별 메모를 함께 작성**할 수 있습니다.
+내 근무표를 친구와 공유할 수 있습니다. **내가 수정하면 친구 화면에 자동 반영**되고, 친구는 근무표를 보면서 **날짜별 메모를 함께 작성**할 수 있습니다.
 
-- **저장소**: 본인 소유의 무료 [Firebase Firestore](https://firebase.google.com)를 사용합니다. 익명 공용 저장소를 쓰지 않아 **공유 링크를 아는 사람만** 접근합니다.
-- **설정(내 폰, 처음 1회)**: `설정(⚙) → 💛 여자친구와 공유`에서 Firebase 프로젝트를 만들고 `firebaseConfig`를 붙여넣으면 됩니다. (앱 안에 단계별 안내 포함)
-- **Firestore 보안 규칙**:
+- **사용자 흐름**: `설정(⚙) → 친구와 공유하기 → 공유방 만들기 → 카카오톡으로 친구 초대`로 끝납니다. 사용자는 Firebase 설정을 하지 않습니다.
+- **운영자 1회 설정**: 무료 [Firebase Firestore](https://firebase.google.com) 프로젝트를 하나 만들고 Authentication에서 **익명 로그인**을 켠 뒤, 웹 앱의 `firebaseConfig`를 [`sync-config.js`](sync-config.js)에 넣어 배포합니다. 이 값은 Firebase 프로젝트의 공개 식별자이며 비밀번호가 아닙니다.
+- **Firestore 보안 규칙**: [`firestore.rules`](firestore.rules) 파일과 같은 내용을 규칙 탭에 게시합니다.
   ```
   rules_version = '2';
   service cloud.firestore {
     match /databases/{database}/documents {
       match /calendars/{code} {
-        allow read, write: if true;
+        function signedIn() {
+          return request.auth != null;
+        }
+        function isOwner() {
+          return signedIn() && resource.data.ownerUid == request.auth.uid;
+        }
+        function isMember() {
+          return signedIn() && request.auth.uid in resource.data.memberUids;
+        }
+        allow create: if signedIn()
+          && code.matches('^[a-z2-9]{20}$')
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.memberUids == [request.auth.uid];
+        allow read: if isOwner() || isMember();
+        allow update: if
+          (isOwner()
+            && request.resource.data.ownerUid == resource.data.ownerUid
+            && request.resource.data.memberUids == resource.data.memberUids)
+          || (signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+            && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+            && request.resource.data.memberUids.size() <= resource.data.memberUids.size() + 1
+            && request.resource.data.memberUids.size() <= 10
+            && request.auth.uid in request.resource.data.memberUids)
+          || (isMember()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['sharedMemos', 'memoUpdatedAt']));
+        allow delete: if isOwner();
       }
     }
   }
   ```
-- **공유하기**: 설정에 나오는 **공유 링크**를 상대방에게 보내면, 상대방이 링크를 열었을 때 내 근무표가 실시간으로 표시됩니다. 근무·태그·패턴은 소유자만 바꿀 수 있고 메모는 두 사람 모두 작성할 수 있습니다.
-  - **간편 전송**: 휴대폰에서는 **💌 카톡·문자로 링크 보내기** 버튼으로 공유 시트(카카오톡·문자 등)를 바로 열 수 있습니다. (`navigator.share` 미지원 기기에서는 링크 복사로 대체)
-  - **QR 코드**: 옆에 있으면 화면의 **QR 코드**를 상대방 폰 카메라로 스캔하면 됩니다. QR은 외부 서버 없이 **오프라인에서 직접 생성**합니다(`qrcode.js`).
+- **공유하기**: 공유 링크를 친구가 열면 근무표가 실시간으로 표시됩니다. 근무·태그·패턴은 소유자만 바꿀 수 있고 메모는 두 사람 모두 작성할 수 있습니다.
+  - **카카오톡 초대**: Android 앱에서는 카카오톡을 바로 열고, 카카오톡이 없으면 기본 공유창을 엽니다. PWA에서는 기기의 공유창을 사용합니다.
+  - **QR 코드**: 옆에 있으면 화면의 QR 코드를 친구 폰 카메라로 스캔하면 됩니다. QR은 외부 서버 없이 오프라인에서 직접 생성합니다(`qrcode.js`).
 - **최신 상태 표시**: 보는 사람 화면에는 **‘방금 전 / N분 전 업데이트됨’** 배지가 표시돼, 지금 보는 근무표가 최신인지 한눈에 알 수 있습니다.
 - 근무표 데이터는 **소유자 → 상대방**으로 전달되고, 날짜별 메모는 **양방향**으로 동기화됩니다. 메모만 별도 필드로 저장하므로 상대방의 메모 작성이 근무표를 덮어쓰지 않습니다.
 
@@ -116,8 +147,8 @@
 
 - 순수 HTML / CSS / JavaScript (의존성·빌드 없음)
 - PWA 지원: `manifest.json` · `service-worker.js` · `icons/`
-- 실시간 공유: `sync.js`(Firebase Firestore) · 오프라인 QR 생성: `qrcode.js`
-- `index.html` · `style.css` · `app.js` · `sync.js` · `qrcode.js` · `manifest.json`
+- 실시간 공유: `sync-config.js` · `sync.js`(Firebase Firestore) · 오프라인 QR 생성: `qrcode.js`
+- `index.html` · `style.css` · `app.js` · `sync-config.js` · `sync.js` · `qrcode.js` · `manifest.json`
 
 ---
 🤖 만든이: Claude

@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.appwidget.AppWidgetManager;
+import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -13,6 +14,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -22,6 +24,7 @@ import android.os.Looper;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -70,6 +73,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
         setContentView(webView);
+        applySystemBarInsets();
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -104,7 +108,23 @@ public class MainActivity extends Activity {
         });
         webView.loadUrl(CALENDAR_URL);
 
-        checkForUpdate();
+        if (BuildConfig.SELF_UPDATE_ENABLED) {
+            checkForUpdate();
+        }
+    }
+
+    private void applySystemBarInsets() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return;
+        }
+        getWindow().setDecorFitsSystemWindows(false);
+        webView.setOnApplyWindowInsetsListener((view, windowInsets) -> {
+            Insets bars = windowInsets.getInsets(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
+            );
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return windowInsets;
+        });
     }
 
     @Override
@@ -383,6 +403,39 @@ public class MainActivity extends Activity {
             CalendarWidgetProvider.updateWidgets(context, manager, manager.getAppWidgetIds(component));
         }
 
+        /* 앱에서는 안드로이드 공유창을 한 번 더 거치지 않고 카카오톡을 먼저 엽니다.
+           카카오톡이 없으면 문자·메일 등을 고를 수 있는 기본 공유창으로 전환합니다. */
+        @JavascriptInterface
+        public void shareToKakao(String title, String text, String url) {
+            String safeTitle = cleanShareText(title, 80);
+            String safeText = cleanShareText(text, 300);
+            String safeUrl = cleanShareText(url, 2_000);
+            if (safeUrl.isEmpty() || !safeUrl.startsWith("https://")) {
+                return;
+            }
+
+            String message = safeText.isEmpty() ? safeUrl : safeText + "\n" + safeUrl;
+            Intent share = new Intent(Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, safeTitle)
+                    .putExtra(Intent.EXTRA_TEXT, message)
+                    .setPackage("com.kakao.talk")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                context.startActivity(share);
+            } catch (ActivityNotFoundException error) {
+                Intent fallback = new Intent(Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(Intent.EXTRA_SUBJECT, safeTitle)
+                        .putExtra(Intent.EXTRA_TEXT, message);
+                Intent chooser = Intent.createChooser(
+                        fallback,
+                        context.getString(R.string.share_chooser_title)
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(chooser);
+            }
+        }
+
         /* 설정 > 백업 내보내기. WebView는 blob: 다운로드를 처리하지 못하므로
            웹에서 JSON 문자열을 그대로 넘겨받아 다운로드 폴더에 저장합니다. */
         @JavascriptInterface
@@ -430,6 +483,16 @@ public class MainActivity extends Activity {
                 name = "shift-calendar-backup.json";
             }
             return name.endsWith(".json") ? name : name + ".json";
+        }
+
+        private static String cleanShareText(String raw, int maxLength) {
+            if (raw == null) {
+                return "";
+            }
+            String cleaned = raw.replace("\u0000", "").trim();
+            return cleaned.length() > maxLength
+                    ? cleaned.substring(0, maxLength)
+                    : cleaned;
         }
 
         private void toast(int messageId) {

@@ -47,6 +47,10 @@ const manifest = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'AndroidManifest.xml'),
   'utf8'
 );
+const directManifest = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'direct', 'AndroidManifest.xml'),
+  'utf8'
+);
 const provider = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'CalendarWidgetProvider.java'),
   'utf8'
@@ -55,10 +59,15 @@ const renderer = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'CalendarWidgetRenderer.java'),
   'utf8'
 );
+const widgetLayout = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'layout', 'widget_calendar.xml'),
+  'utf8'
+);
 
 assert(manifest.includes('android.appwidget.action.APPWIDGET_UPDATE'), 'Android AppWidget 수신기가 등록되지 않았습니다.');
 assert(provider.includes('ACTION_PREVIOUS') && provider.includes('ACTION_NEXT'), '위젯 월 이동 동작이 없습니다.');
 assert(provider.includes('ACTION_GROUP'), '위젯 조 전환 동작이 없습니다.');
+assert(widgetLayout.includes('@+id/widget_group'), '위젯에 조 전환 칩이 없습니다.');
 assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.includes('특근'), '위젯 정산 태그 라벨이 빠졌습니다.');
 
 /* ---------- 앱 내 업데이트 확인 ----------
@@ -66,6 +75,10 @@ assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.in
    build.gradle과 어긋나면 업데이트 안내가 안 뜨거나 무한 반복되므로 여기서 막습니다. */
 const buildGradle = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'build.gradle'),
+  'utf8'
+);
+const workflow = fs.readFileSync(
+  path.join(ROOT, '.github', 'workflows', 'android-widget.yml'),
   'utf8'
 );
 const mainActivity = fs.readFileSync(
@@ -90,13 +103,18 @@ assert(
   versionFile.versionName === gradleVersionName,
   `widget-version.json versionName(${versionFile.versionName})이 build.gradle(${gradleVersionName})과 다릅니다.`
 );
+assert(/compileSdk\s+36/.test(buildGradle), 'Android 16 compileSdk 36이 설정되지 않았습니다.');
+assert(/targetSdk\s+36/.test(buildGradle), 'Google Play용 targetSdk 36이 설정되지 않았습니다.');
+assert(buildGradle.includes('play {') && buildGradle.includes('direct {'), 'Play·직접 배포 빌드가 분리되지 않았습니다.');
+assert(workflow.includes('bundlePlayRelease'), 'Google Play AAB 빌드 작업이 없습니다.');
 assert(
   versionFile.apkUrl === 'https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk',
   'widget-version.json의 apkUrl이 최신 릴리스 주소가 아닙니다.'
 );
 
-assert(manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), '업데이트 설치 권한이 매니페스트에 없습니다.');
-assert(mainActivity.includes('checkForUpdate()'), 'MainActivity에서 업데이트 확인을 호출하지 않습니다.');
+assert(!manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), 'Play 공용 매니페스트에 외부 앱 설치 권한이 남아 있습니다.');
+assert(directManifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), '직접 배포판의 업데이트 설치 권한이 없습니다.');
+assert(mainActivity.includes('BuildConfig.SELF_UPDATE_ENABLED'), '배포 방식별 업데이트 확인 분기가 없습니다.');
 assert(updateChecker.includes('widget-version.json'), 'UpdateChecker가 버전 파일을 바라보지 않습니다.');
 
 /* ---------- 백업 불러오기·내보내기 ----------
@@ -108,6 +126,14 @@ assert(mainActivity.includes('public void saveBackup('), '백업 내보내기 �
 assert(
   appSource.includes("typeof bridge.saveBackup === 'function'"),
   'app.js가 Android 백업 저장 브리지를 사용하지 않습니다.'
+);
+
+/* ---------- 카카오톡 친구 초대 ---------- */
+assert(mainActivity.includes('public void shareToKakao('), '카카오톡 공유 브리지가 없습니다.');
+assert(mainActivity.includes('com.kakao.talk'), '카카오톡 앱을 직접 여는 패키지 연결이 없습니다.');
+assert(
+  appSource.includes("typeof bridge.shareToKakao === 'function'"),
+  'app.js가 Android 카카오톡 공유 브리지를 사용하지 않습니다.'
 );
 
 console.log('Android 월간 달력 위젯 데이터 검사 통과');

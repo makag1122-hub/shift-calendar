@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2.0",
+  "versionCode": 4,
+  "versionName": "1.3.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "설정에서 백업 불러오기·내보내기가 되도록 고쳤습니다.\n이전 폰에서 내보낸 백업 JSON을 불러오면 메모와 직접 바꾼 날이 그대로 옮겨집니다."
+  "notes": "위젯 화면과 친구 공유 흐름을 개선하고 카카오톡 초대를 지원합니다."
 }

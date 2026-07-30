@@ -2,9 +2,9 @@
 <resources>
     <string name="app_name">교대 캘린더</string>
     <string name="widget_description">근무와 지근·지휴·특근을 보여주는 월간 교대 달력</string>
-    <string name="widget_default_title">교대 캘린더 · A조</string>
+    <string name="widget_default_title">이번 달 근무</string>
     <string name="widget_calendar_description">월간 교대근무 달력</string>
-    <string name="widget_open_hint">앱을 열어 달력을 동기화하세요</string>
+    <string name="widget_open_hint">오늘 근무를 불러오는 중</string>
 
     <string name="update_title">새 버전 %1$s</string>
     <string name="update_message_default">새 버전으로 업데이트할까요?</string>
@@ -23,4 +23,6 @@
     <string name="backup_saved">다운로드 폴더에 백업을 저장했습니다.</string>
     <string name="backup_save_failed">백업을 저장하지 못했습니다.</string>
     <string name="backup_save_unsupported">이 안드로이드 버전에서는 앱에서 백업을 저장할 수 없습니다. Chrome에서 내보내기를 사용해 주세요.</string>
+
+    <string name="share_chooser_title">친구에게 공유하기</string>
 </resources>
