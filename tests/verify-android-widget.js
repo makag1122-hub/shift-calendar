@@ -61,4 +61,43 @@ assert(provider.includes('ACTION_PREVIOUS') && provider.includes('ACTION_NEXT'),
 assert(provider.includes('ACTION_GROUP'), '위젯 조 전환 동작이 없습니다.');
 assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.includes('특근'), '위젯 정산 태그 라벨이 빠졌습니다.');
 
+/* ---------- 앱 내 업데이트 확인 ----------
+   widget-version.json은 설치된 앱이 새 버전을 판단하는 기준입니다.
+   build.gradle과 어긋나면 업데이트 안내가 안 뜨거나 무한 반복되므로 여기서 막습니다. */
+const buildGradle = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'build.gradle'),
+  'utf8'
+);
+const mainActivity = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'MainActivity.java'),
+  'utf8'
+);
+const updateChecker = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'UpdateChecker.java'),
+  'utf8'
+);
+const versionFile = JSON.parse(fs.readFileSync(path.join(ROOT, 'widget-version.json'), 'utf8'));
+
+const gradleVersionCode = Number((buildGradle.match(/versionCode\s+(\d+)/) || [])[1]);
+const gradleVersionName = (buildGradle.match(/versionName\s+'([^']+)'/) || [])[1];
+
+assert(Number.isInteger(gradleVersionCode), 'build.gradle에서 versionCode를 읽지 못했습니다.');
+assert(
+  versionFile.versionCode === gradleVersionCode,
+  `widget-version.json versionCode(${versionFile.versionCode})가 build.gradle(${gradleVersionCode})과 다릅니다.`
+);
+assert(
+  versionFile.versionName === gradleVersionName,
+  `widget-version.json versionName(${versionFile.versionName})이 build.gradle(${gradleVersionName})과 다릅니다.`
+);
+assert(
+  versionFile.apkUrl === 'https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk',
+  'widget-version.json의 apkUrl이 최신 릴리스 주소가 아닙니다.'
+);
+
+assert(manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), '업데이트 설치 권한이 매니페스트에 없습니다.');
+assert(mainActivity.includes('checkForUpdate()'), 'MainActivity에서 업데이트 확인을 호출하지 않습니다.');
+assert(updateChecker.includes('widget-version.json'), 'UpdateChecker가 버전 파일을 바라보지 않습니다.');
+
 console.log('Android 월간 달력 위젯 데이터 검사 통과');
+console.log(`업데이트 버전 정보 일치: ${gradleVersionName} (versionCode ${gradleVersionCode})`);

@@ -1,5 +1,7 @@
 name: Android calendar widget
 
+# 태그 push는 paths 필터와 함께 쓰면 무시되므로, 릴리스 발행은
+# workflow_dispatch 입력으로 처리합니다.
 on:
   push:
     branches:
@@ -7,10 +9,14 @@ on:
     paths:
       - "android-widget/**"
       - "app.js"
+      - "widget-version.json"
       - ".github/workflows/android-widget.yml"
-    tags:
-      - "android-widget-v*"
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: "릴리스로 발행할 버전 (예: 1.1.0). 비워두면 빌드만 합니다."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -22,6 +28,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Verify widget data and version
+        run: node tests/verify-android-widget.js
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -78,13 +87,17 @@ jobs:
           path: shift-calendar-widget.apk
 
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/android-widget-v')
+        if: github.event_name == 'workflow_dispatch' && inputs.release_version != ''
         uses: softprops/action-gh-release@v2
         with:
-          name: 교대 캘린더 Android 위젯 ${{ github.ref_name }}
+          tag_name: android-widget-v${{ inputs.release_version }}
+          name: 교대 캘린더 Android 위젯 v${{ inputs.release_version }}
           body: |
             월간 교대 달력을 홈 화면에서 확인하는 Android 위젯입니다.
 
             설치 후 앱을 한 번 열어 근무표를 동기화하고,
             홈 화면을 길게 눌러 `위젯 > 교대 캘린더`를 추가하세요.
+
+            달력 내용(근무 패턴·공휴일·명절 편성)은 앱을 열 때마다 웹에서
+            최신으로 갱신되므로, 이 APK는 위젯 화면 자체가 바뀔 때만 새로 받으면 됩니다.
           files: shift-calendar-widget.apk
