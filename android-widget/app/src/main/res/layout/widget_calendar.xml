@@ -4,45 +4,46 @@
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
     android:orientation="vertical"
-    android:paddingLeft="12dp"
-    android:paddingTop="10dp"
-    android:paddingRight="12dp"
-    android:paddingBottom="11dp">
+    android:paddingLeft="11dp"
+    android:paddingTop="9dp"
+    android:paddingRight="11dp"
+    android:paddingBottom="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="40dp"
+        android:layout_height="42dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="4dp">
 
         <TextView
             android:id="@+id/widget_previous"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:background="@drawable/widget_nav_button"
             android:gravity="center"
             android:text="‹"
             android:textColor="#596174"
-            android:textSize="23sp" />
+            android:textSize="22sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/widget_title"
             android:layout_width="0dp"
-            android:layout_height="34dp"
+            android:layout_height="36dp"
             android:layout_weight="1"
             android:gravity="center_vertical"
             android:maxLines="1"
             android:text="@string/widget_default_title"
-            android:textColor="#202534"
+            android:textColor="#1F2533"
             android:textSize="16sp"
             android:textStyle="bold"
-            android:paddingLeft="11dp" />
+            android:paddingLeft="10dp" />
 
         <TextView
             android:id="@+id/widget_group"
-            android:layout_width="46dp"
-            android:layout_height="30dp"
+            android:layout_width="45dp"
+            android:layout_height="32dp"
             android:layout_marginRight="6dp"
             android:background="@drawable/widget_group_chip"
             android:gravity="center"
@@ -54,26 +55,27 @@
 
         <TextView
             android:id="@+id/widget_mode"
-            android:layout_width="48dp"
-            android:layout_height="30dp"
+            android:layout_width="52dp"
+            android:layout_height="32dp"
             android:layout_marginRight="6dp"
             android:background="@drawable/widget_nav_button"
             android:gravity="center"
             android:maxLines="1"
-            android:text="4개조"
+            android:text="4개 조"
             android:textColor="#596174"
             android:textSize="10.5sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/widget_next"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:background="@drawable/widget_nav_button"
             android:gravity="center"
             android:text="›"
             android:textColor="#596174"
-            android:textSize="23sp" />
+            android:textSize="22sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <ImageView
@@ -84,13 +86,13 @@
         android:adjustViewBounds="true"
         android:contentDescription="@string/widget_calendar_description"
         android:scaleType="fitXY"
-        android:layout_marginTop="2dp"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="7dp" />
 
     <TextView
         android:id="@+id/widget_footer"
         android:layout_width="match_parent"
-        android:layout_height="32dp"
+        android:layout_height="34dp"
         android:background="@drawable/widget_footer_background"
         android:ellipsize="end"
         android:gravity="center_vertical"
@@ -98,8 +100,8 @@
         android:paddingLeft="11dp"
         android:paddingRight="11dp"
         android:text="@string/widget_open_hint"
-        android:textColor="#50596D"
-        android:textSize="11.5sp"
+        android:textColor="#525D73"
+        android:textSize="11sp"
         android:textStyle="bold" />
 
 </LinearLayout>

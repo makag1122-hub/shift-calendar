@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "1.6.0",
+  "versionCode": 8,
+  "versionName": "1.7.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "앱을 열 때 새 버전을 확인하고 Google Play 설치판에서도 업데이트 안내 팝업을 표시합니다."
+  "notes": "위젯을 앱과 같은 카드형 달력 UI로 개선하고, 근무 배지·메모·오늘 표시를 더 선명하게 표시합니다."
 }

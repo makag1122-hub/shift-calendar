@@ -74,9 +74,13 @@ assert(widgetLayout.includes('@+id/widget_group'), '위젯에 조 전환 칩이 
 assert(widgetLayout.includes('@+id/widget_mode'), '위젯에 4개 조 보기 전환 버튼이 없습니다.');
 assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.includes('특근'), '위젯 정산 태그 라벨이 빠졌습니다.');
 assert(renderer.includes('Bitmap.Config.ARGB_8888'), '위젯이 고화질 ARGB 비트맵을 사용하지 않습니다.');
-assert(renderer.includes('RENDER_SCALE = 2'), '위젯의 2배 해상도 렌더링이 빠졌습니다.');
+assert(renderer.includes('RENDER_SCALE = 2.5f'), '위젯의 고해상도 렌더링이 빠졌습니다.');
 assert(renderer.includes('memoText(entry)'), '위젯의 날짜별 메모 표시가 빠졌습니다.');
 assert(renderer.includes('drawAllGroups('), '위젯의 A/B/C/D 4행 비교 렌더링이 없습니다.');
+assert(renderer.includes('calendarHeight('), '위젯 크기에 맞춘 달력 비율 계산이 없습니다.');
+assert(renderer.includes('drawTag('), '앱과 같은 정산 태그 배지가 위젯에 없습니다.');
+assert(provider.includes('OPTION_APPWIDGET_MIN_WIDTH'), '위젯 너비에 맞춘 렌더링이 없습니다.');
+assert(provider.includes('OPTION_APPWIDGET_MIN_HEIGHT'), '위젯 높이에 맞춘 렌더링이 없습니다.');
 
 /* ---------- 앱 내 업데이트 확인 ----------
    widget-version.json은 설치된 앱이 새 버전을 판단하는 기준입니다.

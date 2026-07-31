@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.os.Bundle;
 import android.widget.RemoteViews;
 
 import java.util.Calendar;
@@ -156,8 +157,25 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         int year = target.get(Calendar.YEAR);
         int month = target.get(Calendar.MONTH);
 
+        Bundle options = manager.getAppWidgetOptions(widgetId);
+        int widgetWidthDp = options.getInt(
+                AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,
+                320
+        );
+        int widgetHeightDp = options.getInt(
+                AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,
+                320
+        );
         CalendarWidgetRenderer.Result result =
-                CalendarWidgetRenderer.render(context, year, month, group, allGroups);
+                CalendarWidgetRenderer.render(
+                        context,
+                        year,
+                        month,
+                        group,
+                        allGroups,
+                        widgetWidthDp,
+                        widgetHeightDp
+                );
         RemoteViews views = new RemoteViews(
                 context.getPackageName(),
                 R.layout.widget_calendar
@@ -167,7 +185,7 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
                 String.format(Locale.KOREA, "%d년 %d월", year, month + 1)
         );
         views.setTextViewText(R.id.widget_group, group + "조");
-        views.setTextViewText(R.id.widget_mode, allGroups ? "내 조" : "4개조");
+        views.setTextViewText(R.id.widget_mode, allGroups ? "내 조" : "4개 조");
         views.setInt(
                 R.id.widget_group,
                 "setBackgroundResource",
