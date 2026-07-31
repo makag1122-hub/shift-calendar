@@ -31,6 +31,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import java.io.File;
@@ -67,13 +68,16 @@ public class MainActivity extends Activity {
         handler = new Handler(Looper.getMainLooper());
         executor = Executors.newSingleThreadExecutor();
 
+        FrameLayout appRoot = new FrameLayout(this);
+        appRoot.setBackgroundColor(Color.rgb(238, 241, 246));
+
         webView = new WebView(this);
-        webView.setLayoutParams(new ViewGroup.LayoutParams(
+        appRoot.addView(webView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        setContentView(webView);
-        applySystemBarInsets();
+        applySystemBarInsets(appRoot);
+        setContentView(appRoot);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -113,18 +117,25 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void applySystemBarInsets() {
+    private void applySystemBarInsets(ViewGroup appRoot) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            appRoot.setFitsSystemWindows(true);
             return;
         }
         getWindow().setDecorFitsSystemWindows(false);
-        webView.setOnApplyWindowInsetsListener((view, windowInsets) -> {
-            Insets bars = windowInsets.getInsets(
-                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
-            );
+        int safeTypes = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout();
+        appRoot.setOnApplyWindowInsetsListener((view, windowInsets) -> {
+            Insets bars = windowInsets.getInsets(safeTypes);
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-            return windowInsets;
+            /*
+             * 루트가 안전 영역을 소비합니다. 그대로 WebView에 전달하면 CSS의
+             * safe-area-inset과 합쳐져 기기별로 여백이 두 번 생길 수 있습니다.
+             */
+            return new WindowInsets.Builder(windowInsets)
+                    .setInsets(safeTypes, Insets.NONE)
+                    .build();
         });
+        appRoot.post(appRoot::requestApplyInsets);
     }
 
     @Override

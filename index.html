@@ -3,25 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>교대 캘린더</title>
-  <meta name="theme-color" content="#4f46e5" />
+  <title>교대캘린더: 교대근무자를 위한 캘린더</title>
+  <meta name="description" content="교대근무자의 일정과 메모를 한눈에 보고 친구와 공유하는 교대캘린더" />
+  <meta name="theme-color" content="#18233f" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="교대캘린더" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png" />
-  <link rel="stylesheet" href="style.css?v=20260731a" />
+  <link rel="icon" href="icons/icon-192-v2.png" />
+  <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
+  <link rel="stylesheet" href="style.css?v=20260731b" />
 </head>
 <body>
   <div class="app">
     <!-- 상단 헤더 -->
     <header class="app-header">
       <div class="brand">
-        <span class="brand-logo">🚒</span>
+        <img class="brand-logo" src="icons/icon-192-v2.png" alt="" />
         <div class="brand-text">
-          <h1>교대 캘린더</h1>
+          <h1>교대캘린더</h1>
           <p class="brand-sub">내 조 선택 · 4조 3교대</p>
         </div>
       </div>
@@ -77,7 +78,7 @@
 
     <footer class="app-footer">
       <button class="btn-soft" id="btnToday">오늘로 이동</button>
-      <div class="app-version">ver 2026.07.31.1</div>
+      <div class="app-version">ver 2026.07.31.2</div>
     </footer>
   </div>
 
@@ -166,14 +167,14 @@
         <a class="legal-link" href="privacy.html">개인정보 처리방침</a>
       </section>
 
-      <p class="set-foot">교대 캘린더 · ver 2026.07.31.1</p>
+      <p class="set-foot">교대캘린더 · ver 2026.07.31.2</p>
     </div>
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20260731a"></script>
-  <script src="sync.js?v=20260731a"></script>
-  <script src="app.js?v=20260731a"></script>
+  <script src="sync-config.js?v=20260731b"></script>
+  <script src="sync.js?v=20260731b"></script>
+  <script src="app.js?v=20260731b"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -183,7 +184,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20260731a', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20260731b', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });

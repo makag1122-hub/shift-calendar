@@ -1,6 +1,6 @@
 'use strict';
 
-const ASSET_VERSION = '20260731a';
+const ASSET_VERSION = '20260731b';
 const CACHE_NAME = `shift-calendar-v${ASSET_VERSION}-cache-safe`;
 const APP_SHELL = [
   './',
@@ -12,10 +12,9 @@ const APP_SHELL = [
   `./sync.js?v=${ASSET_VERSION}`,
   `./app.js?v=${ASSET_VERSION}`,
   './manifest.json',
-  './icons/icon-180.png',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/maskable-512.png',
+  './icons/icon-180-v2.png',
+  './icons/icon-192-v2.png',
+  './icons/icon-512-v2.png',
 ];
 
 self.addEventListener('install', (event) => {

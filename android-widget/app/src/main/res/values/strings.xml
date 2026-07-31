@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">교대 캘린더</string>
+    <string name="app_name">교대캘린더</string>
     <string name="widget_description">근무와 지근·지휴·특근을 보여주는 월간 교대 달력</string>
     <string name="widget_default_title">이번 달 근무</string>
     <string name="widget_calendar_description">월간 교대근무 달력</string>
@@ -11,7 +11,7 @@
     <string name="update_action">업데이트</string>
     <string name="update_later">나중에</string>
     <string name="update_cancel">취소</string>
-    <string name="update_download_title">교대 캘린더 위젯 업데이트</string>
+    <string name="update_download_title">교대캘린더 위젯 업데이트</string>
     <string name="update_downloading">업데이트를 내려받는 중입니다…</string>
     <string name="update_failed">업데이트를 열지 못했습니다. 잠시 후 다시 시도해 주세요.</string>
     <string name="update_permission_title">설치 권한이 필요합니다</string>

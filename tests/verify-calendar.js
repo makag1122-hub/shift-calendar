@@ -169,7 +169,7 @@ assert(specialLeaveWithManualJg['2026-08-16']?.tag === 'TG', '초과 자동 지�
 delete api.groupOverrideMap('A')['2026-08-07'];
 delete api.desigMapFor('A')['2026-08-17'];
 
-console.log('교대 캘린더 전수 검사 통과');
+console.log('교대캘린더 전수 검사 통과');
 console.log(`공휴일: 2026년 22일, 2027년 24일`);
 console.log(`검사 범위: ${totals.checkedDates}일 × 4개 조 = ${totals.checkedGroupDates}개 조별 날짜`);
 console.log(`공휴일 조별 검사: ${totals.holidayGroupDates}건`);

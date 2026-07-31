@@ -19,6 +19,7 @@ import java.util.Locale;
 final class CalendarWidgetRenderer {
     private static final int WIDTH = 560;
     private static final int HEIGHT = 440;
+    private static final int RENDER_SCALE = 2;
     private static final int WEEK_HEIGHT = 32;
     private static final int ROWS = 6;
     private static final String[] WEEKDAYS = {"일", "월", "화", "수", "목", "금", "토"};
@@ -43,9 +44,19 @@ final class CalendarWidgetRenderer {
     }
 
     static Result render(Context context, int year, int month, String group) {
-        Bitmap bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.RGB_565);
+        Bitmap bitmap = Bitmap.createBitmap(
+                WIDTH * RENDER_SCALE,
+                HEIGHT * RENDER_SCALE,
+                Bitmap.Config.ARGB_8888
+        );
         Canvas canvas = new Canvas(bitmap);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        canvas.scale(RENDER_SCALE, RENDER_SCALE);
+        Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG
+                        | Paint.SUBPIXEL_TEXT_FLAG
+                        | Paint.DITHER_FLAG
+                        | Paint.FILTER_BITMAP_FLAG
+        );
         canvas.drawColor(Color.rgb(251, 252, 254));
 
         JSONObject root = payload(context);
@@ -147,7 +158,9 @@ final class CalendarWidgetRenderer {
             JSONArray entry = days.optJSONArray(day - 1);
             String shiftKey = entry == null ? "" : entry.optString(0, "");
             String tag = entry == null ? "" : entry.optString(1, "");
-            boolean hasMemo = entry != null && entry.optInt(3, 0) == 1;
+            String memo = memoText(entry);
+            boolean hasMemo = !memo.isEmpty()
+                    || (entry != null && entry.optInt(3, 0) == 1);
             boolean holiday = entry != null && entry.optInt(4, 0) == 1;
             JSONObject shift = shifts == null ? null : shifts.optJSONObject(shiftKey);
             int shiftColor = parseColor(
@@ -210,7 +223,19 @@ final class CalendarWidgetRenderer {
 
             if (hasMemo) {
                 paint.setColor(Color.rgb(225, 147, 37));
-                canvas.drawCircle(right - 10f, bottom - 9f, 3.5f, paint);
+                canvas.drawCircle(left + 10f, bottom - 9f, 2.7f, paint);
+                if (!memo.isEmpty()) {
+                    paint.setTextAlign(Paint.Align.LEFT);
+                    paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.NORMAL));
+                    paint.setTextSize(9.5f);
+                    paint.setColor(Color.rgb(100, 116, 139));
+                    canvas.drawText(
+                            ellipsize(paint, memo, columnWidth - 24f),
+                            left + 16f,
+                            bottom - 6f,
+                            paint
+                    );
+                }
             }
 
             if (currentMonth && today.get(Calendar.DAY_OF_MONTH) == day) {
@@ -257,13 +282,15 @@ final class CalendarWidgetRenderer {
         String start = shift.optString("start", "");
         String end = shift.optString("end", "");
         String time = start.isEmpty() ? "" : " · " + start + "–" + end;
-        return String.format(
+        String summary = String.format(
                 Locale.KOREA,
                 "오늘 · %s조 · %s%s",
                 group,
                 label,
                 time
         );
+        String memo = memoText(entry);
+        return memo.isEmpty() ? summary : summary + " · 메모 " + trimMemo(memo, 18);
     }
 
     private static void drawEmpty(Canvas canvas, Paint paint) {
@@ -271,7 +298,7 @@ final class CalendarWidgetRenderer {
         paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
         paint.setColor(Color.rgb(71, 85, 105));
         paint.setTextSize(25f);
-        canvas.drawText("교대 캘린더", WIDTH / 2f, HEIGHT / 2f - 10f, paint);
+        canvas.drawText("교대캘린더", WIDTH / 2f, HEIGHT / 2f - 10f, paint);
         paint.setTypeface(Typeface.DEFAULT);
         paint.setColor(Color.rgb(100, 116, 139));
         paint.setTextSize(18f);
@@ -325,5 +352,36 @@ final class CalendarWidgetRenderer {
         }
         String trimmed = value.trim();
         return trimmed.length() > 4 ? trimmed.substring(0, 4) : trimmed;
+    }
+
+    private static String memoText(JSONArray entry) {
+        if (entry == null) {
+            return "";
+        }
+        Object raw = entry.opt(3);
+        if (!(raw instanceof String)) {
+            return "";
+        }
+        return ((String) raw).replaceAll("\\s+", " ").trim();
+    }
+
+    private static String trimMemo(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, Math.max(1, maxLength - 1)) + "…";
+    }
+
+    private static String ellipsize(Paint paint, String value, float maxWidth) {
+        if (paint.measureText(value) <= maxWidth) {
+            return value;
+        }
+        String ellipsis = "…";
+        int length = value.length();
+        while (length > 1
+                && paint.measureText(value.substring(0, length) + ellipsis) > maxWidth) {
+            length--;
+        }
+        return value.substring(0, length) + ellipsis;
     }
 }

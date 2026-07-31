@@ -31,8 +31,9 @@ vm.runInNewContext(
   sandbox
 );
 
+sandbox.widgetApi.state.groupMemos.A['2026-08-17'] = '인수인계 확인';
 const payload = sandbox.widgetApi.buildAndroidWidgetPayload(new Date(2026, 6, 29));
-assert(payload.schema === 1, 'Android 위젯 데이터 스키마가 올바르지 않습니다.');
+assert(payload.schema === 2, 'Android 위젯 메모 데이터 스키마가 올바르지 않습니다.');
 assert(payload.activeGroup === 'A', '기본 Android 위젯 조가 A조가 아닙니다.');
 assert(payload.firstYear <= 2026 && payload.lastYear >= 2027, '2026·2027년 위젯 데이터가 모두 포함되지 않습니다.');
 assert(payload.months['2026-08'].A.length === 31, '2026년 8월 A조 데이터가 31일이 아닙니다.');
@@ -41,6 +42,7 @@ assert(payload.months['2027-02'].D.length === 28, '2027년 2월 D조 데이터�
 const august17 = payload.months['2026-08'].A[16];
 assert(august17[1] === 'JG', '2026-08-17 A조 지근이 Android 위젯 데이터에 없습니다.');
 assert(august17[2] === 7, '2026-08-17 A조 지근 번호가 Android 위젯 데이터와 다릅니다.');
+assert(august17[3] === '인수인계 확인', '날짜별 메모 본문이 Android 위젯 데이터에 없습니다.');
 assert(august17[4] === 1, '2026-08-17 대체공휴일 표시가 Android 위젯 데이터에 없습니다.');
 
 const manifest = fs.readFileSync(
@@ -69,6 +71,9 @@ assert(provider.includes('ACTION_PREVIOUS') && provider.includes('ACTION_NEXT'),
 assert(provider.includes('ACTION_GROUP'), '위젯 조 전환 동작이 없습니다.');
 assert(widgetLayout.includes('@+id/widget_group'), '위젯에 조 전환 칩이 없습니다.');
 assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.includes('특근'), '위젯 정산 태그 라벨이 빠졌습니다.');
+assert(renderer.includes('Bitmap.Config.ARGB_8888'), '위젯이 고화질 ARGB 비트맵을 사용하지 않습니다.');
+assert(renderer.includes('RENDER_SCALE = 2'), '위젯의 2배 해상도 렌더링이 빠졌습니다.');
+assert(renderer.includes('memoText(entry)'), '위젯의 날짜별 메모 표시가 빠졌습니다.');
 
 /* ---------- 앱 내 업데이트 확인 ----------
    widget-version.json은 설치된 앱이 새 버전을 판단하는 기준입니다.
@@ -116,6 +121,9 @@ assert(!manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), 'Play 
 assert(directManifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), '직접 배포판의 업데이트 설치 권한이 없습니다.');
 assert(mainActivity.includes('BuildConfig.SELF_UPDATE_ENABLED'), '배포 방식별 업데이트 확인 분기가 없습니다.');
 assert(updateChecker.includes('widget-version.json'), 'UpdateChecker가 버전 파일을 바라보지 않습니다.');
+assert(mainActivity.includes('WindowInsets.Builder'), '상태바 안전 영역을 WebView 앞에서 소비하지 않습니다.');
+assert(mainActivity.includes('requestApplyInsets'), '첫 화면의 상태바 안전 영역 갱신 요청이 없습니다.');
+assert(manifest.includes('@drawable/ic_launcher_v2'), '새 런처 아이콘이 Android 앱에 연결되지 않았습니다.');
 
 /* ---------- 백업 불러오기·내보내기 ----------
    WebView는 파일 선택창과 blob: 다운로드를 기본으로 처리하지 못합니다.

@@ -99,12 +99,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-widget-v${{ inputs.release_version }}
-          name: 교대 캘린더 Android 위젯 v${{ inputs.release_version }}
+          name: 교대캘린더 Android 위젯 v${{ inputs.release_version }}
           body: |
             월간 교대 달력을 홈 화면에서 확인하는 Android 위젯입니다.
 
             설치 후 앱을 한 번 열어 근무표를 동기화하고,
-            홈 화면을 길게 눌러 `위젯 > 교대 캘린더`를 추가하세요.
+            홈 화면을 길게 눌러 `위젯 > 교대캘린더`를 추가하세요.
 
             달력 내용(근무 패턴·공휴일·명절 편성)은 앱을 열 때마다 웹에서
             최신으로 갱신되므로, 이 APK는 위젯 화면 자체가 바뀔 때만 새로 받으면 됩니다.

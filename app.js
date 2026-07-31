@@ -1,7 +1,7 @@
 'use strict';
 
 /* ============================================================
-   교대 캘린더 — 변형 4조 3교대 (D / S / G / O / D2 / G2 / 휴)
+   교대캘린더 — 변형 4조 3교대 (D / S / G / O / D2 / G2 / 휴)
    - 근무 종류 자유 커스텀(추가·삭제·수정)
    - 반복 패턴(사이클) 자동 계산 + 날짜별 수동 변경(override)
    - 데이터는 localStorage 저장
@@ -727,6 +727,10 @@ function renderSummary(){
    네이티브 앱의 WebView가 제공하는 AndroidWidget 브리지에 달력 스냅샷을 전달합니다.
    브라우저/PWA에서는 브리지가 없으므로 아무 작업도 하지 않습니다. */
 let androidWidgetTimer = null;
+function widgetMemo(value){
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+}
+
 function buildAndroidWidgetPayload(referenceDate = new Date()){
   const currentYear = referenceDate.getFullYear();
   const firstYear = Math.min(2026, currentYear - 1);
@@ -760,7 +764,7 @@ function buildAndroidWidgetPayload(referenceDate = new Date()){
             shiftFor(dateStr, group) || '',
             tag ? tag.tag : '',
             tag ? tag.n : 0,
-            memos[dateStr] ? 1 : 0,
+            widgetMemo(memos[dateStr]),
             isHoliday(dateStr) ? 1 : 0,
           ]);
         }
@@ -771,7 +775,7 @@ function buildAndroidWidgetPayload(referenceDate = new Date()){
   }
 
   return {
-    schema: 1,
+    schema: 2,
     generatedAt: Date.now(),
     activeGroup: currentGroup(),
     firstYear,
@@ -1137,7 +1141,7 @@ function renderShareQr(link){
 function shareSyncLink(btn){
   const link = Sync.shareLink();
   if(!link) return;
-  const title = '교대 캘린더 친구 초대';
+  const title = '교대캘린더 친구 초대';
   const text = '내 근무표를 같이 볼 수 있어요. 날짜별 메모도 함께 남겨보세요.';
   const bridge = window.AndroidWidget;
   if(bridge && typeof bridge.shareToKakao === 'function'){
