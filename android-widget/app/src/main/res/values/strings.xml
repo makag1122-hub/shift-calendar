@@ -9,6 +9,7 @@
     <string name="update_title">새 버전 %1$s</string>
     <string name="update_message_default">새 버전으로 업데이트할까요?</string>
     <string name="update_action">업데이트</string>
+    <string name="update_play_action">Play 스토어에서 업데이트</string>
     <string name="update_later">나중에</string>
     <string name="update_cancel">취소</string>
     <string name="update_download_title">교대캘린더 위젯 업데이트</string>

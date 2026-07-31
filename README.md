@@ -62,7 +62,7 @@
 **업데이트**
 
 - **달력 내용**(근무 패턴, 공휴일, 명절 편성, 색상)은 앱이 웹사이트를 그대로 불러오는 구조라 **앱을 열 때마다 자동으로 최신**이 됩니다. APK를 다시 받을 필요가 없습니다.
-- **Google Play 설치판**은 Play 스토어에서 업데이트합니다. 외부 APK 설치 권한과 자체 업데이트 기능이 들어가지 않습니다.
+- **Google Play 설치판**은 앱을 열 때 새 버전을 확인하고 안내 팝업에서 Play 스토어로 이동합니다. 외부 APK 설치 권한은 들어가지 않습니다.
 - **GitHub 직접 설치판**은 위젯 화면 자체가 바뀐 경우 앱 안의 **새 버전 안내창**에서 새 APK를 받을 수 있습니다.
 - 새 버전 판단 기준은 사이트 루트의 [`widget-version.json`](widget-version.json)이며, 여기 적힌 `versionCode`·`versionName`은 `android-widget/app/build.gradle`과 일치해야 합니다. (어긋나면 `tests/verify-android-widget.js`가 실패합니다)
 

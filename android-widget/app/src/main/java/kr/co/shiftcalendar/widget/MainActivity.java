@@ -11,7 +11,6 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Insets;
@@ -44,7 +43,6 @@ public class MainActivity extends Activity {
     private static final String CALENDAR_URL =
             "https://makag1122-hub.github.io/shift-calendar/?androidWidget=1";
 
-    private static final String KEY_SKIPPED_VERSION = "skipped_version_code";
     private static final String APK_FILE_NAME = "shift-calendar-widget.apk";
     private static final long POLL_INTERVAL_MS = 500L;
     private static final int REQUEST_PICK_BACKUP = 1001;
@@ -112,9 +110,7 @@ public class MainActivity extends Activity {
         });
         webView.loadUrl(CALENDAR_URL);
 
-        if (BuildConfig.SELF_UPDATE_ENABLED) {
-            checkForUpdate();
-        }
+        checkForUpdate();
     }
 
     private void applySystemBarInsets(ViewGroup appRoot) {
@@ -216,9 +212,6 @@ public class MainActivity extends Activity {
             if (release == null || release.versionCode <= UpdateChecker.installedVersionCode(this)) {
                 return;
             }
-            if (release.versionCode == prefs().getLong(KEY_SKIPPED_VERSION, -1L)) {
-                return;
-            }
             handler.post(() -> showUpdateDialog(release));
         });
     }
@@ -236,10 +229,38 @@ public class MainActivity extends Activity {
         dialog = new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.update_title, release.versionName))
                 .setMessage(message)
-                .setPositiveButton(R.string.update_action, (ignored, which) -> startUpdate(release))
-                .setNegativeButton(R.string.update_later, (ignored, which) ->
-                        prefs().edit().putLong(KEY_SKIPPED_VERSION, release.versionCode).apply())
+                .setPositiveButton(
+                        BuildConfig.SELF_UPDATE_ENABLED
+                                ? R.string.update_action
+                                : R.string.update_play_action,
+                        (ignored, which) -> {
+                            if (BuildConfig.SELF_UPDATE_ENABLED) {
+                                startUpdate(release);
+                            } else {
+                                openPlayStore();
+                            }
+                        }
+                )
+                /*
+                 * 나중에를 눌러도 이 버전을 영구히 숨기지 않습니다.
+                 * 다음에 앱을 새로 열면 다시 최신 버전을 확인합니다.
+                 */
+                .setNegativeButton(R.string.update_later, null)
                 .show();
+    }
+
+    private void openPlayStore() {
+        Intent market = new Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("market://details?id=" + getPackageName())
+        ).setPackage("com.android.vending");
+        try {
+            startActivity(market);
+        } catch (RuntimeException error) {
+            openInBrowser(
+                    "https://play.google.com/store/apps/details?id=" + getPackageName()
+            );
+        }
     }
 
     private void startUpdate(UpdateChecker.Release release) {
@@ -382,10 +403,6 @@ public class MainActivity extends Activity {
             dialog.dismiss();
         }
         dialog = null;
-    }
-
-    private SharedPreferences prefs() {
-        return getSharedPreferences(CalendarWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE);
     }
 
     private static final class WidgetBridge {

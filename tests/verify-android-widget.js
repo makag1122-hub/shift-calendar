@@ -124,6 +124,9 @@ assert(!manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), 'Play 
 assert(directManifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'), '직접 배포판의 업데이트 설치 권한이 없습니다.');
 assert(mainActivity.includes('BuildConfig.SELF_UPDATE_ENABLED'), '배포 방식별 업데이트 확인 분기가 없습니다.');
 assert(updateChecker.includes('widget-version.json'), 'UpdateChecker가 버전 파일을 바라보지 않습니다.');
+assert(mainActivity.includes('market://details?id='), 'Play 설치판을 Play 스토어 업데이트로 연결하지 않습니다.');
+assert(mainActivity.includes('checkForUpdate();'), '앱 시작 시 업데이트 확인이 실행되지 않습니다.');
+assert(!mainActivity.includes('KEY_SKIPPED_VERSION'), '나중에 선택이 업데이트 버전을 영구히 숨기고 있습니다.');
 assert(mainActivity.includes('WindowInsets.Builder'), '상태바 안전 영역을 WebView 앞에서 소비하지 않습니다.');
 assert(mainActivity.includes('requestApplyInsets'), '첫 화면의 상태바 안전 영역 갱신 요청이 없습니다.');
 assert(manifest.includes('@drawable/ic_launcher_v2'), '새 런처 아이콘이 Android 앱에 연결되지 않았습니다.');

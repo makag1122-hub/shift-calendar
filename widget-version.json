@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "1.5.0",
+  "versionCode": 7,
+  "versionName": "1.6.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "앱과 위젯에 A/B/C/D 4개 조의 월간 근무를 네 줄로 한눈에 비교하는 보기를 추가했습니다."
+  "notes": "앱을 열 때 새 버전을 확인하고 Google Play 설치판에서도 업데이트 안내 팝업을 표시합니다."
 }
