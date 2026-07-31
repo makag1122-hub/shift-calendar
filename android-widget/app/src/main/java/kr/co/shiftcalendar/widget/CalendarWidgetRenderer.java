@@ -23,6 +23,7 @@ final class CalendarWidgetRenderer {
     private static final int WEEK_HEIGHT = 32;
     private static final int ROWS = 6;
     private static final String[] WEEKDAYS = {"일", "월", "화", "수", "목", "금", "토"};
+    private static final String[] GROUPS = {"A", "B", "C", "D"};
 
     private CalendarWidgetRenderer() {
     }
@@ -43,7 +44,13 @@ final class CalendarWidgetRenderer {
         return group.matches("[ABCD]") ? group : "A";
     }
 
-    static Result render(Context context, int year, int month, String group) {
+    static Result render(
+            Context context,
+            int year,
+            int month,
+            String group,
+            boolean allGroups
+    ) {
         Bitmap bitmap = Bitmap.createBitmap(
                 WIDTH * RENDER_SCALE,
                 HEIGHT * RENDER_SCALE,
@@ -67,9 +74,178 @@ final class CalendarWidgetRenderer {
         }
 
         JSONObject shifts = root.optJSONObject("shifts");
+        if (allGroups) {
+            int memoCount = drawAllGroups(
+                    canvas,
+                    paint,
+                    root,
+                    shifts,
+                    year,
+                    month,
+                    group
+            );
+            return new Result(
+                    bitmap,
+                    String.format(Locale.KOREA, "4개 조 한눈에 · 이번 달 메모 %d개", memoCount)
+            );
+        }
         drawWeekdays(canvas, paint);
         drawMonth(canvas, paint, shifts, days, year, month);
         return new Result(bitmap, todaySummary(root, group));
+    }
+
+    private static int drawAllGroups(
+            Canvas canvas,
+            Paint paint,
+            JSONObject root,
+            JSONObject shifts,
+            int year,
+            int month,
+            String activeGroup
+    ) {
+        final float labelWidth = 38f;
+        final float headerHeight = 31f;
+        final float columnWidth = (WIDTH - labelWidth) /
+                new Calendar.Builder()
+                        .setDate(year, month, 1)
+                        .build()
+                        .getActualMaximum(Calendar.DAY_OF_MONTH);
+        final float rowHeight = (HEIGHT - headerHeight) / GROUPS.length;
+
+        Calendar dayCalendar = Calendar.getInstance();
+        dayCalendar.set(year, month, 1, 12, 0, 0);
+        int daysInMonth = dayCalendar.getActualMaximum(Calendar.DAY_OF_MONTH);
+        Calendar today = Calendar.getInstance();
+        boolean currentMonth =
+                today.get(Calendar.YEAR) == year && today.get(Calendar.MONTH) == month;
+        int memoCount = 0;
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.rgb(244, 246, 250));
+        canvas.drawRect(0f, 0f, labelWidth, HEIGHT, paint);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        paint.setTextSize(8f);
+        paint.setColor(Color.rgb(119, 127, 143));
+        canvas.drawText("조", labelWidth / 2f, 20f, paint);
+
+        for (int day = 1; day <= daysInMonth; day++) {
+            dayCalendar.set(Calendar.DAY_OF_MONTH, day);
+            int column = dayCalendar.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
+            float centerX = labelWidth + (day - 0.5f) * columnWidth;
+            paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            paint.setTextSize(8.2f);
+            paint.setColor(
+                    column == 0
+                            ? Color.rgb(199, 69, 55)
+                            : column == 6
+                            ? Color.rgb(55, 105, 184)
+                            : Color.rgb(71, 85, 105)
+            );
+            canvas.drawText(String.valueOf(day), centerX, 12f, paint);
+            paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.NORMAL));
+            paint.setTextSize(6.2f);
+            paint.setColor(Color.rgb(148, 156, 172));
+            canvas.drawText(WEEKDAYS[column], centerX, 24f, paint);
+        }
+
+        for (int row = 0; row < GROUPS.length; row++) {
+            String group = GROUPS[row];
+            JSONArray days = monthDays(root, year, month, group);
+            float top = headerHeight + row * rowHeight;
+            float bottom = top + rowHeight;
+
+            paint.setColor(row % 2 == 0
+                    ? Color.rgb(251, 252, 254)
+                    : Color.rgb(247, 249, 252));
+            canvas.drawRect(labelWidth, top, WIDTH, bottom, paint);
+            paint.setColor(Color.rgb(226, 230, 237));
+            canvas.drawRect(0f, bottom - 1f, WIDTH, bottom, paint);
+
+            if (group.equals(activeGroup)) {
+                paint.setColor(Color.rgb(70, 84, 197));
+                canvas.drawRoundRect(
+                        new RectF(5f, top + 31f, labelWidth - 5f, bottom - 31f),
+                        7f,
+                        7f,
+                        paint
+                );
+                paint.setColor(Color.WHITE);
+            } else {
+                paint.setColor(Color.rgb(52, 58, 72));
+            }
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            paint.setTextSize(12f);
+            canvas.drawText(group, labelWidth / 2f, top + rowHeight / 2f + 4f, paint);
+
+            if (days == null) {
+                continue;
+            }
+            for (int day = 1; day <= daysInMonth; day++) {
+                JSONArray entry = days.optJSONArray(day - 1);
+                String shiftKey = entry == null ? "" : entry.optString(0, "");
+                JSONObject shift = shifts == null ? null : shifts.optJSONObject(shiftKey);
+                int shiftColor = parseColor(
+                        shift == null ? "#94a3b8" : shift.optString("color", "#94a3b8")
+                );
+                float left = labelWidth + (day - 1) * columnWidth;
+                float right = left + columnWidth;
+                RectF cell = new RectF(left + 1f, top + 9f, right - 1f, bottom - 9f);
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(blendWithWhite(shiftColor, 0.18f));
+                canvas.drawRoundRect(cell, 3.5f, 3.5f, paint);
+
+                String tag = entry == null ? "" : entry.optString(1, "");
+                if (!tag.isEmpty()) {
+                    paint.setColor(tagColor(tag));
+                    canvas.drawRoundRect(
+                            new RectF(left + 2f, top + 11f, right - 2f, top + 14f),
+                            1.5f,
+                            1.5f,
+                            paint
+                    );
+                }
+
+                String shiftLabel = shift == null
+                        ? "-"
+                        : shift.optString("short", shift.optString("label", shiftKey));
+                paint.setTextAlign(Paint.Align.CENTER);
+                paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+                paint.setTextSize(7.4f);
+                paint.setColor(blendWithBlack(shiftColor, 0.56f));
+                canvas.drawText(
+                        ellipsize(paint, trimLabel(shiftLabel), columnWidth - 3f),
+                        (left + right) / 2f,
+                        top + rowHeight / 2f + 3f,
+                        paint
+                );
+
+                String memo = memoText(entry);
+                if (!memo.isEmpty()) {
+                    memoCount++;
+                    paint.setColor(Color.rgb(225, 147, 37));
+                    canvas.drawCircle((left + right) / 2f, bottom - 14f, 2.1f, paint);
+                }
+            }
+        }
+
+        if (currentMonth) {
+            float todayLeft =
+                    labelWidth + (today.get(Calendar.DAY_OF_MONTH) - 1) * columnWidth;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.4f);
+            paint.setColor(Color.rgb(70, 84, 197));
+            canvas.drawRoundRect(
+                    new RectF(todayLeft + 0.5f, 0.5f, todayLeft + columnWidth - 0.5f, HEIGHT - 0.5f),
+                    3f,
+                    3f,
+                    paint
+            );
+            paint.setStyle(Paint.Style.FILL);
+        }
+        return memoCount;
     }
 
     private static JSONObject payload(Context context) {

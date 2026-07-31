@@ -8,6 +8,7 @@
    ============================================================ */
 
 const STORAGE_KEY = 'shiftcal.v2';
+const CALENDAR_VIEW_KEY = 'shiftcal.calendarView';
 const BASE_DATE = '2026-06-25';
 const BASE_PATTERN_START = '2026-06-09'; // 2026-06-25 = A조 GY 4일차
 const GROUPS = ['A','B','C','D'];
@@ -284,6 +285,10 @@ function canEditMemo(){
 
 let state = loadState();
 let view = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
+let calendarView = (() => {
+  try{ return localStorage.getItem(CALENDAR_VIEW_KEY) === 'all' ? 'all' : 'single'; }
+  catch(e){ return 'single'; }
+})();
 let selectedDate = null;
 let sheetRange = null;   // 범위 시트 모드 { start, end }
 let rangeAnchor = null;  // 길게 눌러 시작한 날짜
@@ -590,7 +595,74 @@ function renderTeamBoard(){
     <div class="team-grid">${items}</div>`;
 }
 
+function renderAllGroupsCalendar(){
+  const grid = $('allGroupsGrid');
+  const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
+  const monthKey = `${view.year}-${pad(view.month+1)}`;
+  const today = todayStr();
+  const current = currentGroup();
+  const tagMaps = Object.fromEntries(
+    GROUPS.map(group => [group, tagsForMonth(group, view.year, view.month)])
+  );
+
+  const dateHeaders = Array.from({ length:daysInMonth }, (_, index)=>{
+    const day = index + 1;
+    const dateStr = `${monthKey}-${pad(day)}`;
+    const dow = new Date(view.year, view.month, day).getDay();
+    const dayClass = isHoliday(dateStr) || dow === 0 ? ' sun' : (dow === 6 ? ' sat' : '');
+    return `<div class="all-date-head${dayClass}${dateStr===today?' today':''}" data-date="${dateStr}">
+      <span>${day}</span><small>${WEEK[dow]}</small>
+    </div>`;
+  }).join('');
+
+  const rows = GROUPS.map(group=>{
+    const memos = memosFor(group);
+    const cells = Array.from({ length:daysInMonth }, (_, index)=>{
+      const day = index + 1;
+      const dateStr = `${monthKey}-${pad(day)}`;
+      const shift = st(shiftFor(dateStr, group));
+      const color = shift ? shift.color : '#94a3b8';
+      const label = shift ? (shift.short || shift.label) : '-';
+      const tag = tagMaps[group][dateStr];
+      const tagInfo = tag ? DESIG[tag.tag] : null;
+      const memo = (memos[dateStr] || '').trim();
+      return `<button class="all-group-cell${dateStr===today?' today':''}" data-group="${group}" data-date="${dateStr}" style="--c:${color}" aria-label="${group}조 ${day}일 ${escapeHtml(label)}">
+        <span class="all-shift">${escapeHtml(label)}</span>
+        ${tagInfo ? `<span class="all-tag" style="--tag:${tagInfo.color}">${tagInfo.short}</span>` : ''}
+        ${memo ? `<span class="all-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : ''}
+      </button>`;
+    }).join('');
+    return `<button class="all-group-label${group===current?' active':''}" data-group="${group}" aria-label="${group}조를 내 조로 선택">${group}조</button>${cells}`;
+  }).join('');
+
+  grid.style.setProperty('--days', daysInMonth);
+  grid.innerHTML = `<div class="all-groups-corner">조</div>${dateHeaders}${rows}`;
+
+  requestAnimationFrame(()=>{
+    const scroll = $('allGroupsScroll');
+    const todayHead = grid.querySelector('.all-date-head.today');
+    scroll.scrollLeft = todayHead ? Math.max(0, todayHead.offsetLeft - 125) : 0;
+  });
+}
+
 function renderCalendar(){
+  const showAllGroups = calendarView === 'all';
+  document.querySelectorAll('[data-calendar-view]').forEach(button=>{
+    const active = button.dataset.calendarView === calendarView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  $('singleCalendar').hidden = showAllGroups;
+  $('allGroupsCalendar').hidden = !showAllGroups;
+  $('memoPanel').hidden = showAllGroups;
+  $('summary').hidden = showAllGroups;
+
+  if(showAllGroups){
+    $('monthTitle').textContent = `${view.year}년 ${view.month+1}월 · 4개 조`;
+    renderAllGroupsCalendar();
+    return;
+  }
+
   const group = currentGroup();
   $('monthTitle').textContent = `${view.year}년 ${view.month+1}월 · ${group}조`;
   const startDow = new Date(view.year, view.month, 1).getDay();
@@ -632,6 +704,7 @@ function renderCalendar(){
     </button>`;
   }
   $('grid').innerHTML = html;
+  $('summary').hidden = false;
   renderMemoPanel();
   renderSummary();
 }
@@ -1393,6 +1466,15 @@ function selectGroup(group){
   if(selectedDate) openDaySheet(selectedDate);
 }
 
+function selectCalendarView(nextView){
+  const next = nextView === 'all' ? 'all' : 'single';
+  if(calendarView === next) return;
+  calendarView = next;
+  try{ localStorage.setItem(CALENDAR_VIEW_KEY, calendarView); }catch(e){}
+  hideRangeBanner();
+  renderCalendar();
+}
+
 /* ---------- 이벤트 연결 ---------- */
 function wire(){
   // 내 조 선택
@@ -1403,6 +1485,25 @@ function wire(){
   $('teamBoard').addEventListener('click', (e)=>{
     const card = e.target.closest('[data-group]');
     if(card) selectGroup(card.dataset.group);
+  });
+  $('calendarViewTabs').addEventListener('click', (e)=>{
+    const button = e.target.closest('[data-calendar-view]');
+    if(button) selectCalendarView(button.dataset.calendarView);
+  });
+  $('allGroupsGrid').addEventListener('click', (e)=>{
+    const cell = e.target.closest('.all-group-cell');
+    if(cell){
+      const group = normalizeGroup(cell.dataset.group);
+      if(group !== currentGroup()){
+        state.activeGroup = group;
+        saveState();
+        renderAll();
+      }
+      openDaySheet(cell.dataset.date);
+      return;
+    }
+    const label = e.target.closest('.all-group-label');
+    if(label) selectGroup(label.dataset.group);
   });
 
   // 월 이동

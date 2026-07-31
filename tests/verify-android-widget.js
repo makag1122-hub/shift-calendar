@@ -69,11 +69,14 @@ const widgetLayout = fs.readFileSync(
 assert(manifest.includes('android.appwidget.action.APPWIDGET_UPDATE'), 'Android AppWidget 수신기가 등록되지 않았습니다.');
 assert(provider.includes('ACTION_PREVIOUS') && provider.includes('ACTION_NEXT'), '위젯 월 이동 동작이 없습니다.');
 assert(provider.includes('ACTION_GROUP'), '위젯 조 전환 동작이 없습니다.');
+assert(provider.includes('ACTION_MODE'), '위젯 내 조·4개 조 보기 전환 동작이 없습니다.');
 assert(widgetLayout.includes('@+id/widget_group'), '위젯에 조 전환 칩이 없습니다.');
+assert(widgetLayout.includes('@+id/widget_mode'), '위젯에 4개 조 보기 전환 버튼이 없습니다.');
 assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.includes('특근'), '위젯 정산 태그 라벨이 빠졌습니다.');
 assert(renderer.includes('Bitmap.Config.ARGB_8888'), '위젯이 고화질 ARGB 비트맵을 사용하지 않습니다.');
 assert(renderer.includes('RENDER_SCALE = 2'), '위젯의 2배 해상도 렌더링이 빠졌습니다.');
 assert(renderer.includes('memoText(entry)'), '위젯의 날짜별 메모 표시가 빠졌습니다.');
+assert(renderer.includes('drawAllGroups('), '위젯의 A/B/C/D 4행 비교 렌더링이 없습니다.');
 
 /* ---------- 앱 내 업데이트 확인 ----------
    widget-version.json은 설치된 앱이 새 버전을 판단하는 기준입니다.

@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.widget.RemoteViews;
 
 import java.util.Calendar;
@@ -23,6 +24,8 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
             "kr.co.shiftcalendar.widget.action.TODAY";
     private static final String ACTION_GROUP =
             "kr.co.shiftcalendar.widget.action.GROUP";
+    private static final String ACTION_MODE =
+            "kr.co.shiftcalendar.widget.action.MODE";
 
     private static final String EXTRA_WIDGET_ID = "widget_id";
     private static final String[] GROUPS = {"A", "B", "C", "D"};
@@ -53,7 +56,8 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         if (!ACTION_PREVIOUS.equals(action)
                 && !ACTION_NEXT.equals(action)
                 && !ACTION_TODAY.equals(action)
-                && !ACTION_GROUP.equals(action)) {
+                && !ACTION_GROUP.equals(action)
+                && !ACTION_MODE.equals(action)) {
             return;
         }
 
@@ -78,7 +82,7 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         } else if (ACTION_NEXT.equals(action)) {
             int offset = Math.min(18, preferences.getInt(offsetKey, 0) + 1);
             preferences.edit().putInt(offsetKey, offset).apply();
-        } else {
+        } else if (ACTION_GROUP.equals(action)) {
             String current = preferences.getString(
                     groupKey,
                     CalendarWidgetRenderer.activeGroup(context)
@@ -92,6 +96,11 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
             }
             preferences.edit()
                     .putString(groupKey, GROUPS[(index + 1) % GROUPS.length])
+                    .apply();
+        } else {
+            String modeKey = modeKey(widgetId);
+            preferences.edit()
+                    .putBoolean(modeKey, !preferences.getBoolean(modeKey, false))
                     .apply();
         }
 
@@ -109,6 +118,7 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         for (int widgetId : appWidgetIds) {
             editor.remove(offsetKey(widgetId));
             editor.remove(groupKey(widgetId));
+            editor.remove(modeKey(widgetId));
         }
         editor.apply();
     }
@@ -138,6 +148,7 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
                 groupKey(widgetId),
                 CalendarWidgetRenderer.activeGroup(context)
         );
+        boolean allGroups = preferences.getBoolean(modeKey(widgetId), false);
 
         Calendar target = Calendar.getInstance();
         target.set(Calendar.DAY_OF_MONTH, 1);
@@ -146,7 +157,7 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         int month = target.get(Calendar.MONTH);
 
         CalendarWidgetRenderer.Result result =
-                CalendarWidgetRenderer.render(context, year, month, group);
+                CalendarWidgetRenderer.render(context, year, month, group, allGroups);
         RemoteViews views = new RemoteViews(
                 context.getPackageName(),
                 R.layout.widget_calendar
@@ -156,6 +167,25 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
                 String.format(Locale.KOREA, "%d년 %d월", year, month + 1)
         );
         views.setTextViewText(R.id.widget_group, group + "조");
+        views.setTextViewText(R.id.widget_mode, allGroups ? "내 조" : "4개조");
+        views.setInt(
+                R.id.widget_group,
+                "setBackgroundResource",
+                allGroups ? R.drawable.widget_nav_button : R.drawable.widget_group_chip
+        );
+        views.setTextColor(
+                R.id.widget_group,
+                allGroups ? Color.rgb(89, 97, 116) : Color.WHITE
+        );
+        views.setInt(
+                R.id.widget_mode,
+                "setBackgroundResource",
+                allGroups ? R.drawable.widget_group_chip : R.drawable.widget_nav_button
+        );
+        views.setTextColor(
+                R.id.widget_mode,
+                allGroups ? Color.WHITE : Color.rgb(89, 97, 116)
+        );
         views.setImageViewBitmap(R.id.widget_calendar_image, result.bitmap);
         views.setTextViewText(R.id.widget_footer, result.footer);
 
@@ -174,6 +204,10 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         views.setOnClickPendingIntent(
                 R.id.widget_group,
                 broadcastIntent(context, widgetId, ACTION_GROUP, 5)
+        );
+        views.setOnClickPendingIntent(
+                R.id.widget_mode,
+                broadcastIntent(context, widgetId, ACTION_MODE, 6)
         );
         views.setOnClickPendingIntent(
                 R.id.widget_footer,
@@ -215,5 +249,9 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
 
     private static String groupKey(int widgetId) {
         return "group_" + widgetId;
+    }
+
+    private static String modeKey(int widgetId) {
+        return "all_groups_" + widgetId;
     }
 }

@@ -6,6 +6,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 
 function assert(condition, message){
   if(!condition) throw new Error(message);
@@ -35,6 +36,18 @@ assert(
 assert(
   !css.includes('box-shadow:inset 3px 0 0 #4d9b8f'),
   '공동 메모 입력창에 장식성 세로선이 다시 생겼습니다.'
+);
+assert(
+  index.includes('data-calendar-view="all"') && index.includes('id="allGroupsGrid"'),
+  '4개 조 한눈에 보기의 화면 구조가 없습니다.'
+);
+assert(
+  app.includes('function renderAllGroupsCalendar()') && app.includes('GROUPS.map(group=>'),
+  'A/B/C/D 4행 가로 비교표 렌더링이 없습니다.'
+);
+assert(
+  css.includes('grid-template-rows:28px repeat(4, 68px);'),
+  '4개 조 비교표가 정확히 네 행으로 고정되지 않았습니다.'
 );
 
 console.log('달력 카드 정보 구조 검사 통과');
