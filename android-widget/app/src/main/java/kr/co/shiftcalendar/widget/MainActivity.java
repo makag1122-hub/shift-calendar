@@ -44,6 +44,9 @@ public class MainActivity extends Activity {
             "https://makag1122-hub.github.io/shift-calendar/?androidWidget=1";
     private static final String SHARE_SCHEME = "shiftcalendar";
     private static final String SHARE_HOST = "share";
+    private static final String KAKAO_SHARE_SCHEME =
+            "kakaoe9f15b01b136223f0f0d7b2e00b94281";
+    private static final String KAKAO_SHARE_HOST = "kakaolink";
     private static final String PLAY_STORE_URL =
             "https://play.google.com/store/apps/details?id=kr.co.shiftcalendar.widget";
 
@@ -88,7 +91,7 @@ public class MainActivity extends Activity {
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setUserAgentString(settings.getUserAgentString() + " ShiftCalendarWidget/1.0");
 
-        webView.addJavascriptInterface(new WidgetBridge(getApplicationContext()), "AndroidWidget");
+        webView.addJavascriptInterface(new WidgetBridge(this), "AndroidWidget");
 
         /* 설정 > 백업 불러오기가 쓰는 <input type="file">은 이 처리가 있어야 열립니다. */
         webView.setWebChromeClient(new WebChromeClient() {
@@ -140,6 +143,9 @@ public class MainActivity extends Activity {
         String token = "";
         if (SHARE_SCHEME.equalsIgnoreCase(uri.getScheme())
                 && SHARE_HOST.equalsIgnoreCase(uri.getHost())) {
+            token = uri.getQueryParameter("token");
+        } else if (KAKAO_SHARE_SCHEME.equalsIgnoreCase(uri.getScheme())
+                && KAKAO_SHARE_HOST.equalsIgnoreCase(uri.getHost())) {
             token = uri.getQueryParameter("token");
         } else {
             String fragment = uri.getFragment();
@@ -446,11 +452,13 @@ public class MainActivity extends Activity {
     }
 
     private static final class WidgetBridge {
+        private final MainActivity activity;
         private final Context context;
         private final Handler toastHandler = new Handler(Looper.getMainLooper());
 
-        WidgetBridge(Context context) {
-            this.context = context;
+        WidgetBridge(MainActivity activity) {
+            this.activity = activity;
+            this.context = activity.getApplicationContext();
         }
 
         @JavascriptInterface
@@ -500,6 +508,16 @@ public class MainActivity extends Activity {
                     .build()
                     .toString();
 
+            activity.runOnUiThread(() -> KakaoShareManager.shareInvitation(
+                    activity,
+                    safeTitle,
+                    safeText,
+                    token,
+                    () -> shareWithAndroid(safeTitle, safeText, appLink)
+            ));
+        }
+
+        private void shareWithAndroid(String safeTitle, String safeText, String appLink) {
             StringBuilder message = new StringBuilder();
             if (!safeText.isEmpty()) {
                 message.append(safeText).append("\n\n");
@@ -512,10 +530,9 @@ public class MainActivity extends Activity {
                     .setType("text/plain")
                     .putExtra(Intent.EXTRA_SUBJECT, safeTitle)
                     .putExtra(Intent.EXTRA_TEXT, message.toString())
-                    .setPackage("com.kakao.talk")
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    .setPackage("com.kakao.talk");
             try {
-                context.startActivity(share);
+                activity.startActivity(share);
             } catch (ActivityNotFoundException error) {
                 Intent fallback = new Intent(Intent.ACTION_SEND)
                         .setType("text/plain")
@@ -524,8 +541,8 @@ public class MainActivity extends Activity {
                 Intent chooser = Intent.createChooser(
                         fallback,
                         context.getString(R.string.share_chooser_title)
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(chooser);
+                );
+                activity.startActivity(chooser);
             }
         }
 

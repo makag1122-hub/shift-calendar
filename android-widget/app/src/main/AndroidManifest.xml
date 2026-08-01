@@ -3,6 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <application
+        android:name=".ShiftCalendarApplication"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher_v2"
         android:label="@string/app_name"
@@ -27,6 +28,15 @@
                 <data
                     android:host="share"
                     android:scheme="shiftcalendar" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="kakaolink"
+                    android:scheme="kakaoe9f15b01b136223f0f0d7b2e00b94281" />
             </intent-filter>
         </activity>
 
