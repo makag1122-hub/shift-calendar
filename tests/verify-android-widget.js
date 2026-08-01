@@ -101,6 +101,10 @@ const buildGradle = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'build.gradle'),
   'utf8'
 );
+const gradleProperties = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'gradle.properties'),
+  'utf8'
+);
 const workflow = fs.readFileSync(
   path.join(ROOT, '.github', 'workflows', 'android-widget.yml'),
   'utf8'
@@ -175,6 +179,7 @@ assert(mainActivity.includes('shareToken('), '공유 토큰을 앱으로 전달�
 assert(mainActivity.includes('shiftcalendar'), '카카오톡 공유가 앱 딥링크를 만들지 않습니다.');
 assert(mainActivity.includes('onNewIntent('), '실행 중인 앱에서 친구 초대 링크를 받지 못합니다.');
 assert(buildGradle.includes("com.kakao.sdk:v2-share:2.24.0"), '카카오톡 공식 공유 SDK가 연결되지 않았습니다.');
+assert(gradleProperties.includes('android.useAndroidX=true'), '카카오 SDK의 AndroidX 사용 설정이 없습니다.');
 assert(shiftCalendarApplication.includes('KakaoSdk.init('), '카카오 SDK 초기화가 없습니다.');
 assert(manifest.includes('android:name=".ShiftCalendarApplication"'), '카카오 SDK Application이 매니페스트에 없습니다.');
 assert(manifest.includes('android:scheme="kakaoe9f15b01b136223f0f0d7b2e00b94281"'), '카카오 앱 실행 스킴이 없습니다.');
