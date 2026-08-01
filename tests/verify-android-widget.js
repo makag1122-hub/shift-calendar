@@ -157,7 +157,7 @@ assert(mainActivity.includes('checkForUpdate();'), '앱 시작 시 업데이트 
 assert(!mainActivity.includes('KEY_SKIPPED_VERSION'), '나중에 선택이 업데이트 버전을 영구히 숨기고 있습니다.');
 assert(mainActivity.includes('WindowInsets.Builder'), '상태바 안전 영역을 WebView 앞에서 소비하지 않습니다.');
 assert(mainActivity.includes('requestApplyInsets'), '첫 화면의 상태바 안전 영역 갱신 요청이 없습니다.');
-assert(manifest.includes('@drawable/ic_launcher_v2'), '새 런처 아이콘이 Android 앱에 연결되지 않았습니다.');
+assert(manifest.includes('@drawable/ic_launcher_v3'), '새 런처 아이콘이 Android 앱에 연결되지 않았습니다.');
 
 /* ---------- 백업 불러오기·내보내기 ----------
    WebView는 파일 선택창과 blob: 다운로드를 기본으로 처리하지 못합니다.
