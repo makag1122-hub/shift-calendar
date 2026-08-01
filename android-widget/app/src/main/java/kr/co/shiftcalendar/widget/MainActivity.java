@@ -42,6 +42,10 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity {
     private static final String CALENDAR_URL =
             "https://makag1122-hub.github.io/shift-calendar/?androidWidget=1";
+    private static final String SHARE_SCHEME = "shiftcalendar";
+    private static final String SHARE_HOST = "share";
+    private static final String PLAY_STORE_URL =
+            "https://play.google.com/store/apps/details?id=kr.co.shiftcalendar.widget";
 
     private static final String APK_FILE_NAME = "shift-calendar-widget.apk";
     private static final long POLL_INTERVAL_MS = 500L;
@@ -108,9 +112,45 @@ public class MainActivity extends Activity {
                 );
             }
         });
-        webView.loadUrl(CALENDAR_URL);
+        webView.loadUrl(launchUrl(getIntent()));
 
         checkForUpdate();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (webView != null) {
+            webView.loadUrl(launchUrl(intent));
+        }
+    }
+
+    private static String launchUrl(Intent intent) {
+        String token = shareToken(intent == null ? null : intent.getData());
+        return token.isEmpty()
+                ? CALENDAR_URL
+                : CALENDAR_URL + "#share=" + Uri.encode(token);
+    }
+
+    private static String shareToken(Uri uri) {
+        if (uri == null) {
+            return "";
+        }
+        String token = "";
+        if (SHARE_SCHEME.equalsIgnoreCase(uri.getScheme())
+                && SHARE_HOST.equalsIgnoreCase(uri.getHost())) {
+            token = uri.getQueryParameter("token");
+        } else {
+            String fragment = uri.getFragment();
+            if (fragment != null && fragment.startsWith("share=")) {
+                token = fragment.substring("share=".length());
+            }
+        }
+        if (token == null || !token.matches("[A-Za-z0-9_-]{8,1800}")) {
+            return "";
+        }
+        return token;
     }
 
     private void applySystemBarInsets(ViewGroup appRoot) {
@@ -429,6 +469,13 @@ public class MainActivity extends Activity {
             AppWidgetManager manager = AppWidgetManager.getInstance(context);
             ComponentName component = new ComponentName(context, CalendarWidgetProvider.class);
             CalendarWidgetProvider.updateWidgets(context, manager, manager.getAppWidgetIds(component));
+            ComponentName weekComponent =
+                    new ComponentName(context, FourGroupWeekWidgetProvider.class);
+            FourGroupWeekWidgetProvider.updateWidgets(
+                    context,
+                    manager,
+                    manager.getAppWidgetIds(weekComponent)
+            );
         }
 
         /* 앱에서는 안드로이드 공유창을 한 번 더 거치지 않고 카카오톡을 먼저 엽니다.
@@ -442,11 +489,29 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            String message = safeText.isEmpty() ? safeUrl : safeText + "\n" + safeUrl;
+            String token = shareToken(Uri.parse(safeUrl));
+            if (token.isEmpty()) {
+                return;
+            }
+            String appLink = new Uri.Builder()
+                    .scheme(SHARE_SCHEME)
+                    .authority(SHARE_HOST)
+                    .appendQueryParameter("token", token)
+                    .build()
+                    .toString();
+
+            StringBuilder message = new StringBuilder();
+            if (!safeText.isEmpty()) {
+                message.append(safeText).append("\n\n");
+            }
+            message.append("교대캘린더 앱에서 근무표 열기\n")
+                    .append(appLink)
+                    .append("\n\n앱이 없다면 먼저 설치한 뒤 초대 링크를 다시 눌러주세요.\n")
+                    .append(PLAY_STORE_URL);
             Intent share = new Intent(Intent.ACTION_SEND)
                     .setType("text/plain")
                     .putExtra(Intent.EXTRA_SUBJECT, safeTitle)
-                    .putExtra(Intent.EXTRA_TEXT, message)
+                    .putExtra(Intent.EXTRA_TEXT, message.toString())
                     .setPackage("com.kakao.talk")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             try {
@@ -455,7 +520,7 @@ public class MainActivity extends Activity {
                 Intent fallback = new Intent(Intent.ACTION_SEND)
                         .setType("text/plain")
                         .putExtra(Intent.EXTRA_SUBJECT, safeTitle)
-                        .putExtra(Intent.EXTRA_TEXT, message);
+                        .putExtra(Intent.EXTRA_TEXT, message.toString());
                 Intent chooser = Intent.createChooser(
                         fallback,
                         context.getString(R.string.share_chooser_title)

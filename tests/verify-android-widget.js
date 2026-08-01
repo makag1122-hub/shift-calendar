@@ -65,22 +65,34 @@ const widgetLayout = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'layout', 'widget_calendar.xml'),
   'utf8'
 );
+const weekProvider = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'FourGroupWeekWidgetProvider.java'),
+  'utf8'
+);
+const weekWidgetLayout = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'layout', 'widget_four_groups_week.xml'),
+  'utf8'
+);
 
 assert(manifest.includes('android.appwidget.action.APPWIDGET_UPDATE'), 'Android AppWidget 수신기가 등록되지 않았습니다.');
 assert(provider.includes('ACTION_PREVIOUS') && provider.includes('ACTION_NEXT'), '위젯 월 이동 동작이 없습니다.');
 assert(provider.includes('ACTION_GROUP'), '위젯 조 전환 동작이 없습니다.');
-assert(provider.includes('ACTION_MODE'), '위젯 내 조·4개 조 보기 전환 동작이 없습니다.');
 assert(widgetLayout.includes('@+id/widget_group'), '위젯에 조 전환 칩이 없습니다.');
-assert(widgetLayout.includes('@+id/widget_mode'), '위젯에 4개 조 보기 전환 버튼이 없습니다.');
 assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.includes('특근'), '위젯 정산 태그 라벨이 빠졌습니다.');
 assert(renderer.includes('Bitmap.Config.ARGB_8888'), '위젯이 고화질 ARGB 비트맵을 사용하지 않습니다.');
 assert(renderer.includes('RENDER_SCALE = 2.5f'), '위젯의 고해상도 렌더링이 빠졌습니다.');
 assert(renderer.includes('memoText(entry)'), '위젯의 날짜별 메모 표시가 빠졌습니다.');
 assert(renderer.includes('drawAllGroups('), '위젯의 A/B/C/D 4행 비교 렌더링이 없습니다.');
+assert(renderer.includes('renderWeek('), '4개 조 주간 위젯 렌더링이 없습니다.');
+assert(renderer.includes('drawWeekGroups('), '4개 조 주간 4행 비교 렌더링이 없습니다.');
 assert(renderer.includes('calendarHeight('), '위젯 크기에 맞춘 달력 비율 계산이 없습니다.');
 assert(renderer.includes('drawTag('), '앱과 같은 정산 태그 배지가 위젯에 없습니다.');
 assert(provider.includes('OPTION_APPWIDGET_MIN_WIDTH'), '위젯 너비에 맞춘 렌더링이 없습니다.');
 assert(provider.includes('OPTION_APPWIDGET_MIN_HEIGHT'), '위젯 높이에 맞춘 렌더링이 없습니다.');
+assert(manifest.includes('.FourGroupWeekWidgetProvider'), '4개 조 주간 위젯이 매니페스트에 없습니다.');
+assert(weekProvider.includes('WEEK_PREVIOUS') && weekProvider.includes('WEEK_NEXT'), '주간 위젯의 주 이동 동작이 없습니다.');
+assert(weekProvider.includes('Calendar.WEEK_OF_YEAR'), '주간 위젯이 7일 단위로 이동하지 않습니다.');
+assert(weekWidgetLayout.includes('@+id/week_widget_image'), '4개 조 주간 위젯 레이아웃이 없습니다.');
 
 /* ---------- 앱 내 업데이트 확인 ----------
    widget-version.json은 설치된 앱이 새 버전을 판단하는 기준입니다.
@@ -149,6 +161,11 @@ assert(
 /* ---------- 카카오톡 친구 초대 ---------- */
 assert(mainActivity.includes('public void shareToKakao('), '카카오톡 공유 브리지가 없습니다.');
 assert(mainActivity.includes('com.kakao.talk'), '카카오톡 앱을 직접 여는 패키지 연결이 없습니다.');
+assert(manifest.includes('android:scheme="shiftcalendar"'), '친구 초대 앱 딥링크 스킴이 없습니다.');
+assert(manifest.includes('android:host="share"'), '친구 초대 앱 딥링크 주소가 없습니다.');
+assert(mainActivity.includes('shareToken('), '공유 토큰을 앱으로 전달하는 처리가 없습니다.');
+assert(mainActivity.includes('shiftcalendar'), '카카오톡 공유가 앱 딥링크를 만들지 않습니다.');
+assert(mainActivity.includes('onNewIntent('), '실행 중인 앱에서 친구 초대 링크를 받지 못합니다.');
 assert(
   appSource.includes("typeof bridge.shareToKakao === 'function'"),
   'app.js가 Android 카카오톡 공유 브리지를 사용하지 않습니다.'

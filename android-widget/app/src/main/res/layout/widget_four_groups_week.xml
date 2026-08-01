@@ -17,7 +17,7 @@
         android:paddingBottom="4dp">
 
         <TextView
-            android:id="@+id/widget_previous"
+            android:id="@+id/week_widget_previous"
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="@drawable/widget_nav_button"
@@ -28,33 +28,33 @@
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/widget_title"
+            android:id="@+id/week_widget_title"
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
+            android:ellipsize="end"
             android:gravity="center_vertical"
             android:maxLines="1"
-            android:text="@string/widget_default_title"
+            android:paddingLeft="10dp"
+            android:text="이번 주"
             android:textColor="#1F2533"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:paddingLeft="10dp" />
+            android:textSize="15sp"
+            android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/widget_group"
-            android:layout_width="45dp"
+            android:layout_width="58dp"
             android:layout_height="32dp"
             android:layout_marginRight="6dp"
             android:background="@drawable/widget_group_chip"
             android:gravity="center"
             android:maxLines="1"
-            android:text="A조"
+            android:text="4개 조"
             android:textColor="#FFFFFF"
-            android:textSize="12sp"
+            android:textSize="10.5sp"
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/widget_next"
+            android:id="@+id/week_widget_next"
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="@drawable/widget_nav_button"
@@ -66,18 +66,18 @@
     </LinearLayout>
 
     <ImageView
-        android:id="@+id/widget_calendar_image"
+        android:id="@+id/week_widget_image"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="7dp"
         android:layout_weight="1"
         android:adjustViewBounds="true"
-        android:contentDescription="@string/widget_calendar_description"
-        android:scaleType="fitXY"
-        android:layout_marginTop="3dp"
-        android:layout_marginBottom="7dp" />
+        android:contentDescription="@string/week_widget_calendar_description"
+        android:scaleType="fitXY" />
 
     <TextView
-        android:id="@+id/widget_footer"
+        android:id="@+id/week_widget_footer"
         android:layout_width="match_parent"
         android:layout_height="34dp"
         android:background="@drawable/widget_footer_background"
@@ -86,7 +86,7 @@
         android:maxLines="1"
         android:paddingLeft="11dp"
         android:paddingRight="11dp"
-        android:text="@string/widget_open_hint"
+        android:text="@string/week_widget_open_hint"
         android:textColor="#525D73"
         android:textSize="11sp"
         android:textStyle="bold" />

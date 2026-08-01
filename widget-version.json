@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "1.7.0",
+  "versionCode": 9,
+  "versionName": "1.8.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "위젯을 앱과 같은 카드형 달력 UI로 개선하고, 근무 배지·메모·오늘 표시를 더 선명하게 표시합니다."
+  "notes": "카카오톡 친구 초대를 앱으로 연결하고, 월간 달력과 A/B/C/D 4개 조 주간 위젯을 별도로 제공합니다."
 }

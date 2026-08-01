@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">교대캘린더</string>
-    <string name="widget_description">내 조 또는 A/B/C/D 4개 조를 비교하는 월간 교대 달력</string>
+    <string name="widget_description">선택한 내 조의 월간 교대 달력</string>
     <string name="widget_default_title">이번 달 근무</string>
-    <string name="widget_calendar_description">내 조 및 4개 조 월간 교대근무 달력</string>
+    <string name="widget_calendar_description">선택한 내 조의 월간 교대근무 달력</string>
     <string name="widget_open_hint">오늘 근무를 불러오는 중</string>
+    <string name="week_widget_description">A/B/C/D 4개 조를 일주일 단위로 비교하는 위젯</string>
+    <string name="week_widget_calendar_description">A/B/C/D 4개 조 주간 교대근무표</string>
+    <string name="week_widget_open_hint">4개 조 일주일 근무를 불러오는 중</string>
 
     <string name="update_title">새 버전 %1$s</string>
     <string name="update_message_default">새 버전으로 업데이트할까요?</string>
