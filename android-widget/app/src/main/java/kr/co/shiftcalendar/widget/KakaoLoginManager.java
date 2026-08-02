@@ -1,6 +1,8 @@
 package kr.co.shiftcalendar.widget;
 
 import android.app.Activity;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import com.kakao.sdk.auth.model.OAuthToken;
@@ -16,6 +18,7 @@ import kotlin.Unit;
 /** 카카오 토큰은 네이티브 SDK 안에만 두고 WebView에는 닉네임만 전달합니다. */
 final class KakaoLoginManager {
     private static final String TAG = "KakaoLoginManager";
+    private static final long LOGIN_TIMEOUT_MS = 45_000L;
 
     interface Listener {
         void onConnected(String nickname);
@@ -27,36 +30,52 @@ final class KakaoLoginManager {
     }
 
     static void login(Activity activity, Listener listener) {
+        LoginAttempt attempt = new LoginAttempt(listener);
+        attempt.startTimeout();
         UserApiClient client = UserApiClient.getInstance();
         if (client.isKakaoTalkLoginAvailable(activity)) {
             client.loginWithKakaoTalk(activity, (token, error) -> {
                 if (token != null) {
-                    loadProfile(listener);
+                    loadProfile(attempt);
                 } else if (isCancelled(error)) {
-                    listener.onError("카카오 로그인이 취소됐어요.", true);
+                    attempt.error("카카오 로그인이 취소됐어요.", true);
                 } else {
-                    Log.w(TAG, "KakaoTalk login failed", error);
-                    listener.onError(
-                            "카카오톡 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.",
-                            false
-                    );
+                    Log.w(TAG, "KakaoTalk login failed; trying Kakao Account", error);
+                    loginWithAccount(activity, attempt);
                 }
                 return Unit.INSTANCE;
             });
         } else {
-            loginWithAccount(activity, listener);
+            loginWithAccount(activity, attempt);
         }
     }
 
-    private static void loginWithAccount(Activity activity, Listener listener) {
+    private static void loginWithAccount(Activity activity, LoginAttempt attempt) {
         UserApiClient.getInstance().loginWithKakaoAccount(activity, (token, error) -> {
             if (token != null) {
-                loadProfile(listener);
+                loadProfile(attempt);
             } else if (isCancelled(error)) {
-                listener.onError("카카오 로그인이 취소됐어요.", true);
+                attempt.error("카카오 로그인이 취소됐어요.", true);
             } else {
                 Log.w(TAG, "Kakao account login failed", error);
-                listener.onError("카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.", false);
+                attempt.error("카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.", false);
+            }
+            return Unit.INSTANCE;
+        });
+    }
+
+    private static void loadProfile(LoginAttempt attempt) {
+        UserApiClient.getInstance().me((user, error) -> {
+            if (user != null) {
+                String nickname = nicknameOf(user);
+                if (!nickname.isEmpty()) {
+                    attempt.connected(nickname);
+                } else {
+                    attempt.error("카카오 동의 항목에서 닉네임 사용을 설정해 주세요.", false);
+                }
+            } else {
+                Log.w(TAG, "Failed to load Kakao profile after login", error);
+                attempt.error("카카오 로그인 정보 확인에 실패했어요. 다시 시도해 주세요.", false);
             }
             return Unit.INSTANCE;
         });
@@ -123,5 +142,47 @@ final class KakaoLoginManager {
     private static boolean isMissingToken(Throwable error) {
         return error instanceof ClientError
                 && ((ClientError) error).getReason() == ClientErrorCause.TokenNotFound;
+    }
+
+    /** 로그인 콜백이 유실돼도 WebView가 확인 중 상태에 계속 머물지 않게 합니다. */
+    private static final class LoginAttempt {
+        private final Listener listener;
+        private final Handler handler = new Handler(Looper.getMainLooper());
+        private boolean completed;
+        private final Runnable timeout = () -> error(
+                "카카오 로그인 응답이 늦어지고 있어요. 다시 시도해 주세요.",
+                false
+        );
+
+        LoginAttempt(Listener listener) {
+            this.listener = listener;
+        }
+
+        void startTimeout() {
+            handler.postDelayed(timeout, LOGIN_TIMEOUT_MS);
+        }
+
+        synchronized void connected(String nickname) {
+            if (!finish()) {
+                return;
+            }
+            listener.onConnected(nickname);
+        }
+
+        synchronized void error(String message, boolean cancelled) {
+            if (!finish()) {
+                return;
+            }
+            listener.onError(message, cancelled);
+        }
+
+        private boolean finish() {
+            if (completed) {
+                return false;
+            }
+            completed = true;
+            handler.removeCallbacks(timeout);
+            return true;
+        }
     }
 }

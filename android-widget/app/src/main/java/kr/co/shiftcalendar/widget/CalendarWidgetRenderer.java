@@ -21,9 +21,9 @@ final class CalendarWidgetRenderer {
     private static final int DEFAULT_HEIGHT = 440;
     private static final int MIN_HEIGHT = 350;
     private static final int MAX_HEIGHT = 520;
-    private static final int DEFAULT_WEEK_HEIGHT = 260;
-    private static final int MIN_WEEK_HEIGHT = 220;
-    private static final int MAX_WEEK_HEIGHT = 300;
+    private static final int DEFAULT_WEEK_HEIGHT = 200;
+    private static final int MIN_WEEK_HEIGHT = 180;
+    private static final int MAX_WEEK_HEIGHT = 240;
     private static final float RENDER_SCALE = 2.5f;
     private static final int WEEK_HEIGHT = 32;
     private static final int ROWS = 6;
@@ -72,7 +72,7 @@ final class CalendarWidgetRenderer {
             int widgetWidthDp,
             int widgetHeightDp
     ) {
-        int height = weekHeight(widgetWidthDp, widgetHeightDp);
+        int height = calendarHeight(widgetWidthDp, widgetHeightDp);
         Bitmap bitmap = Bitmap.createBitmap(
                 Math.round(WIDTH * RENDER_SCALE),
                 Math.round(height * RENDER_SCALE),
@@ -124,7 +124,7 @@ final class CalendarWidgetRenderer {
             int widgetWidthDp,
             int widgetHeightDp
     ) {
-        int height = calendarHeight(widgetWidthDp, widgetHeightDp);
+        int height = weekHeight(widgetWidthDp, widgetHeightDp);
         Bitmap bitmap = Bitmap.createBitmap(
                 Math.round(WIDTH * RENDER_SCALE),
                 Math.round(height * RENDER_SCALE),

@@ -1,12 +1,9 @@
 package kr.co.shiftcalendar.widget;
 
 import android.app.Activity;
-import android.content.Intent;
-import android.net.Uri;
 import android.util.Log;
 
 import com.kakao.sdk.share.ShareClient;
-import com.kakao.sdk.share.WebSharerClient;
 import com.kakao.sdk.template.model.Button;
 import com.kakao.sdk.template.model.Link;
 import com.kakao.sdk.template.model.TextTemplate;
@@ -57,8 +54,8 @@ final class KakaoShareManager {
                                 if (error == null && sharingResult != null) {
                                     activity.startActivity(sharingResult.getIntent());
                                 } else {
-                                    Log.w(TAG, "Native Kakao share failed; using web sharer", error);
-                                    openWebShare(activity, template, fallback);
+                                    Log.w(TAG, "Native Kakao share failed; using Android share", error);
+                                    fallback.run();
                                 }
                             });
                             return Unit.INSTANCE;
@@ -67,23 +64,9 @@ final class KakaoShareManager {
                 return;
             }
 
-            openWebShare(activity, template, fallback);
+            fallback.run();
         } catch (RuntimeException error) {
-            Log.w(TAG, "Kakao share setup failed; using web sharer", error);
-            openWebShare(activity, template, fallback);
-        }
-    }
-
-    private static void openWebShare(
-            Activity activity,
-            TextTemplate template,
-            Runnable fallback
-    ) {
-        try {
-            Uri webShareUrl = WebSharerClient.getInstance().makeDefaultUrl(template);
-            activity.startActivity(new Intent(Intent.ACTION_VIEW, webShareUrl));
-        } catch (RuntimeException error) {
-            Log.w(TAG, "Kakao web share failed; using Android share sheet", error);
+            Log.w(TAG, "Kakao share setup failed; using Android share", error);
             fallback.run();
         }
     }

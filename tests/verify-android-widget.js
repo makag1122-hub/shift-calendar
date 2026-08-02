@@ -90,6 +90,14 @@ assert(renderer.includes('drawAllGroups('), '위젯의 A/B/C/D 4행 비교 렌�
 assert(renderer.includes('renderWeek('), '4개 조 주간 위젯 렌더링이 없습니다.');
 assert(renderer.includes('drawWeekGroups('), '4개 조 주간 4행 비교 렌더링이 없습니다.');
 assert(renderer.includes('calendarHeight('), '위젯 크기에 맞춘 달력 비율 계산이 없습니다.');
+assert(
+  /static Result render\([\s\S]*?int height = calendarHeight\(/.test(renderer),
+  '일반 달력 위젯이 월간 높이 계산을 사용하지 않습니다.'
+);
+assert(
+  /static Result renderWeek\([\s\S]*?int height = weekHeight\(/.test(renderer),
+  '4개 조 위젯이 낮은 주간 높이 계산을 사용하지 않습니다.'
+);
 assert(renderer.includes('drawTag('), '앱과 같은 정산 태그 배지가 위젯에 없습니다.');
 assert(provider.includes('OPTION_APPWIDGET_MIN_WIDTH'), '위젯 너비에 맞춘 렌더링이 없습니다.');
 assert(provider.includes('OPTION_APPWIDGET_MIN_HEIGHT'), '위젯 높이에 맞춘 렌더링이 없습니다.');
@@ -98,7 +106,7 @@ assert(weekProvider.includes('WEEK_PREVIOUS') && weekProvider.includes('WEEK_NEX
 assert(weekProvider.includes('Calendar.WEEK_OF_YEAR'), '주간 위젯이 7일 단위로 이동하지 않습니다.');
 assert(weekWidgetLayout.includes('@+id/week_widget_image'), '4개 조 주간 위젯 레이아웃이 없습니다.');
 assert(!weekWidgetLayout.includes('week_widget_footer'), '4개 조 주간 위젯에 불필요한 하단 영역이 남아 있습니다.');
-assert(weekWidgetInfo.includes('android:targetCellHeight="2"'), '4개 조 주간 위젯 높이가 2칸으로 줄어들지 않았습니다.');
+assert(weekWidgetInfo.includes('android:targetCellHeight="1"'), '4개 조 주간 위젯 기본 높이가 1칸으로 줄어들지 않았습니다.');
 const weekRendererStart = renderer.indexOf('private static void drawWeekGroups(');
 const weekRendererEnd = renderer.indexOf('private static JSONArray dayEntry(', weekRendererStart);
 const weekRenderer = renderer.slice(weekRendererStart, weekRendererEnd);
@@ -205,8 +213,8 @@ assert(manifest.includes('android:host="kakaolink"'), '카카오 앱 실행 호�
 assert(manifest.includes('com.kakao.sdk.auth.AuthCodeHandlerActivity'), '카카오 로그인 콜백 Activity가 없습니다.');
 assert(manifest.includes('android:host="oauth"'), '카카오 로그인 OAuth 리다이렉트 주소가 없습니다.');
 assert(kakaoShareManager.includes('ShareClient.getInstance().shareDefault('), '카카오톡 공식 기본 템플릿 공유가 없습니다.');
-assert(kakaoShareManager.includes('openWebShare(activity, template, fallback)'), '카카오 네이티브 공유 실패 시 공식 웹 공유 전환이 없습니다.');
-assert(kakaoShareManager.includes('WebSharerClient.getInstance().makeDefaultUrl(template)'), '카카오 공식 웹 공유 URL 생성이 없습니다.');
+assert(!kakaoShareManager.includes('WebSharerClient'), '카카오 공유 실패 시 4019 웹 공유 화면으로 다시 이동합니다.');
+assert(kakaoShareManager.includes('fallback.run()'), '카카오 네이티브 공유 실패 후 안전한 일반 공유 전환이 없습니다.');
 assert(kakaoShareManager.includes('androidExecutionParams') || kakaoShareManager.includes('executionParams'), '카카오 앱 실행 토큰 전달이 없습니다.');
 assert(kakaoShareManager.includes('교대캘린더에서 열기'), '카카오톡 공유 카드의 앱 열기 버튼이 없습니다.');
 assert(
@@ -217,7 +225,8 @@ assert(mainActivity.includes('public void loginWithKakao()'), '카카오 로그�
 assert(mainActivity.includes('public void disconnectKakao()'), '카카오 연결 해제 WebView 브리지가 없습니다.');
 assert(kakaoLoginManager.includes('loginWithKakaoTalk('), '카카오톡 로그인 호출이 없습니다.');
 assert(kakaoLoginManager.includes('loginWithKakaoAccount('), '카카오톡 미설치 시 계정 로그인 대체 경로가 없습니다.');
-assert(kakaoLoginManager.includes('KakaoTalk login failed'), '카카오톡 로그인 실패가 웹 로그인 중복 실행 없이 종료되지 않습니다.');
+assert(kakaoLoginManager.includes('KakaoTalk login failed; trying Kakao Account'), '카카오톡 로그인 실패 후 카카오계정 대체 로그인이 없습니다.');
+assert(kakaoLoginManager.includes('LOGIN_TIMEOUT_MS'), '카카오 로그인 무한 대기 방지 시간이 없습니다.');
 assert(kakaoLoginManager.includes('.unlink('), '카카오 연결 해제 처리가 없습니다.');
 assert(appSource.includes('window.onAndroidKakaoUser'), '카카오 닉네임 수신 처리가 없습니다.');
 assert(appSource.includes('renderParticipantNames'), '공유방 참여자 이름 UI가 없습니다.');
