@@ -1,6 +1,6 @@
 {
-  "versionCode": 19,
-  "versionName": "1.18.0",
+  "versionCode": 20,
+  "versionName": "1.19.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "카카오 로그인을 없애고 공유방에 표시할 이름을 직접 입력하도록 바꿨습니다. 로그인 실패 안내창이 더 이상 뜨지 않고, 휴대폰 브라우저(PWA)에서도 이름을 정할 수 있습니다."
+  "notes": "친구 초대 메시지에 실제 초대 링크가 보이지 않던 문제를 고쳤습니다. 이제 앱이 없는 친구도 링크를 눌러 브라우저에서 바로 근무표를 볼 수 있습니다."
 }

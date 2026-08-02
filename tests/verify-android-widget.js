@@ -254,7 +254,25 @@ assert(kakaoShareManager.includes('ShareClient.getInstance().shareDefault('), '�
 assert(!kakaoShareManager.includes('WebSharerClient'), '카카오 공유 실패 시 4019 웹 공유 화면으로 다시 이동합니다.');
 assert(kakaoShareManager.includes('fallback.run()'), '카카오 네이티브 공유 실패 후 안전한 일반 공유 전환이 없습니다.');
 assert(kakaoShareManager.includes('androidExecutionParams') || kakaoShareManager.includes('executionParams'), '카카오 앱 실행 토큰 전달이 없습니다.');
-assert(kakaoShareManager.includes('교대캘린더에서 열기'), '카카오톡 공유 카드의 앱 열기 버튼이 없습니다.');
+
+/* 앱이 없는 친구도 초대를 열 수 있어야 합니다 (https 주소가 반드시 실려야 함) */
+assert(
+  !kakaoShareManager.includes('new Link(null, null'),
+  '카카오톡 초대 카드에 초대 주소(webUrl)가 비어 있어 앱 없는 친구가 열 수 없습니다.'
+);
+assert(
+  kakaoShareManager.includes('new Link(inviteUrl, inviteUrl'),
+  '카카오톡 초대 카드에 https 초대 주소가 실리지 않습니다.'
+);
+assert(
+  mainActivity.includes('private void shareWithAndroid(String safeTitle, String safeText, String inviteUrl)')
+    && mainActivity.includes('.append(inviteUrl)'),
+  '기본 공유창 메시지에 https 초대 주소가 들어가지 않습니다.'
+);
+assert(
+  !/message\.append\([^)]*\)\s*\.append\(appLink\)/.test(mainActivity),
+  '기본 공유창이 아직 앱 전용 딥링크(shiftcalendar://)를 초대 링크로 보냅니다.'
+);
 assert(
   appSource.includes("typeof bridge.shareToKakao === 'function'"),
   'app.js가 Android 카카오톡 공유 브리지를 사용하지 않습니다.'

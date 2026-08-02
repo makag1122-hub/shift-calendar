@@ -511,30 +511,27 @@ public class MainActivity extends Activity {
             if (token.isEmpty()) {
                 return;
             }
-            String appLink = new Uri.Builder()
-                    .scheme(SHARE_SCHEME)
-                    .authority(SHARE_HOST)
-                    .appendQueryParameter("token", token)
-                    .build()
-                    .toString();
 
+            /* 받는 사람이 앱을 안 깔았어도 열 수 있도록 https 초대 주소를 그대로 보냅니다.
+               앱이 깔려 있으면 실행 파라미터(token)로 앱이 바로 열립니다. */
             activity.runOnUiThread(() -> KakaoShareManager.shareInvitation(
                     activity,
                     safeTitle,
                     safeText,
+                    safeUrl,
                     token,
-                    () -> shareWithAndroid(safeTitle, safeText, appLink)
+                    () -> shareWithAndroid(safeTitle, safeText, safeUrl)
             ));
         }
 
-        private void shareWithAndroid(String safeTitle, String safeText, String appLink) {
+        private void shareWithAndroid(String safeTitle, String safeText, String inviteUrl) {
             StringBuilder message = new StringBuilder();
             if (!safeText.isEmpty()) {
                 message.append(safeText).append("\n\n");
             }
-            message.append("교대캘린더 앱에서 근무표 열기\n")
-                    .append(appLink)
-                    .append("\n\n앱이 없다면 먼저 설치한 뒤 초대 링크를 다시 눌러주세요.\n")
+            message.append("👉 초대 링크 (눌러서 근무표 보기)\n")
+                    .append(inviteUrl)
+                    .append("\n\n휴대폰 브라우저에서 바로 열리고, 교대캘린더 앱이 있으면 앱으로 열립니다.\n")
                     .append(PLAY_STORE_URL);
             Intent share = new Intent(Intent.ACTION_SEND)
                     .setType("text/plain")
