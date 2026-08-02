@@ -46,6 +46,14 @@ assert(
   'A/B/C/D 4행 가로 비교표 렌더링이 없습니다.'
 );
 assert(
+  !index.includes('id="groupTabs"') && !index.includes('id="todayBanner"'),
+  '앱 상단에 중복된 내 조 선택 또는 오늘 근무 영역이 남아 있습니다.'
+);
+assert(
+  index.includes('id="teamBoard"') && app.includes("$('teamBoard').addEventListener"),
+  'A/B/C/D 오늘 배치에서 조를 선택하는 기능이 없습니다.'
+);
+assert(
   css.includes('grid-template-rows:28px repeat(4, 68px);'),
   '4개 조 비교표가 정확히 네 행으로 고정되지 않았습니다.'
 );

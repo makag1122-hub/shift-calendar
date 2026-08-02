@@ -68,62 +68,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .icon-btn:active{ transform: scale(.94); }
 .icon-btn.nav{ font-size: 24px; }
 
-/* 내 조 선택 */
-.group-switcher{
-  background: rgba(251,252,254,.94);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  padding: 10px;
-  margin: 0 0 10px;
-}
-.group-switch-head{
-  display:flex; align-items:center; justify-content:space-between;
-  gap: 10px; margin-bottom: 8px;
-  font-size: 12.5px; color: var(--ink-soft); font-weight:700;
-}
-.group-switch-head b{ color: var(--brand); font-size: 13px; }
-.group-tabs{ display:grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
-.group-tab{
-  border: 1px solid var(--line);
-  background: #f4f6f9;
-  color: var(--ink);
-  border-radius: 10px;
-  min-height: 38px;
-  font-size: 13px;
-  font-weight: 800;
-  font-family: inherit;
-  cursor: pointer;
-}
-.group-tab.active{
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
-  box-shadow: 0 7px 18px rgba(70,84,197,.22);
-}
-.group-tab:active{ transform: scale(.96); }
-
-/* 오늘 배너 */
-.today-banner{
-  --accent: var(--brand);
-  background: rgba(251,252,254,.96);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 13px 16px;
-  margin: 4px 0 10px;
-  display:grid;
-  grid-template-columns: minmax(0,1fr) auto;
-  align-items:center;
-  gap:10px;
-  border:1px solid rgba(223,228,236,.75);
-  border-left: 5px solid var(--accent);
-}
-.tb-left{ display:flex; flex-direction:column; gap:6px; }
-.tb-date{ font-size: 12.5px; color: var(--ink-soft); }
-.tb-shift{ font-size: 16px; font-weight: 700; }
-.tb-badge{ color:#fff; padding: 3px 12px; border-radius: 999px; font-size: 15px; }
-.tb-time{ font-size: 13px; color: var(--ink); font-weight:800; text-align:right; white-space:nowrap; }
-
 /* 오늘 조별 배치 */
 .team-board{
   background: var(--card);

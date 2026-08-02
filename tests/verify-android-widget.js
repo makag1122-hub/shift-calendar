@@ -73,6 +73,10 @@ const weekWidgetLayout = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'layout', 'widget_four_groups_week.xml'),
   'utf8'
 );
+const weekWidgetInfo = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'xml', 'four_group_week_widget_info.xml'),
+  'utf8'
+);
 
 assert(manifest.includes('android.appwidget.action.APPWIDGET_UPDATE'), 'Android AppWidget 수신기가 등록되지 않았습니다.');
 assert(provider.includes('ACTION_PREVIOUS') && provider.includes('ACTION_NEXT'), '위젯 월 이동 동작이 없습니다.');
@@ -93,6 +97,14 @@ assert(manifest.includes('.FourGroupWeekWidgetProvider'), '4개 조 주간 위�
 assert(weekProvider.includes('WEEK_PREVIOUS') && weekProvider.includes('WEEK_NEXT'), '주간 위젯의 주 이동 동작이 없습니다.');
 assert(weekProvider.includes('Calendar.WEEK_OF_YEAR'), '주간 위젯이 7일 단위로 이동하지 않습니다.');
 assert(weekWidgetLayout.includes('@+id/week_widget_image'), '4개 조 주간 위젯 레이아웃이 없습니다.');
+assert(!weekWidgetLayout.includes('week_widget_footer'), '4개 조 주간 위젯에 불필요한 하단 영역이 남아 있습니다.');
+assert(weekWidgetInfo.includes('android:targetCellHeight="2"'), '4개 조 주간 위젯 높이가 2칸으로 줄어들지 않았습니다.');
+const weekRendererStart = renderer.indexOf('private static void drawWeekGroups(');
+const weekRendererEnd = renderer.indexOf('private static JSONArray dayEntry(', weekRendererStart);
+const weekRenderer = renderer.slice(weekRendererStart, weekRendererEnd);
+assert(weekRendererStart >= 0 && weekRendererEnd > weekRendererStart, '4개 조 주간 위젯 렌더러 범위를 찾지 못했습니다.');
+assert(!weekRenderer.includes('memoText('), '4개 조 주간 위젯에 메모가 다시 표시되고 있습니다.');
+assert(!weekRenderer.includes('optString(1'), '4개 조 주간 위젯에 정산 태그가 다시 표시되고 있습니다.');
 
 /* ---------- 앱 내 업데이트 확인 ----------
    widget-version.json은 설치된 앱이 새 버전을 판단하는 기준입니다.

@@ -535,42 +535,6 @@ function renderWeekdays(){
   ).join('');
 }
 
-function renderGroupSwitcher(){
-  const group = currentGroup();
-  const label = $('activeGroupLabel');
-  if(label) label.textContent = `${group}조`;
-  $('groupTabs').innerHTML = GROUPS.map(g =>
-    `<button class="group-tab${g===group?' active':''}" data-group="${g}" aria-pressed="${g===group}">
-      ${g}조
-    </button>`
-  ).join('');
-}
-
-function renderTodayBanner(){
-  const el = $('todayBanner');
-  const d = new Date();
-  const wd = WEEK[d.getDay()];
-  const today = todayStr();
-  const group = currentGroup();
-  const key = shiftFor(today, group);
-  const t = st(key);
-  const shiftDay = shiftDayText(today, group);
-  const dateLabel = `오늘 ${d.getMonth()+1}월 ${d.getDate()}일 (${wd}) · ${group}조 기준`;
-  if(!t){
-    el.style.setProperty('--accent', '#94a3b8');
-    el.innerHTML = `<div class="tb-left"><div class="tb-date">${dateLabel}</div>
-      <div class="tb-shift">근무 미설정</div></div>`;
-    return;
-  }
-  el.style.setProperty('--accent', t.color);
-  el.innerHTML = `
-    <div class="tb-left">
-      <div class="tb-date">${dateLabel}</div>
-      <div class="tb-shift"><span class="tb-badge" style="background:${t.color}">${group}조 ${t.label}</span></div>
-    </div>
-    <div class="tb-time">${shiftDay ? `${shiftDay} · ` : ''}${timeText(t)}</div>`;
-}
-
 function renderTeamBoard(){
   const el = $('teamBoard');
   if(!el) return;
@@ -876,8 +840,6 @@ function queueAndroidWidgetSnapshot(){
 window.publishAndroidWidgetSnapshot = publishAndroidWidgetSnapshot;
 
 function renderAll(){
-  renderGroupSwitcher();
-  renderTodayBanner();
   renderTeamBoard();
   renderCalendar();
   renderLegend();
@@ -999,7 +961,7 @@ function setShift(key){
       else overrides[ds] = key;
     });
     saveState();
-    renderCalendar(); renderTodayBanner(); renderTeamBoard();
+    renderCalendar(); renderTeamBoard();
     openRangeSheet(sheetRange.start, sheetRange.end);
     return;
   }
@@ -1011,7 +973,6 @@ function setShift(key){
   saveState();
   openDaySheet(selectedDate);
   renderCalendar();
-  renderTodayBanner();
   renderTeamBoard();
 }
 
@@ -1043,7 +1004,7 @@ function setDesig(tag){
   else gd[selectedDate] = tag;
   saveState();
   openDaySheet(selectedDate);
-  renderCalendar(); renderTodayBanner(); renderTeamBoard();
+  renderCalendar(); renderTeamBoard();
 }
 
 // 특근/지근/지휴는 전부 자동 계산 (개수 입력칸 제거)
@@ -1587,11 +1548,6 @@ function selectCalendarView(nextView){
 
 /* ---------- 이벤트 연결 ---------- */
 function wire(){
-  // 내 조 선택
-  $('groupTabs').addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-group]');
-    if(btn) selectGroup(btn.dataset.group);
-  });
   $('teamBoard').addEventListener('click', (e)=>{
     const card = e.target.closest('[data-group]');
     if(card) selectGroup(card.dataset.group);
@@ -1661,13 +1617,13 @@ function wire(){
     if(sheetRange){
       const ov = groupOverrideMap(group), mm = memosFor(group);
       rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ delete ov[ds]; delete mm[ds]; });
-      saveState(); renderCalendar(); renderTodayBanner(); renderTeamBoard();
+      saveState(); renderCalendar(); renderTeamBoard();
       openRangeSheet(sheetRange.start, sheetRange.end);
       return;
     }
     if(selectedDate){
       delete groupOverrideMap(group)[selectedDate];
-      saveState(); openDaySheet(selectedDate); renderCalendar(); renderTodayBanner(); renderTeamBoard();
+      saveState(); openDaySheet(selectedDate); renderCalendar(); renderTeamBoard();
     }
   };
   $('sheetOptions').addEventListener('click', (e)=>{

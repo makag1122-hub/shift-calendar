@@ -137,7 +137,6 @@ public class FourGroupWeekWidgetProvider extends AppWidgetProvider {
         );
         views.setTextViewText(R.id.week_widget_title, rangeTitle(weekStart));
         views.setImageViewBitmap(R.id.week_widget_image, result.bitmap);
-        views.setTextViewText(R.id.week_widget_footer, result.footer);
 
         views.setOnClickPendingIntent(
                 R.id.week_widget_previous,
@@ -151,11 +150,6 @@ public class FourGroupWeekWidgetProvider extends AppWidgetProvider {
                 R.id.week_widget_title,
                 broadcastIntent(context, widgetId, ACTION_TODAY, 3)
         );
-        views.setOnClickPendingIntent(
-                R.id.week_widget_footer,
-                broadcastIntent(context, widgetId, ACTION_TODAY, 4)
-        );
-
         Intent openIntent = new Intent(context, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent openApp = PendingIntent.getActivity(

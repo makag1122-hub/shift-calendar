@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "1.13.0",
+  "versionCode": 15,
+  "versionName": "1.14.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "카카오 로그인 완료 후 앱으로 돌아오지 않던 문제와 로그인 화면이 두 번 표시되던 문제를 수정했습니다."
+  "notes": "4개 조 주간 위젯을 근무형태 중심의 낮고 촘촘한 화면으로 개선하고, 앱 상단의 중복된 내 조 선택과 오늘 근무 영역을 정리했습니다."
 }

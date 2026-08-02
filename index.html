@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192-v2.png" />
   <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
-  <link rel="stylesheet" href="style.css?v=20260802a" />
+  <link rel="stylesheet" href="style.css?v=20260802b" />
 </head>
 <body>
   <div class="app">
@@ -23,7 +23,7 @@
         <img class="brand-logo" src="icons/icon-192-v2.png" alt="" />
         <div class="brand-text">
           <h1>교대캘린더</h1>
-          <p class="brand-sub">내 조 선택 · 4조 3교대</p>
+          <p class="brand-sub">4조 3교대 · 근무표와 메모</p>
         </div>
       </div>
       <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
@@ -31,18 +31,6 @@
 
     <!-- 공유 보기 + 공동 메모 배너 -->
     <div class="sync-banner" id="syncBanner" hidden></div>
-
-    <!-- 내 조 선택 -->
-    <section class="group-switcher" aria-label="내 조 선택">
-      <div class="group-switch-head">
-        <span>내 조</span>
-        <b id="activeGroupLabel">A조</b>
-      </div>
-      <div class="group-tabs" id="groupTabs"></div>
-    </section>
-
-    <!-- 오늘 근무 배너 -->
-    <section class="today-banner" id="todayBanner"></section>
 
     <!-- 오늘 조별 배치 -->
     <section class="team-board" id="teamBoard"></section>
@@ -193,9 +181,9 @@
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20260802a"></script>
-  <script src="sync.js?v=20260802a"></script>
-  <script src="app.js?v=20260802a"></script>
+  <script src="sync-config.js?v=20260802b"></script>
+  <script src="sync.js?v=20260802b"></script>
+  <script src="app.js?v=20260802b"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -205,7 +193,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20260802a', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20260802b', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });
