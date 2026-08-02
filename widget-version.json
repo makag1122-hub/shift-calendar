@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "1.10.0",
+  "versionCode": 12,
+  "versionName": "1.11.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "새로운 3D 교대캘린더 아이콘을 적용했습니다. 카카오 공식 공유 카드의 앱 열기 버튼으로 공유받은 근무표를 바로 불러올 수 있습니다."
+  "notes": "카카오 네이티브 공유 검증에 실패해도 일반 텍스트가 아닌 공식 웹 공유 카드로 자동 전환됩니다. 앱 안의 버전 표시도 실제 Android 버전과 일치하도록 수정했습니다."
 }

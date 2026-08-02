@@ -3,6 +3,7 @@ package kr.co.shiftcalendar.widget;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.util.Log;
 
 import com.kakao.sdk.share.ShareClient;
 import com.kakao.sdk.share.WebSharerClient;
@@ -16,6 +17,8 @@ import java.util.Map;
 import kotlin.Unit;
 
 final class KakaoShareManager {
+    private static final String TAG = "KakaoShareManager";
+
     private KakaoShareManager() {
     }
 
@@ -54,7 +57,8 @@ final class KakaoShareManager {
                                 if (error == null && sharingResult != null) {
                                     activity.startActivity(sharingResult.getIntent());
                                 } else {
-                                    fallback.run();
+                                    Log.w(TAG, "Native Kakao share failed; using web sharer", error);
+                                    openWebShare(activity, template, fallback);
                                 }
                             });
                             return Unit.INSTANCE;
@@ -63,9 +67,23 @@ final class KakaoShareManager {
                 return;
             }
 
+            openWebShare(activity, template, fallback);
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Kakao share setup failed; using web sharer", error);
+            openWebShare(activity, template, fallback);
+        }
+    }
+
+    private static void openWebShare(
+            Activity activity,
+            TextTemplate template,
+            Runnable fallback
+    ) {
+        try {
             Uri webShareUrl = WebSharerClient.getInstance().makeDefaultUrl(template);
             activity.startActivity(new Intent(Intent.ACTION_VIEW, webShareUrl));
         } catch (RuntimeException error) {
+            Log.w(TAG, "Kakao web share failed; using Android share sheet", error);
             fallback.run();
         }
     }

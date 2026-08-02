@@ -113,6 +113,16 @@ public class MainActivity extends Activity {
                         "window.publishAndroidWidgetSnapshot && window.publishAndroidWidgetSnapshot();",
                         null
                 );
+                String appVersion = BuildConfig.VERSION_NAME;
+                view.evaluateJavascript(
+                        "(function(){"
+                                + "document.querySelectorAll('.app-version').forEach(function(el){"
+                                + "el.textContent='ver " + appVersion + "';});"
+                                + "document.querySelectorAll('.set-foot').forEach(function(el){"
+                                + "el.textContent='교대캘린더 · ver " + appVersion + "';});"
+                                + "})();",
+                        null
+                );
             }
         });
         webView.loadUrl(launchUrl(getIntent()));
