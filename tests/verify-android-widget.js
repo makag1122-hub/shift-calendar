@@ -117,6 +117,10 @@ const kakaoShareManager = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'KakaoShareManager.java'),
   'utf8'
 );
+const kakaoLoginManager = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'KakaoLoginManager.java'),
+  'utf8'
+);
 const shiftCalendarApplication = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'ShiftCalendarApplication.java'),
   'utf8'
@@ -180,6 +184,7 @@ assert(mainActivity.includes('shiftcalendar'), '카카오톡 공유가 앱 딥�
 assert(mainActivity.includes('onNewIntent('), '실행 중인 앱에서 친구 초대 링크를 받지 못합니다.');
 assert(mainActivity.includes('BuildConfig.VERSION_NAME'), '앱 화면의 버전 표시가 실제 Android 버전과 연결되지 않았습니다.');
 assert(buildGradle.includes("com.kakao.sdk:v2-share:2.24.0"), '카카오톡 공식 공유 SDK가 연결되지 않았습니다.');
+assert(buildGradle.includes("com.kakao.sdk:v2-user:2.24.0"), '카카오 로그인 SDK가 연결되지 않았습니다.');
 assert(gradleProperties.includes('android.useAndroidX=true'), '카카오 SDK의 AndroidX 사용 설정이 없습니다.');
 assert(shiftCalendarApplication.includes('KakaoSdk.init('), '카카오 SDK 초기화가 없습니다.');
 assert(manifest.includes('android:name=".ShiftCalendarApplication"'), '카카오 SDK Application이 매니페스트에 없습니다.');
@@ -194,6 +199,13 @@ assert(
   appSource.includes("typeof bridge.shareToKakao === 'function'"),
   'app.js가 Android 카카오톡 공유 브리지를 사용하지 않습니다.'
 );
+assert(mainActivity.includes('public void loginWithKakao()'), '카카오 로그인 WebView 브리지가 없습니다.');
+assert(mainActivity.includes('public void disconnectKakao()'), '카카오 연결 해제 WebView 브리지가 없습니다.');
+assert(kakaoLoginManager.includes('loginWithKakaoTalk('), '카카오톡 로그인 호출이 없습니다.');
+assert(kakaoLoginManager.includes('loginWithKakaoAccount('), '카카오톡 미설치 시 계정 로그인 대체 경로가 없습니다.');
+assert(kakaoLoginManager.includes('.unlink('), '카카오 연결 해제 처리가 없습니다.');
+assert(appSource.includes('window.onAndroidKakaoUser'), '카카오 닉네임 수신 처리가 없습니다.');
+assert(appSource.includes('renderParticipantNames'), '공유방 참여자 이름 UI가 없습니다.');
 
 console.log('Android 월간 달력 위젯 데이터 검사 통과');
 console.log(`업데이트 버전 정보 일치: ${gradleVersionName} (versionCode ${gradleVersionCode})`);

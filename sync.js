@@ -18,12 +18,17 @@
   let fb = null;         // { db, doc, setDoc, updateDoc, onSnapshot }
   let docRef = null;
   let unsub = null;
+  let participantsUnsub = null;
   let pushTimer = null;
   let memoPushTimer = null;
   let pendingMemoUpdates = {};
   let status = 'off';    // off | connecting | live | readonly | error
   let lastError = '';
   let lastUpdated = 0;   // 마지막으로 클라우드에 반영된 시각(ms) — viewer는 원격, owner는 내 push
+  let profileName = '';
+  let profileResolved = false;
+  let participantError = '';
+  let participantList = [];
 
   /* ---------- 저장/불러오기 ---------- */
   function loadCfg(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); }catch(e){ return null; } }
@@ -92,6 +97,8 @@
       deleteDoc: fsMod.deleteDoc,
       onSnapshot: fsMod.onSnapshot,
       arrayUnion: fsMod.arrayUnion,
+      collection: fsMod.collection,
+      getDocs: fsMod.getDocs,
     };
     return fb;
   }
@@ -116,6 +123,8 @@
             setStatus('readonly');
           },
           (err)=>{ setStatus('error', friendly(err)); });
+        subscribeParticipants();
+        await syncParticipantProfile();
       }else{
         await pushNow();          // 최초 1회 현재 상태 업로드(문서 생성)
         unsub = f.onSnapshot(docRef,
@@ -128,6 +137,8 @@
             setStatus('live');
           },
           (err)=>{ setStatus('error', friendly(err)); });
+        subscribeParticipants();
+        await syncParticipantProfile();
         setStatus('live');
       }
     }catch(e){ setStatus('error', friendly(e)); }
@@ -139,6 +150,81 @@
     if(/failed to fetch|network|offline/i.test(m)) return '네트워크 연결을 확인해 주세요.';
     if(/invalid-api-key|api-key/i.test(m)) return 'API 키가 올바르지 않아요. 설정을 다시 붙여넣어 주세요.';
     return m;
+  }
+
+  function cleanProfileName(value){
+    return String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/\s+/g, ' ').trim().slice(0, 20);
+  }
+
+  function participantDoc(){
+    if(!fb || !fb.uid || !cfg || !docRef) return null;
+    return fb.doc(fb.db, 'calendars', cfg.code, 'participants', fb.uid);
+  }
+
+  function subscribeParticipants(){
+    if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
+    participantList = [];
+    if(!window.AndroidWidget || !fb || !fb.collection || !cfg || !docRef) return;
+    const ref = fb.collection(fb.db, 'calendars', cfg.code, 'participants');
+    participantsUnsub = fb.onSnapshot(ref,
+      (snap)=>{
+        participantError = '';
+        participantList = (snap.docs || []).map(item=>{
+          const value = item.data ? item.data() : {};
+          return {
+            name: cleanProfileName(value && value.name),
+            role: value && value.role === 'owner' ? 'owner' : 'viewer',
+            joinedAt: Number(value && value.joinedAt) || 0,
+          };
+        }).filter(item=>item.name).sort((a,b)=>{
+          if(a.role !== b.role) return a.role === 'owner' ? -1 : 1;
+          return a.joinedAt - b.joinedAt;
+        }).slice(0, 10);
+        if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
+      },
+      (err)=>{
+        participantError = friendly(err);
+        if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
+      });
+  }
+
+  async function upsertParticipant(){
+    const ref = participantDoc();
+    if(!ref || !profileName || !cfg) return;
+    const now = Date.now();
+    try{
+      await fb.setDoc(ref, {
+        name: profileName,
+        role: cfg.role === 'owner' ? 'owner' : 'viewer',
+        joinedAt: now,
+        updatedAt: now,
+      }, { merge:true });
+      participantError = '';
+    }catch(e){
+      participantError = friendly(e);
+      if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
+    }
+  }
+
+  async function removeParticipant(silent){
+    const ref = participantDoc();
+    if(!ref || !fb || !fb.deleteDoc) return;
+    try{
+      await fb.deleteDoc(ref);
+      participantError = '';
+    }catch(e){
+      if(!silent){
+        participantError = friendly(e);
+        if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
+      }
+    }
+  }
+
+  async function syncParticipantProfile(){
+    if(!profileResolved) return;
+    if(profileName) await upsertParticipant();
+    else await removeParticipant();
   }
 
   /* ---------- 원격 → 로컬 반영(viewer) ---------- */
@@ -271,7 +357,23 @@
     role(){ return cfg ? cfg.role : null; },
     code(){ return cfg ? cfg.code : null; },
     lastUpdated(){ return lastUpdated || null; },
-    getStatus(){ return { status, error: lastError, code: cfg?cfg.code:null, role: cfg?cfg.role:null, updatedAt: lastUpdated || null }; },
+    getStatus(){ return { status, error: lastError, participantError, code: cfg?cfg.code:null, role: cfg?cfg.role:null, updatedAt: lastUpdated || null }; },
+    participants(){ return participantList.map(item=>({ ...item })); },
+    profileName(){ return profileName; },
+    async setProfile(name){
+      profileName = cleanProfileName(name);
+      profileResolved = true;
+      participantError = '';
+      if(profileName) await upsertParticipant();
+      if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
+    },
+    async clearProfile(){
+      profileResolved = true;
+      await removeParticipant(false);
+      profileName = '';
+      participantError = '';
+      if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
+    },
     managedReady(){ return !!managedConfig(); },
     async enableOwner(configText){
       const manualText = String(configText || '').trim();
@@ -281,6 +383,7 @@
       }
       const keepCode = (cfg && cfg.code) ? cfg.code : randomCode();
       if(unsub){ unsub(); unsub = null; }
+      if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
       fb = null;  // 설정이 바뀌면 재초기화
       cfg = {
         config,
@@ -293,7 +396,14 @@
       await connect();
     },
     async disable(){
+      await removeParticipant(true);
       if(cfg && cfg.role === 'owner' && docRef && fb && fb.deleteDoc){
+        if(fb.collection && fb.getDocs){
+          try{
+            const people = await fb.getDocs(fb.collection(fb.db, 'calendars', cfg.code, 'participants'));
+            await Promise.all((people.docs || []).map(item=>fb.deleteDoc(item.ref)));
+          }catch(e){}
+        }
         try{
           await fb.deleteDoc(docRef);
         }catch(e){
@@ -302,7 +412,9 @@
         }
       }
       if(unsub){ unsub(); unsub = null; }
+      if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
       clearCfg(); cfg = null; docRef = null; fb = null; lastUpdated = 0;
+      participantList = []; participantError = '';
       pushTimer && clearTimeout(pushTimer);
       memoPushTimer && clearTimeout(memoPushTimer);
       pendingMemoUpdates = {};

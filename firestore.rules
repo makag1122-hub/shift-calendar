@@ -34,6 +34,37 @@ service cloud.firestore {
             .hasOnly(['sharedMemos', 'memoUpdatedAt']));
 
       allow delete: if isOwner();
+
+      match /participants/{uid} {
+        function calendar() {
+          return get(/databases/$(database)/documents/calendars/$(code));
+        }
+        function isCalendarMember() {
+          return request.auth != null
+            && request.auth.uid in calendar().data.memberUids;
+        }
+        function validProfile() {
+          return request.resource.data.keys()
+              .hasOnly(['name', 'role', 'joinedAt', 'updatedAt'])
+            && request.resource.data.name is string
+            && request.resource.data.name.size() >= 1
+            && request.resource.data.name.size() <= 20
+            && request.resource.data.joinedAt is int
+            && request.resource.data.updatedAt is int
+            && ((request.auth.uid == calendar().data.ownerUid
+                  && request.resource.data.role == 'owner')
+              || (request.auth.uid != calendar().data.ownerUid
+                  && request.resource.data.role == 'viewer'));
+        }
+
+        allow read: if isCalendarMember();
+        allow create, update: if isCalendarMember()
+          && request.auth.uid == uid
+          && validProfile();
+        allow delete: if request.auth != null
+          && (request.auth.uid == uid
+            || request.auth.uid == calendar().data.ownerUid);
+      }
     }
   }
 }

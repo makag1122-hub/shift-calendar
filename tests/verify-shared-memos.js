@@ -19,7 +19,7 @@ function wait(ms){
 }
 
 function makeSandbox(role, remoteData){
-  const calls = { setDoc: [], updateDoc: [], renders: 0 };
+  const calls = { setDoc: [], updateDoc: [], deleteDoc: [], renders: 0 };
   const cfg = {
     config: { apiKey: 'test-key', projectId: 'test-project' },
     code: 'shared-calendar',
@@ -68,10 +68,12 @@ function makeSandbox(role, remoteData){
     },
     __fsMod: {
       getFirestore: app => ({ app }),
-      doc: (_db, collection, code) => `${collection}/${code}`,
+      doc: (_db, ...parts) => parts.join('/'),
+      collection: (_db, ...parts) => parts.join('/'),
       setDoc: async (...args) => { calls.setDoc.push(args); },
       updateDoc: async (...args) => { calls.updateDoc.push(args); },
-      deleteDoc: async () => {},
+      deleteDoc: async (...args) => { calls.deleteDoc.push(args); },
+      getDocs: async () => ({ docs: [] }),
       arrayUnion: value => ({ arrayUnion: value }),
       onSnapshot: (_ref, onValue) => {
         if(remoteData) onValue({ data: () => remoteData });
@@ -85,6 +87,28 @@ function makeSandbox(role, remoteData){
   };
   sandbox.window = sandbox;
   return { sandbox, calls };
+}
+
+async function verifyParticipantName(){
+  const { sandbox, calls } = makeSandbox(null);
+  sandbox.SHIFT_CALENDAR_FIREBASE_CONFIG = {
+    apiKey: 'managed-key',
+    projectId: 'managed-project',
+  };
+  vm.runInNewContext(source, sandbox);
+  await sandbox.Sync.enableOwner();
+  await sandbox.Sync.setProfile('  광희  ');
+
+  const write = calls.setDoc.find(call => String(call[0]).includes('/participants/'));
+  assert(write, '공유방 참여자 이름 문서가 저장되지 않았습니다.');
+  assert(write[1].name === '광희', '카카오 닉네임이 정리되어 저장되지 않았습니다.');
+  assert(write[1].role === 'owner', '공유방 소유자 역할이 이름 문서에 없습니다.');
+
+  await sandbox.Sync.clearProfile();
+  assert(
+    calls.deleteDoc.some(call => String(call[0]).includes('/participants/')),
+    '카카오 연결 해제 시 공유방 이름 문서가 삭제되지 않았습니다.'
+  );
 }
 
 async function verifyManagedSetup(){
@@ -173,7 +197,7 @@ async function verifyViewer(){
   );
 }
 
-Promise.all([verifyOwner(), verifyViewer(), verifyManagedSetup()])
+Promise.all([verifyOwner(), verifyViewer(), verifyManagedSetup(), verifyParticipantName()])
   .then(() => console.log('공동 메모 동기화 검사 통과'))
   .catch(error => {
     console.error(error.message);

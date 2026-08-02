@@ -1176,12 +1176,111 @@ service cloud.firestore {
             .hasOnly(['sharedMemos', 'memoUpdatedAt']));
 
       allow delete: if isOwner();
+
+      match /participants/{uid} {
+        function calendar() {
+          return get(/databases/$(database)/documents/calendars/$(code));
+        }
+        function isCalendarMember() {
+          return request.auth != null
+            && request.auth.uid in calendar().data.memberUids;
+        }
+        function validProfile() {
+          return request.resource.data.keys()
+              .hasOnly(['name', 'role', 'joinedAt', 'updatedAt'])
+            && request.resource.data.name is string
+            && request.resource.data.name.size() >= 1
+            && request.resource.data.name.size() <= 20
+            && request.resource.data.joinedAt is int
+            && request.resource.data.updatedAt is int
+            && ((request.auth.uid == calendar().data.ownerUid
+                  && request.resource.data.role == 'owner')
+              || (request.auth.uid != calendar().data.ownerUid
+                  && request.resource.data.role == 'viewer'));
+        }
+
+        allow read: if isCalendarMember();
+        allow create, update: if isCalendarMember()
+          && request.auth.uid == uid
+          && validProfile();
+        allow delete: if request.auth != null
+          && (request.auth.uid == uid
+            || request.auth.uid == calendar().data.ownerUid);
+      }
     }
   }
 }`;
 
 function syncStatusText(s){
   return ({ connecting:'⏳ 연결 중…', live:'🟢 실시간 공유 중', readonly:'💬 공유 연결됨 · 메모 작성 가능', error:'⚠️ 오류', off:'꺼짐' })[s] || s;
+}
+
+let kakaoIdentity = { status:'checking', nickname:'', message:'' };
+
+function androidBridge(){
+  return window.AndroidWidget || null;
+}
+
+function renderKakaoIdentity(){
+  const bridge = androidBridge();
+  if(!bridge || typeof bridge.loginWithKakao !== 'function') return '';
+  if(kakaoIdentity.status === 'connected' && kakaoIdentity.nickname){
+    return `<div class="kakao-identity connected">
+      <span class="kakao-avatar" aria-hidden="true">${escapeHtml(kakaoIdentity.nickname.slice(0,1))}</span>
+      <span><strong>${escapeHtml(kakaoIdentity.nickname)}</strong><small>카카오 닉네임으로 참여 중</small></span>
+      <button class="btn-identity-link" id="syncKakaoDisconnect">연결 해제</button>
+    </div>`;
+  }
+  const waiting = kakaoIdentity.status === 'checking';
+  const message = kakaoIdentity.status === 'error' ? kakaoIdentity.message : '';
+  return `<div class="kakao-login-card">
+    <div><strong>내 이름 표시하기</strong><p>카카오 로그인하면 초대 문구와 공유방 참여자에 닉네임이 표시돼요.</p></div>
+    <button class="btn-kakao-login" id="syncKakaoLogin" ${waiting?'disabled':''}>
+      <span class="kakao-mark" aria-hidden="true"></span>${waiting?'확인 중…':'카카오 로그인'}
+    </button>
+    ${message ? `<p class="kakao-login-error">${escapeHtml(message)}</p>` : ''}
+    <small>이메일·전화번호·프로필 사진은 앱 기능에 사용하거나 저장하지 않습니다.</small>
+  </div>`;
+}
+
+function renderParticipantNames(){
+  if(!androidBridge() || !window.Sync || !Sync.isOn()) return '';
+  const people = Sync.participants ? Sync.participants() : [];
+  const status = Sync.getStatus ? Sync.getStatus() : {};
+  const list = people.length
+    ? `<div class="participant-list">${people.map(person=>`
+        <span class="participant-chip ${person.role==='owner'?'owner':''}">
+          <i>${escapeHtml(person.name.slice(0,1))}</i>${escapeHtml(person.name)}
+          ${person.role==='owner'?'<b>공유자</b>':''}
+        </span>`).join('')}</div>`
+    : '<p class="participant-empty">카카오 로그인한 참여자의 이름이 여기에 표시됩니다.</p>';
+  return `<div class="participants-card">
+    <div class="participants-title"><strong>공유방 참여자</strong><span>${people.length}명</span></div>
+    ${list}
+    ${status.participantError ? `<p class="kakao-login-error">이름 동기화 오류 · ${escapeHtml(status.participantError)}</p>` : ''}
+  </div>`;
+}
+
+window.onAndroidKakaoUser = function(payload){
+  const next = payload && typeof payload === 'object' ? payload : {};
+  const status = String(next.status || 'error');
+  const nickname = String(next.nickname || '').trim().slice(0,20);
+  kakaoIdentity = {
+    status,
+    nickname: status === 'connected' ? nickname : '',
+    message: String(next.message || ''),
+  };
+  if(window.Sync){
+    if(status === 'connected' && nickname && Sync.setProfile) Sync.setProfile(nickname);
+    else if(status === 'signed_out' && Sync.clearProfile) Sync.clearProfile();
+  }
+  if($('settingsModal') && !$('settingsModal').hidden) renderSyncBox();
+};
+
+function requestKakaoIdentity(){
+  const bridge = androidBridge();
+  if(bridge && typeof bridge.requestKakaoUser === 'function') bridge.requestKakaoUser();
+  else kakaoIdentity = { status:'signed_out', nickname:'', message:'' };
 }
 
 // 상대 시각: '방금 전' · 'N분 전' · 'N시간 전' · 'N일 전' · 날짜
@@ -1214,8 +1313,11 @@ function renderShareQr(link){
 function shareSyncLink(btn){
   const link = Sync.shareLink();
   if(!link) return;
-  const title = '교대캘린더 친구 초대';
-  const text = '내 근무표를 같이 볼 수 있어요. 날짜별 메모도 함께 남겨보세요.';
+  const sender = kakaoIdentity.status === 'connected' ? kakaoIdentity.nickname : '';
+  const title = sender ? `${sender}님의 교대캘린더 초대` : '교대캘린더 친구 초대';
+  const text = sender
+    ? `${sender}님의 근무표를 같이 볼 수 있어요. 날짜별 메모도 함께 남겨보세요.`
+    : '내 근무표를 같이 볼 수 있어요. 날짜별 메모도 함께 남겨보세요.';
   const bridge = window.AndroidWidget;
   if(bridge && typeof bridge.shareToKakao === 'function'){
     bridge.shareToKakao(title, text, link);
@@ -1236,6 +1338,8 @@ function renderSyncBox(){
     box.innerHTML = `
       <div class="sync-status on">${syncStatusText(st.status)}</div>
       ${last ? `<div class="sync-updated">🔄 <b data-reltime="${last}">${relTime(last)}</b> 업데이트됨</div>` : ''}
+      ${renderKakaoIdentity()}
+      ${renderParticipantNames()}
       <p class="sync-note">근무표는 소유자만 바꿀 수 있고 자동으로 반영됩니다. 날짜를 누르면 <b>메모는 함께 작성</b>할 수 있어요.</p>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
       <button class="btn-text-danger" id="syncDisableBtn">이 공유방 나가기</button>`;
@@ -1247,6 +1351,8 @@ function renderSyncBox(){
     box.innerHTML = `
       <div class="sync-status ${st.status==='error'?'err':'on'}">${syncStatusText(st.status)}</div>
       ${st.status==='error' ? `<div class="sync-msg err">${escapeHtml(st.error)}</div>` : ''}
+      ${renderKakaoIdentity()}
+      ${renderParticipantNames()}
       <div class="sync-ready-copy">
         <strong>친구를 초대할 준비가 됐어요</strong>
         <span>아래 버튼을 누르면 카카오톡으로 초대 링크를 보낼 수 있어요.</span>
@@ -1270,6 +1376,7 @@ function renderSyncBox(){
   }
   if(Sync.managedReady()){
     box.innerHTML = `
+      ${renderKakaoIdentity()}
       <div class="sync-intro">
         <div class="sync-intro-icon" aria-hidden="true">↗</div>
         <div>
@@ -1344,11 +1451,14 @@ function renderSyncBanner(){
   if(!el || !window.Sync) return;
   if(Sync.role() === 'viewer'){
     const st = Sync.getStatus();
+    const people = androidBridge() && Sync.participants ? Sync.participants() : [];
+    const owner = people.find(person=>person.role === 'owner');
+    const ownerText = owner ? `${escapeHtml(owner.name)}님의 근무표 · ` : '';
     el.hidden = false;
     el.className = 'sync-banner' + (st.status==='error' ? ' err' : '');
     el.innerHTML = st.status==='error'
       ? `⚠️ 공유 연결 오류 — ${escapeHtml(st.error)}`
-      : `💬 친구와 공유 중 · <b>메모 작성 가능</b>${st.updatedAt ? ` · <b data-reltime="${st.updatedAt}">${relTime(st.updatedAt)}</b> 업데이트` : ' · 실시간 반영'}`;
+      : `💬 ${ownerText}친구와 공유 중 · <b>메모 작성 가능</b>${st.updatedAt ? ` · <b data-reltime="${st.updatedAt}">${relTime(st.updatedAt)}</b> 업데이트` : ' · 실시간 반영'}`;
     document.body.classList.add('readonly-mode');
   } else {
     el.hidden = true;
@@ -1604,6 +1714,22 @@ function wire(){
     else if(t.id === 'syncShareBtn'){ shareSyncLink(t); }
     else if(t.id === 'syncCopyBtn'){ copyToClipboard($('syncLink').value, t); }
     else if(t.id === 'syncCopyRules'){ copyToClipboard(FIRESTORE_RULES, t); }
+    else if(t.id === 'syncKakaoLogin'){
+      const bridge = androidBridge();
+      if(bridge && typeof bridge.loginWithKakao === 'function'){
+        kakaoIdentity = { status:'checking', nickname:'', message:'' };
+        renderSyncBox();
+        bridge.loginWithKakao();
+      }
+    }
+    else if(t.id === 'syncKakaoDisconnect'){
+      const bridge = androidBridge();
+      if(bridge && typeof bridge.disconnectKakao === 'function'
+        && confirm('카카오 연결을 해제할까요? 공유방에 표시된 내 이름도 삭제됩니다.')){
+        t.disabled = true;
+        bridge.disconnectKakao();
+      }
+    }
     else if(t.id === 'syncDisableBtn'){
       const leaving = Sync.role() === 'viewer';
       const message = leaving
@@ -1704,3 +1830,4 @@ renderWeekdays();
 renderAll();
 wire();
 if(window.Sync && Sync.init){ renderSyncBanner(); Sync.init(); }  // 공유 링크 감지 + 실시간 연결
+requestKakaoIdentity();
