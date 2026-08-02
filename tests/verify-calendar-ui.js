@@ -7,6 +7,7 @@ const ROOT = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
 const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const sync = fs.readFileSync(path.join(ROOT, 'sync.js'), 'utf8');
 
 function assert(condition, message){
   if(!condition) throw new Error(message);
@@ -72,5 +73,33 @@ assert(
 assert(!css.includes('.today-banner') && !css.includes('.tb-time'), '삭제된 오늘 배너 CSS가 남아 있습니다.');
 assert(index.includes('ver 2026.08.03'), '화면 버전 날짜가 2026.08.03으로 갱신되지 않았습니다.');
 assert(!index.includes('ver 2026.07.31.3'), '화면에 이전 버전 날짜가 남아 있습니다.');
+
+/* ---------- 공유방 이름: 카카오 로그인 대신 직접 입력 ---------- */
+assert(
+  app.includes('id="syncNameInput"') && app.includes('id="syncNameSave"'),
+  '공유방에 표시할 이름을 직접 입력하는 칸이 없습니다.'
+);
+assert(app.includes('function saveDisplayName('), '입력한 이름을 저장하는 처리가 없습니다.');
+assert(
+  !app.includes('kakaoIdentity') && !app.includes('btn-kakao-login'),
+  '카카오 로그인 카드가 앱 화면에 아직 남아 있습니다.'
+);
+assert(
+  !css.includes('.kakao-login-card') && !css.includes('.kakao-identity'),
+  '카카오 로그인 카드 CSS가 남아 있습니다.'
+);
+assert(css.includes('.name-card'), '이름 입력 카드 스타일이 없습니다.');
+assert(
+  app.includes('typeof bridge.shareToKakao') && css.includes('.kakao-mark'),
+  '카카오톡 초대 공유 기능이 사라졌습니다.'
+);
+assert(
+  sync.includes("PROFILE_KEY = 'shiftcal.profile'") && sync.includes('saveProfileName('),
+  '입력한 이름이 기기에 저장되지 않습니다.'
+);
+assert(
+  !app.includes('!androidBridge() || !window.Sync || !Sync.isOn()'),
+  '참여자 목록이 아직 Android 앱에서만 보입니다.'
+);
 
 console.log('달력 카드 정보 구조 검사 통과');

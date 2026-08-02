@@ -10,6 +10,7 @@
    ============================================================ */
 (function(){
   const SYNC_KEY = 'shiftcal.sync';   // localStorage: { config, code, role }
+  const PROFILE_KEY = 'shiftcal.profile'; // localStorage: 공유방에 표시할 내 이름
   const SDK_APP = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   const SDK_FS  = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
   const SDK_AUTH = 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
@@ -25,8 +26,9 @@
   let status = 'off';    // off | connecting | live | readonly | error
   let lastError = '';
   let lastUpdated = 0;   // 마지막으로 클라우드에 반영된 시각(ms) — viewer는 원격, owner는 내 push
-  let profileName = '';
-  let profileResolved = false;
+  // 이름은 카카오 로그인 대신 사용자가 직접 입력하고, 이 기기에 저장해 둡니다.
+  let profileName = loadProfileName();
+  let profileResolved = !!profileName;
   let participantError = '';
   let participantList = [];
 
@@ -34,6 +36,15 @@
   function loadCfg(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); }catch(e){ return null; } }
   function saveCfg(c){ try{ localStorage.setItem(SYNC_KEY, JSON.stringify(c)); }catch(e){} }
   function clearCfg(){ try{ localStorage.removeItem(SYNC_KEY); }catch(e){} }
+  function loadProfileName(){
+    try{ return cleanProfileName(localStorage.getItem(PROFILE_KEY) || ''); }catch(e){ return ''; }
+  }
+  function saveProfileName(name){
+    try{
+      if(name) localStorage.setItem(PROFILE_KEY, name);
+      else localStorage.removeItem(PROFILE_KEY);
+    }catch(e){}
+  }
 
   /* ---------- Firebase 설정 파싱(JSON/JS 스니펫 모두 허용) ---------- */
   function parseConfig(text){
@@ -364,6 +375,7 @@
       profileName = cleanProfileName(name);
       profileResolved = true;
       participantError = '';
+      saveProfileName(profileName);
       if(profileName) await upsertParticipant();
       if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
     },
@@ -372,6 +384,7 @@
       await removeParticipant(false);
       profileName = '';
       participantError = '';
+      saveProfileName('');
       if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
     },
     managedReady(){ return !!managedConfig(); },

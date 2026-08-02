@@ -33,9 +33,6 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.File;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -472,62 +469,6 @@ public class MainActivity extends Activity {
         WidgetBridge(MainActivity activity) {
             this.activity = activity;
             this.context = activity.getApplicationContext();
-        }
-
-        /** 카카오 액세스 토큰과 회원번호는 WebView에 넘기지 않고 닉네임만 전달합니다. */
-        @JavascriptInterface
-        public void loginWithKakao() {
-            activity.runOnUiThread(() -> KakaoLoginManager.login(activity, kakaoListener()));
-        }
-
-        @JavascriptInterface
-        public void requestKakaoUser() {
-            activity.runOnUiThread(() -> KakaoLoginManager.restore(kakaoListener()));
-        }
-
-        @JavascriptInterface
-        public void disconnectKakao() {
-            activity.runOnUiThread(() -> KakaoLoginManager.disconnect(kakaoListener()));
-        }
-
-        private KakaoLoginManager.Listener kakaoListener() {
-            return new KakaoLoginManager.Listener() {
-                @Override
-                public void onConnected(String nickname) {
-                    notifyKakaoState("connected", nickname, "");
-                }
-
-                @Override
-                public void onSignedOut() {
-                    notifyKakaoState("signed_out", "", "");
-                }
-
-                @Override
-                public void onError(String message, boolean cancelled) {
-                    notifyKakaoState(cancelled ? "cancelled" : "error", "", message);
-                }
-            };
-        }
-
-        private void notifyKakaoState(String status, String nickname, String message) {
-            JSONObject payload = new JSONObject();
-            try {
-                payload.put("status", status);
-                payload.put("nickname", nickname);
-                payload.put("message", message);
-            } catch (JSONException ignored) {
-                return;
-            }
-            activity.runOnUiThread(() -> {
-                if (activity.webView == null) {
-                    return;
-                }
-                activity.webView.evaluateJavascript(
-                        "window.onAndroidKakaoUser && window.onAndroidKakaoUser("
-                                + payload + ");",
-                        null
-                );
-            });
         }
 
         @JavascriptInterface

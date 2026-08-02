@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "1.17.0",
+  "versionCode": 19,
+  "versionName": "1.18.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "낮은 위젯에서도 달력이 찌그러지지 않도록 비율을 보정하고, 홈 화면에 오늘 날짜와 선택한 조의 근무 시간을 다시 표시했습니다. 카카오 로그인 대기 시간도 안정화했습니다."
+  "notes": "카카오 로그인을 없애고 공유방에 표시할 이름을 직접 입력하도록 바꿨습니다. 로그인 실패 안내창이 더 이상 뜨지 않고, 휴대폰 브라우저(PWA)에서도 이름을 정할 수 있습니다."
 }

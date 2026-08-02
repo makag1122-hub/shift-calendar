@@ -959,40 +959,37 @@ body.readonly-mode .cal-hint{ display:none; }
   box-shadow:0 7px 16px rgba(117,100,0,.15);
 }
 .btn-kakao:active{ transform:scale(.98); background:#f7df00; }
-.kakao-login-card{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
-  gap:8px 12px;
-  align-items:center;
+/* 공유방에 표시할 내 이름 직접 입력 */
+.name-card{
   padding:13px;
   margin:0 0 12px;
-  border:1px solid #f0df55;
+  border:1px solid var(--line);
   border-radius:14px;
-  background:linear-gradient(145deg,#fffdf0,#fff9c8);
+  background:rgba(248,250,252,.88);
 }
-.kakao-login-card strong{ display:block; font-size:13.5px; color:#191919; }
-.kakao-login-card p{ margin:3px 0 0; font-size:11.5px; color:#675f31; line-height:1.45; }
-.kakao-login-card > small{ grid-column:1/-1; color:#7c7350; font-size:10.5px; }
-.btn-kakao-login{
-  border:0; border-radius:10px; background:#fee500; color:#191919;
-  min-height:38px; padding:8px 12px; display:flex; align-items:center; gap:7px;
-  font:800 12.5px/1 inherit; white-space:nowrap; cursor:pointer;
-}
-.btn-kakao-login:disabled{ opacity:.6; cursor:wait; }
-.btn-kakao-login .kakao-mark{ width:17px; height:14px; }
-.kakao-login-error{ grid-column:1/-1; margin:0!important; color:#c2410c!important; font-size:11px!important; }
-.kakao-identity{
-  display:flex; align-items:center; gap:10px; padding:11px 12px; margin:0 0 10px;
-  border:1px solid #f0df55; border-radius:14px; background:#fffceb;
-}
-.kakao-avatar{
+.name-card.set{ border-color:color-mix(in srgb, var(--brand) 34%, var(--line)); background:rgba(238,240,255,.72); }
+.name-card-head{ display:flex; align-items:center; gap:10px; }
+.name-card-head > div{ min-width:0; }
+.name-card strong{ display:block; font-size:13.5px; color:var(--ink); }
+.name-card p{ margin:3px 0 0; font-size:11.5px; color:var(--ink-soft); line-height:1.45; }
+.name-avatar{
   width:34px; height:34px; border-radius:50%; display:grid; place-items:center;
-  background:#fee500; color:#191919; font-size:14px; font-weight:900; flex:0 0 auto;
+  background:var(--brand); color:#fff; font-size:14px; font-weight:900; flex:0 0 auto;
 }
-.kakao-identity > span:nth-child(2){ min-width:0; display:flex; flex:1; flex-direction:column; }
-.kakao-identity strong{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; }
-.kakao-identity small{ margin-top:2px; color:var(--ink-soft); font-size:10.5px; }
-.btn-identity-link{ border:0; background:transparent; color:var(--ink-soft); font:700 11px/1 inherit; padding:7px 3px; cursor:pointer; }
+.name-input-row{ display:flex; align-items:center; gap:7px; margin-top:10px; }
+.name-input{
+  flex:1; min-width:0;
+  border:1px solid var(--line); border-radius:10px; background:#fff;
+  min-height:40px; padding:0 11px;
+  font:600 13.5px/1 inherit; color:var(--ink);
+}
+.name-input::placeholder{ color:#9aa3b2; font-weight:500; }
+/* .btn-primary 기본값(width:100%·margin-top)이 입력칸을 밀어내지 않도록 되돌립니다. */
+.name-input-row .btn-primary{
+  flex:0 0 auto; width:auto; margin-top:0;
+  min-height:40px; padding:0 16px; font-size:13px;
+}
+.name-card .btn-text-danger{ margin-top:6px; padding-left:0; font-size:11.5px; }
 .participants-card{ padding:12px; margin:0 0 12px; border:1px solid var(--line); border-radius:14px; background:rgba(248,250,252,.88); }
 .participants-title{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 .participants-title strong{ font-size:12.5px; }

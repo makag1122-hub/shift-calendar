@@ -12,8 +12,8 @@ android {
         applicationId 'kr.co.shiftcalendar.widget'
         minSdk 26
         targetSdk 36
-        versionCode 18
-        versionName '1.17.0'
+        versionCode 19
+        versionName '1.18.0'
     }
 
     flavorDimensions += 'distribution'
@@ -61,6 +61,6 @@ android {
 }
 
 dependencies {
+    // 카카오톡 초대 공유만 사용합니다. (로그인 SDK는 이름 직접 입력으로 대체되어 제거)
     implementation 'com.kakao.sdk:v2-share:2.24.0'
-    implementation 'com.kakao.sdk:v2-user:2.24.0'
 }
