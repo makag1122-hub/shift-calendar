@@ -86,6 +86,9 @@ assert(renderer.includes('지근') && renderer.includes('지휴') && renderer.in
 assert(renderer.includes('Bitmap.Config.ARGB_8888'), '위젯이 고화질 ARGB 비트맵을 사용하지 않습니다.');
 assert(renderer.includes('RENDER_SCALE = 2.5f'), '위젯의 고해상도 렌더링이 빠졌습니다.');
 assert(renderer.includes('memoText(entry)'), '위젯의 날짜별 메모 표시가 빠졌습니다.');
+assert(renderer.includes('boolean compactCell = rowHeight < 60f'), '낮은 월간 위젯 셀의 자동 축소 처리가 없습니다.');
+assert(renderer.includes('canvas.clipRect(cell.left + 1f'), '월간 위젯 내용이 날짜 셀 밖으로 넘칠 수 있습니다.');
+assert(renderer.includes('boolean showMemoText'), '작은 셀에서 메모 표시 밀도를 조절하지 않습니다.');
 assert(renderer.includes('drawAllGroups('), '위젯의 A/B/C/D 4행 비교 렌더링이 없습니다.');
 assert(renderer.includes('renderWeek('), '4개 조 주간 위젯 렌더링이 없습니다.');
 assert(renderer.includes('drawWeekGroups('), '4개 조 주간 4행 비교 렌더링이 없습니다.');

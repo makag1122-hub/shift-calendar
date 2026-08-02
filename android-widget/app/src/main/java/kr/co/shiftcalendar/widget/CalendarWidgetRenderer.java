@@ -609,9 +609,17 @@ final class CalendarWidgetRenderer {
             canvas.drawRoundRect(cell, 8f, 8f, paint);
             paint.setStyle(Paint.Style.FILL);
 
+            /*
+             * 낮은 위젯에서는 날짜, 근무 배지, 메모가 같은 세로 구간을 사용하지 않도록
+             * 셀을 세 구역으로 분리합니다. 모든 텍스트는 셀 안에서만 그려집니다.
+             */
+            boolean compactCell = rowHeight < 60f;
+            int cellSave = canvas.save();
+            canvas.clipRect(cell.left + 1f, cell.top + 1f, cell.right - 1f, cell.bottom - 1f);
+
             paint.setTypeface(TYPEFACE_BOLD);
             paint.setTextAlign(Paint.Align.LEFT);
-            paint.setTextSize(15f);
+            paint.setTextSize(compactCell ? 12.5f : 14f);
             paint.setColor(
                     holiday || column == 0
                             ? COLOR_SUNDAY
@@ -619,28 +627,40 @@ final class CalendarWidgetRenderer {
                             ? COLOR_SATURDAY
                             : COLOR_INK
             );
-            float dateBaseline = top + Math.min(20f, rowHeight * 0.30f + 2f);
-            canvas.drawText(String.valueOf(day), left + 8f, dateBaseline, paint);
+            float dateBaseline = top + (compactCell ? 16f : 19f);
+            canvas.drawText(String.valueOf(day), left + 7f, dateBaseline, paint);
 
             if (!tag.isEmpty()) {
-                drawTag(canvas, paint, tag, right - 7f, top + 7f);
+                drawTag(
+                        canvas,
+                        paint,
+                        tag,
+                        right - 6f,
+                        top + (compactCell ? 4f : 6f),
+                        compactCell
+                );
             }
 
             String shiftLabel = shift == null
                     ? "-"
                     : shift.optString("short", shift.optString("label", shiftKey));
-            float badgeTop = top + Math.min(27f, rowHeight * 0.36f);
-            float badgeBottom = Math.min(badgeTop + 24f, top + rowHeight * 0.71f);
+            float badgeTop = top + (compactCell ? 21f : 26f);
+            float memoBand = hasMemo ? (compactCell ? 13f : 16f) : 6f;
+            float badgeBottom = Math.min(
+                    badgeTop + (compactCell ? 18f : 22f),
+                    bottom - memoBand
+            );
+            badgeBottom = Math.max(badgeTop + 13f, badgeBottom);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(shiftColor);
-            RectF pill = new RectF(left + 7f, badgeTop, right - 7f, badgeBottom);
-            canvas.drawRoundRect(pill, 8f, 8f, paint);
+            RectF pill = new RectF(left + 6f, badgeTop, right - 6f, badgeBottom);
+            canvas.drawRoundRect(pill, compactCell ? 6f : 7f, compactCell ? 6f : 7f, paint);
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(13.5f);
+            paint.setTextSize(compactCell ? 11f : 12.5f);
             paint.setColor(Color.WHITE);
             paint.setTypeface(TYPEFACE_BOLD);
             canvas.drawText(
-                    trimLabel(shiftLabel),
+                    ellipsize(paint, trimLabel(shiftLabel), pill.width() - 8f),
                     left + columnWidth / 2f,
                     pill.centerY() - (paint.ascent() + paint.descent()) / 2f,
                     paint
@@ -648,20 +668,26 @@ final class CalendarWidgetRenderer {
 
             if (hasMemo) {
                 paint.setColor(COLOR_MEMO);
-                canvas.drawCircle(left + 10f, bottom - 10f, 2.7f, paint);
-                if (!memo.isEmpty()) {
+                float memoBaseline = bottom - (compactCell ? 5f : 7f);
+                canvas.drawCircle(left + 9f, memoBaseline - 2.3f, compactCell ? 2f : 2.4f, paint);
+                boolean showMemoText = !memo.isEmpty()
+                        && rowHeight >= 49f
+                        && columnWidth >= 66f;
+                if (showMemoText) {
                     paint.setTextAlign(Paint.Align.LEFT);
                     paint.setTypeface(TYPEFACE_MEDIUM);
-                    paint.setTextSize(9.2f);
+                    paint.setTextSize(compactCell ? 7.4f : 8.6f);
                     paint.setColor(COLOR_INK_SOFT);
                     canvas.drawText(
-                            ellipsize(paint, memo, columnWidth - 24f),
-                            left + 16f,
-                            bottom - 7f,
+                            ellipsize(paint, memo, columnWidth - 22f),
+                            left + 14f,
+                            memoBaseline,
                             paint
                     );
                 }
             }
+
+            canvas.restoreToCount(cellSave);
 
             if (currentMonth && today.get(Calendar.DAY_OF_MONTH) == day) {
                 paint.setStyle(Paint.Style.STROKE);
@@ -678,25 +704,32 @@ final class CalendarWidgetRenderer {
             Paint paint,
             String tag,
             float right,
-            float top
+            float top,
+            boolean compact
     ) {
         String label = tagLabel(tag);
         int color = tagColor(tag);
         paint.setTypeface(TYPEFACE_BOLD);
-        paint.setTextSize(9.5f);
-        float width = paint.measureText(label) + 9f;
-        RectF badge = new RectF(right - width, top, right, top + 14f);
+        paint.setTextSize(compact ? 7.8f : 9f);
+        float width = paint.measureText(label) + (compact ? 7f : 8f);
+        float height = compact ? 11f : 13f;
+        RectF badge = new RectF(right - width, top, right, top + height);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(blendWithWhite(color, 0.11f));
-        canvas.drawRoundRect(badge, 5f, 5f, paint);
+        canvas.drawRoundRect(badge, 4f, 4f, paint);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(0.8f);
         paint.setColor(blendWithWhite(color, 0.46f));
-        canvas.drawRoundRect(badge, 5f, 5f, paint);
+        canvas.drawRoundRect(badge, 4f, 4f, paint);
         paint.setStyle(Paint.Style.FILL);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setColor(color);
-        canvas.drawText(label, badge.centerX(), top + 10.4f, paint);
+        canvas.drawText(
+                label,
+                badge.centerX(),
+                badge.centerY() - (paint.ascent() + paint.descent()) / 2f,
+                paint
+        );
     }
 
     private static String todaySummary(JSONObject root, String group) {
