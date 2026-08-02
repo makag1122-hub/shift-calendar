@@ -539,6 +539,8 @@ function renderTeamBoard(){
   const el = $('teamBoard');
   if(!el) return;
   const today = todayStr();
+  const todayDate = parseYmd(today);
+  const todayLabel = `${todayDate.getMonth()+1}월 ${todayDate.getDate()}일 (${WEEK[todayDate.getDay()]})`;
   const selected = currentGroup();
   const items = GROUPS.map(group=>{
     const key = shiftFor(today, group);
@@ -549,12 +551,13 @@ function renderTeamBoard(){
       <strong>${group}조</strong>
       <span class="team-shift">${t ? t.label : '미설정'}</span>
       <span class="team-day">${shiftDay}</span>
+      ${group===selected ? `<span class="team-time">${escapeHtml(timeText(t))}</span>` : ''}
     </button>`;
   }).join('');
   el.innerHTML = `
     <div class="team-head">
       <span>A/B/C/D 오늘 배치</span>
-      <b>${BASE_DATE} 기준</b>
+      <b>오늘 · ${todayLabel}</b>
     </div>
     <div class="team-grid">${items}</div>`;
 }

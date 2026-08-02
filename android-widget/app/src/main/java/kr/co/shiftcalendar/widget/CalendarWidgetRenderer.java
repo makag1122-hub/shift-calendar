@@ -72,10 +72,10 @@ final class CalendarWidgetRenderer {
             int widgetWidthDp,
             int widgetHeightDp
     ) {
-        int height = calendarHeight(widgetWidthDp, widgetHeightDp);
+        int bitmapHeight = calendarHeight(widgetWidthDp, widgetHeightDp);
         Bitmap bitmap = Bitmap.createBitmap(
                 Math.round(WIDTH * RENDER_SCALE),
-                Math.round(height * RENDER_SCALE),
+                Math.round(bitmapHeight * RENDER_SCALE),
                 Bitmap.Config.ARGB_8888
         );
         Canvas canvas = new Canvas(bitmap);
@@ -87,6 +87,7 @@ final class CalendarWidgetRenderer {
                         | Paint.FILTER_BITMAP_FLAG
         );
         canvas.drawColor(COLOR_SURFACE);
+        int height = prepareContentCanvas(canvas, bitmapHeight, MIN_HEIGHT, MAX_HEIGHT);
 
         JSONObject root = payload(context);
         JSONArray days = monthDays(root, year, month, group);
@@ -124,10 +125,10 @@ final class CalendarWidgetRenderer {
             int widgetWidthDp,
             int widgetHeightDp
     ) {
-        int height = weekHeight(widgetWidthDp, widgetHeightDp);
+        int bitmapHeight = weekHeight(widgetWidthDp, widgetHeightDp);
         Bitmap bitmap = Bitmap.createBitmap(
                 Math.round(WIDTH * RENDER_SCALE),
-                Math.round(height * RENDER_SCALE),
+                Math.round(bitmapHeight * RENDER_SCALE),
                 Bitmap.Config.ARGB_8888
         );
         Canvas canvas = new Canvas(bitmap);
@@ -139,6 +140,12 @@ final class CalendarWidgetRenderer {
                         | Paint.FILTER_BITMAP_FLAG
         );
         canvas.drawColor(COLOR_SURFACE);
+        int height = prepareContentCanvas(
+                canvas,
+                bitmapHeight,
+                MIN_WEEK_HEIGHT,
+                MAX_WEEK_HEIGHT
+        );
 
         JSONObject root = payload(context);
         if (root == null) {
@@ -313,23 +320,58 @@ final class CalendarWidgetRenderer {
     }
 
     private static int calendarHeight(int widgetWidthDp, int widgetHeightDp) {
-        if (widgetWidthDp <= 0 || widgetHeightDp <= 0) {
-            return DEFAULT_HEIGHT;
-        }
-        float availableWidth = Math.max(220f, widgetWidthDp - 24f);
-        float availableHeight = Math.max(145f, widgetHeightDp - 102f);
-        int fittedHeight = Math.round(WIDTH * availableHeight / availableWidth);
-        return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, fittedHeight));
+        return fittedBitmapHeight(widgetWidthDp, widgetHeightDp, 22f, 105f, DEFAULT_HEIGHT);
     }
 
     private static int weekHeight(int widgetWidthDp, int widgetHeightDp) {
+        return fittedBitmapHeight(
+                widgetWidthDp,
+                widgetHeightDp,
+                18f,
+                42f,
+                DEFAULT_WEEK_HEIGHT
+        );
+    }
+
+    /** ImageView의 실제 내용 박스와 같은 종횡비로 비트맵을 만듭니다. */
+    private static int fittedBitmapHeight(
+            int widgetWidthDp,
+            int widgetHeightDp,
+            float horizontalChromeDp,
+            float verticalChromeDp,
+            int fallback
+    ) {
         if (widgetWidthDp <= 0 || widgetHeightDp <= 0) {
-            return DEFAULT_WEEK_HEIGHT;
+            return fallback;
         }
-        float availableWidth = Math.max(220f, widgetWidthDp - 18f);
-        float availableHeight = Math.max(100f, widgetHeightDp - 48f);
-        int fittedHeight = Math.round(WIDTH * availableHeight / availableWidth);
-        return Math.max(MIN_WEEK_HEIGHT, Math.min(MAX_WEEK_HEIGHT, fittedHeight));
+        float availableWidth = Math.max(1f, widgetWidthDp - horizontalChromeDp);
+        float availableHeight = Math.max(1f, widgetHeightDp - verticalChromeDp);
+        return Math.max(1, Math.round(WIDTH * availableHeight / availableWidth));
+    }
+
+    /**
+     * 너무 낮은 칸에서는 검증된 최소 레이아웃을 균일 축소하고 좌우 중앙에 둡니다.
+     * 따라서 날짜 셀 좌표는 유지하면서 가로·세로 배율이 달라지는 찌그러짐만 막습니다.
+     */
+    private static int prepareContentCanvas(
+            Canvas canvas,
+            int bitmapHeight,
+            int minContentHeight,
+            int maxContentHeight
+    ) {
+        int contentHeight = Math.max(
+                minContentHeight,
+                Math.min(maxContentHeight, bitmapHeight)
+        );
+        float scale = Math.min(1f, bitmapHeight / (float) contentHeight);
+        float scaledWidth = WIDTH * scale;
+        float scaledHeight = contentHeight * scale;
+        canvas.translate(
+                (WIDTH - scaledWidth) / 2f,
+                Math.max(0f, (bitmapHeight - scaledHeight) / 2f)
+        );
+        canvas.scale(scale, scale);
+        return contentHeight;
     }
 
     private static int drawAllGroups(

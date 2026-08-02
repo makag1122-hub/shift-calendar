@@ -72,7 +72,7 @@
         android:layout_weight="1"
         android:adjustViewBounds="true"
         android:contentDescription="@string/widget_calendar_description"
-        android:scaleType="fitXY"
+        android:scaleType="fitCenter"
         android:layout_marginTop="3dp"
         android:layout_marginBottom="7dp" />
 

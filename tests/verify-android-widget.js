@@ -77,6 +77,10 @@ const weekWidgetInfo = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'xml', 'four_group_week_widget_info.xml'),
   'utf8'
 );
+const widgetSize = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'WidgetSize.java'),
+  'utf8'
+);
 
 assert(manifest.includes('android.appwidget.action.APPWIDGET_UPDATE'), 'Android AppWidget 수신기가 등록되지 않았습니다.');
 assert(provider.includes('ACTION_PREVIOUS') && provider.includes('ACTION_NEXT'), '위젯 월 이동 동작이 없습니다.');
@@ -94,22 +98,60 @@ assert(renderer.includes('renderWeek('), '4개 조 주간 위젯 렌더링이 �
 assert(renderer.includes('drawWeekGroups('), '4개 조 주간 4행 비교 렌더링이 없습니다.');
 assert(renderer.includes('calendarHeight('), '위젯 크기에 맞춘 달력 비율 계산이 없습니다.');
 assert(
-  /static Result render\([\s\S]*?int height = calendarHeight\(/.test(renderer),
+  /static Result render\([\s\S]*?int bitmapHeight = calendarHeight\(/.test(renderer),
   '일반 달력 위젯이 월간 높이 계산을 사용하지 않습니다.'
 );
 assert(
-  /static Result renderWeek\([\s\S]*?int height = weekHeight\(/.test(renderer),
+  /static Result renderWeek\([\s\S]*?int bitmapHeight = weekHeight\(/.test(renderer),
   '4개 조 위젯이 낮은 주간 높이 계산을 사용하지 않습니다.'
 );
 assert(renderer.includes('drawTag('), '앱과 같은 정산 태그 배지가 위젯에 없습니다.');
-assert(provider.includes('OPTION_APPWIDGET_MIN_WIDTH'), '위젯 너비에 맞춘 렌더링이 없습니다.');
-assert(provider.includes('OPTION_APPWIDGET_MIN_HEIGHT'), '위젯 높이에 맞춘 렌더링이 없습니다.');
+assert(provider.includes('WidgetSize.widthDp('), '위젯 너비의 방향별 계산이 없습니다.');
+assert(provider.includes('WidgetSize.heightDp('), '위젯 높이의 방향별 계산이 없습니다.');
 assert(manifest.includes('.FourGroupWeekWidgetProvider'), '4개 조 주간 위젯이 매니페스트에 없습니다.');
 assert(weekProvider.includes('WEEK_PREVIOUS') && weekProvider.includes('WEEK_NEXT'), '주간 위젯의 주 이동 동작이 없습니다.');
 assert(weekProvider.includes('Calendar.WEEK_OF_YEAR'), '주간 위젯이 7일 단위로 이동하지 않습니다.');
 assert(weekWidgetLayout.includes('@+id/week_widget_image'), '4개 조 주간 위젯 레이아웃이 없습니다.');
 assert(!weekWidgetLayout.includes('week_widget_footer'), '4개 조 주간 위젯에 불필요한 하단 영역이 남아 있습니다.');
-assert(weekWidgetInfo.includes('android:targetCellHeight="1"'), '4개 조 주간 위젯 기본 높이가 1칸으로 줄어들지 않았습니다.');
+assert(weekWidgetInfo.includes('android:targetCellHeight="2"'), '4개 조 주간 위젯 targetCellHeight가 최소 높이와 맞지 않습니다.');
+assert(weekProvider.includes('WidgetSize.widthDp(') && weekProvider.includes('WidgetSize.heightDp('), '4개 조 주간 위젯 크기가 방향별로 계산되지 않습니다.');
+assert(widgetSize.includes('Configuration.ORIENTATION_LANDSCAPE'), '위젯 방향 구분이 없습니다.');
+assert(widgetSize.includes('OPTION_APPWIDGET_MAX_HEIGHT'), '세로 모드의 MAX_HEIGHT 사용이 없습니다.');
+assert(widgetSize.includes('OPTION_APPWIDGET_MAX_WIDTH'), '가로 모드의 MAX_WIDTH 사용이 없습니다.');
+assert(widgetLayout.includes('android:scaleType="fitCenter"'), '월간 위젯의 비율 유지 scaleType이 없습니다.');
+assert(weekWidgetLayout.includes('android:scaleType="fitCenter"'), '4개 조 주간 위젯의 비율 유지 scaleType이 없습니다.');
+assert(!widgetLayout.includes('fitXY') && !weekWidgetLayout.includes('fitXY'), '위젯에 fitXY 왜곡이 남아 있습니다.');
+assert(renderer.includes('fittedBitmapHeight('), 'ImageView 비율에 맞춘 비트맵 높이 계산이 없습니다.');
+assert(renderer.includes('prepareContentCanvas('), '낮은 위젯의 균일 축소 처리가 없습니다.');
+assert(!renderer.includes('Math.max(220f, widgetWidthDp'), '실제 크기를 무시하는 220dp 너비 하한이 남아 있습니다.');
+assert(!renderer.includes('Math.max(100f, widgetHeightDp') && !renderer.includes('Math.max(145f, widgetHeightDp'), '실제 크기를 무시하는 높이 하한이 남아 있습니다.');
+
+function fittedBitmapHeight(width, height, horizontalChrome, verticalChrome){
+  const availableWidth = Math.max(1, width - horizontalChrome);
+  const availableHeight = Math.max(1, height - verticalChrome);
+  return Math.max(1, Math.round(560 * availableHeight / availableWidth));
+}
+
+[
+  { name:'week 250x105', width:250, height:105, horizontalChrome:18, verticalChrome:42 },
+  { name:'week 330x130', width:330, height:130, horizontalChrome:18, verticalChrome:42 },
+  { name:'month 250x180', width:250, height:180, horizontalChrome:22, verticalChrome:105 },
+  { name:'month 330x250', width:330, height:250, horizontalChrome:22, verticalChrome:105 },
+].forEach(sample => {
+  const bitmapHeight = fittedBitmapHeight(
+    sample.width,
+    sample.height,
+    sample.horizontalChrome,
+    sample.verticalChrome
+  );
+  const scaleX = (sample.width - sample.horizontalChrome) / 560;
+  const scaleY = (sample.height - sample.verticalChrome) / bitmapHeight;
+  const axisRatio = scaleY / scaleX;
+  assert(
+    axisRatio >= 0.95 && axisRatio <= 1.05,
+    `${sample.name} 위젯의 세로/가로 배율이 다릅니다: ${axisRatio}`
+  );
+});
 const weekRendererStart = renderer.indexOf('private static void drawWeekGroups(');
 const weekRendererEnd = renderer.indexOf('private static JSONArray dayEntry(', weekRendererStart);
 const weekRenderer = renderer.slice(weekRendererStart, weekRendererEnd);
@@ -230,6 +272,11 @@ assert(kakaoLoginManager.includes('loginWithKakaoTalk('), '카카오톡 로그�
 assert(kakaoLoginManager.includes('loginWithKakaoAccount('), '카카오톡 미설치 시 계정 로그인 대체 경로가 없습니다.');
 assert(kakaoLoginManager.includes('KakaoTalk login failed; trying Kakao Account'), '카카오톡 로그인 실패 후 카카오계정 대체 로그인이 없습니다.');
 assert(kakaoLoginManager.includes('LOGIN_TIMEOUT_MS'), '카카오 로그인 무한 대기 방지 시간이 없습니다.');
+assert(kakaoLoginManager.includes('LOGIN_TIMEOUT_MS = 120_000L'), '카카오 로그인 대기 시간이 120초가 아닙니다.');
+assert(
+  (kakaoLoginManager.match(/private static void loadProfile\(/g) || []).length === 1,
+  '카카오 프로필 조회 loadProfile 구현이 중복되어 있습니다.'
+);
 assert(kakaoLoginManager.includes('.unlink('), '카카오 연결 해제 처리가 없습니다.');
 assert(appSource.includes('window.onAndroidKakaoUser'), '카카오 닉네임 수신 처리가 없습니다.');
 assert(appSource.includes('renderParticipantNames'), '공유방 참여자 이름 UI가 없습니다.');

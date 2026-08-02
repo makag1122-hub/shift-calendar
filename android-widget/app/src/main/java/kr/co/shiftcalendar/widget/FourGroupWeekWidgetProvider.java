@@ -115,14 +115,8 @@ public class FourGroupWeekWidgetProvider extends AppWidgetProvider {
         weekStart.add(Calendar.WEEK_OF_YEAR, offset);
 
         Bundle options = manager.getAppWidgetOptions(widgetId);
-        int widgetWidthDp = options.getInt(
-                AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,
-                320
-        );
-        int widgetHeightDp = options.getInt(
-                AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,
-                260
-        );
+        int widgetWidthDp = WidgetSize.widthDp(context, options, 320);
+        int widgetHeightDp = WidgetSize.heightDp(context, options, 180);
         CalendarWidgetRenderer.Result result = CalendarWidgetRenderer.renderWeek(
                 context,
                 weekStart,

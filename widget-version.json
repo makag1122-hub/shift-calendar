@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
-  "versionName": "1.16.0",
+  "versionCode": 18,
+  "versionName": "1.17.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "월간 달력 위젯에서 날짜, 지근·지휴·특근 태그, 근무형태와 메모가 셀 크기에 맞춰 자동으로 축소·분리되어 서로 겹치지 않도록 개선했습니다."
+  "notes": "낮은 위젯에서도 달력이 찌그러지지 않도록 비율을 보정하고, 홈 화면에 오늘 날짜와 선택한 조의 근무 시간을 다시 표시했습니다. 카카오 로그인 대기 시간도 안정화했습니다."
 }

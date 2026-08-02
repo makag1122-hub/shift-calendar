@@ -100,9 +100,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   gap:1px;
   text-align: left;
 }
-.team-item.active{ outline: 2px solid var(--brand); outline-offset: -2px; }
+.team-item.active{
+  outline:2px solid var(--brand);
+  outline-offset:-2px;
+  min-height:74px;
+  grid-template-rows:17px 14px 14px 13px;
+}
 .team-item:active{ transform: scale(.97); }
-.team-shift, .team-day{
+.team-shift, .team-day, .team-time{
   width:100%;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -111,6 +116,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .team-shift{ font-size: 11px; color: var(--ink-soft); font-weight:700; line-height:1.1; }
 .team-item strong{ width:100%; font-size: 15px; color: var(--ink); line-height:1.15; }
 .team-day{ font-size: 10.5px; color: var(--ink-soft); font-weight:700; line-height:1.1; }
+.team-time{
+  font-size:9px;
+  color:var(--brand);
+  font-weight:850;
+  line-height:1.15;
+}
 
 @media (max-width: 380px){
   .team-grid{ grid-template-columns: repeat(2,1fr); }
@@ -541,8 +552,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 
 @media (max-width: 380px){
   .app{ padding-left:10px; padding-right:10px; }
-  .today-banner{ grid-template-columns:1fr; gap:7px; }
-  .tb-time{ text-align:left; font-size:12.5px; }
   .team-board{ padding:10px; }
   .team-grid{ gap:5px; }
   .team-item{ min-height:58px; padding:7px 6px; }

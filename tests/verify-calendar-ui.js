@@ -57,5 +57,20 @@ assert(
   css.includes('grid-template-rows:28px repeat(4, 68px);'),
   '4개 조 비교표가 정확히 네 행으로 고정되지 않았습니다.'
 );
+assert(
+  app.includes('<b>오늘 · ${todayLabel}</b>'),
+  'A/B/C/D 오늘 배치 머리글에 오늘 날짜가 없습니다.'
+);
+assert(
+  app.includes('<span class="team-time">${escapeHtml(timeText(t))}</span>'),
+  '선택한 조 카드에 오늘 근무 시간이 없습니다.'
+);
+assert(
+  !app.includes('<b>${BASE_DATE} 기준</b>'),
+  '오늘 배치 머리글에 과거 기준일이 남아 있습니다.'
+);
+assert(!css.includes('.today-banner') && !css.includes('.tb-time'), '삭제된 오늘 배너 CSS가 남아 있습니다.');
+assert(index.includes('ver 2026.08.03'), '화면 버전 날짜가 2026.08.03으로 갱신되지 않았습니다.');
+assert(!index.includes('ver 2026.07.31.3'), '화면에 이전 버전 날짜가 남아 있습니다.');
 
 console.log('달력 카드 정보 구조 검사 통과');

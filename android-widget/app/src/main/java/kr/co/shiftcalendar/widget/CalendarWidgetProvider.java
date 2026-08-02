@@ -145,14 +145,8 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         int month = target.get(Calendar.MONTH);
 
         Bundle options = manager.getAppWidgetOptions(widgetId);
-        int widgetWidthDp = options.getInt(
-                AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,
-                320
-        );
-        int widgetHeightDp = options.getInt(
-                AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,
-                320
-        );
+        int widgetWidthDp = WidgetSize.widthDp(context, options, 320);
+        int widgetHeightDp = WidgetSize.heightDp(context, options, 320);
         CalendarWidgetRenderer.Result result =
                 CalendarWidgetRenderer.render(
                         context,

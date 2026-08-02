@@ -18,7 +18,7 @@ import kotlin.Unit;
 /** 카카오 토큰은 네이티브 SDK 안에만 두고 WebView에는 닉네임만 전달합니다. */
 final class KakaoLoginManager {
     private static final String TAG = "KakaoLoginManager";
-    private static final long LOGIN_TIMEOUT_MS = 45_000L;
+    private static final long LOGIN_TIMEOUT_MS = 120_000L;
 
     interface Listener {
         void onConnected(String nickname);
@@ -59,23 +59,6 @@ final class KakaoLoginManager {
             } else {
                 Log.w(TAG, "Kakao account login failed", error);
                 attempt.error("카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.", false);
-            }
-            return Unit.INSTANCE;
-        });
-    }
-
-    private static void loadProfile(LoginAttempt attempt) {
-        UserApiClient.getInstance().me((user, error) -> {
-            if (user != null) {
-                String nickname = nicknameOf(user);
-                if (!nickname.isEmpty()) {
-                    attempt.connected(nickname);
-                } else {
-                    attempt.error("카카오 동의 항목에서 닉네임 사용을 설정해 주세요.", false);
-                }
-            } else {
-                Log.w(TAG, "Failed to load Kakao profile after login", error);
-                attempt.error("카카오 로그인 정보 확인에 실패했어요. 다시 시도해 주세요.", false);
             }
             return Unit.INSTANCE;
         });
@@ -145,7 +128,7 @@ final class KakaoLoginManager {
     }
 
     /** 로그인 콜백이 유실돼도 WebView가 확인 중 상태에 계속 머물지 않게 합니다. */
-    private static final class LoginAttempt {
+    private static final class LoginAttempt implements Listener {
         private final Listener listener;
         private final Handler handler = new Handler(Looper.getMainLooper());
         private boolean completed;
@@ -162,18 +145,33 @@ final class KakaoLoginManager {
             handler.postDelayed(timeout, LOGIN_TIMEOUT_MS);
         }
 
-        synchronized void connected(String nickname) {
+        @Override
+        public synchronized void onConnected(String nickname) {
             if (!finish()) {
                 return;
             }
             listener.onConnected(nickname);
         }
 
-        synchronized void error(String message, boolean cancelled) {
+        @Override
+        public synchronized void onSignedOut() {
+            onError("카카오 로그인 토큰을 확인하지 못했어요. 다시 시도해 주세요.", false);
+        }
+
+        @Override
+        public synchronized void onError(String message, boolean cancelled) {
             if (!finish()) {
                 return;
             }
             listener.onError(message, cancelled);
+        }
+
+        void connected(String nickname) {
+            onConnected(nickname);
+        }
+
+        void error(String message, boolean cancelled) {
+            onError(message, cancelled);
         }
 
         private boolean finish() {

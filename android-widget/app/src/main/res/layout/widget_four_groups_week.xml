@@ -73,6 +73,6 @@
         android:layout_weight="1"
         android:adjustViewBounds="true"
         android:contentDescription="@string/week_widget_calendar_description"
-        android:scaleType="fitXY" />
+        android:scaleType="fitCenter" />
 
 </LinearLayout>
