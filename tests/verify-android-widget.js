@@ -190,6 +190,8 @@ assert(shiftCalendarApplication.includes('KakaoSdk.init('), '카카오 SDK 초�
 assert(manifest.includes('android:name=".ShiftCalendarApplication"'), '카카오 SDK Application이 매니페스트에 없습니다.');
 assert(manifest.includes('android:scheme="kakaoe9f15b01b136223f0f0d7b2e00b94281"'), '카카오 앱 실행 스킴이 없습니다.');
 assert(manifest.includes('android:host="kakaolink"'), '카카오 앱 실행 호스트가 없습니다.');
+assert(manifest.includes('com.kakao.sdk.auth.AuthCodeHandlerActivity'), '카카오 로그인 콜백 Activity가 없습니다.');
+assert(manifest.includes('android:host="oauth"'), '카카오 로그인 OAuth 리다이렉트 주소가 없습니다.');
 assert(kakaoShareManager.includes('ShareClient.getInstance().shareDefault('), '카카오톡 공식 기본 템플릿 공유가 없습니다.');
 assert(kakaoShareManager.includes('openWebShare(activity, template, fallback)'), '카카오 네이티브 공유 실패 시 공식 웹 공유 전환이 없습니다.');
 assert(kakaoShareManager.includes('WebSharerClient.getInstance().makeDefaultUrl(template)'), '카카오 공식 웹 공유 URL 생성이 없습니다.');
@@ -203,6 +205,7 @@ assert(mainActivity.includes('public void loginWithKakao()'), '카카오 로그�
 assert(mainActivity.includes('public void disconnectKakao()'), '카카오 연결 해제 WebView 브리지가 없습니다.');
 assert(kakaoLoginManager.includes('loginWithKakaoTalk('), '카카오톡 로그인 호출이 없습니다.');
 assert(kakaoLoginManager.includes('loginWithKakaoAccount('), '카카오톡 미설치 시 계정 로그인 대체 경로가 없습니다.');
+assert(kakaoLoginManager.includes('KakaoTalk login failed'), '카카오톡 로그인 실패가 웹 로그인 중복 실행 없이 종료되지 않습니다.');
 assert(kakaoLoginManager.includes('.unlink('), '카카오 연결 해제 처리가 없습니다.');
 assert(appSource.includes('window.onAndroidKakaoUser'), '카카오 닉네임 수신 처리가 없습니다.');
 assert(appSource.includes('renderParticipantNames'), '공유방 참여자 이름 UI가 없습니다.');

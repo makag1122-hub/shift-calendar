@@ -35,7 +35,11 @@ final class KakaoLoginManager {
                 } else if (isCancelled(error)) {
                     listener.onError("카카오 로그인이 취소됐어요.", true);
                 } else {
-                    loginWithAccount(activity, listener);
+                    Log.w(TAG, "KakaoTalk login failed", error);
+                    listener.onError(
+                            "카카오톡 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.",
+                            false
+                    );
                 }
                 return Unit.INSTANCE;
             });

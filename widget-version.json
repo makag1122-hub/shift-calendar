@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "1.12.0",
+  "versionCode": 14,
+  "versionName": "1.13.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "카카오 로그인으로 닉네임을 연결하고 공유방에서 공유자와 참여자 이름을 확인할 수 있습니다. 카카오 연결 해제 시 공유방의 내 이름도 함께 삭제됩니다."
+  "notes": "카카오 로그인 완료 후 앱으로 돌아오지 않던 문제와 로그인 화면이 두 번 표시되던 문제를 수정했습니다."
 }
