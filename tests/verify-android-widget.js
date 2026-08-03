@@ -152,6 +152,120 @@ function fittedBitmapHeight(width, height, horizontalChrome, verticalChrome){
     `${sample.name} 위젯의 세로/가로 배율이 다릅니다: ${axisRatio}`
   );
 });
+/* ---------- 6×7 4개 조 월간 위젯 ----------
+   한 칸에 날짜와 A·B·C·D 네 줄이 함께 들어가므로, 칸이 낮아져도
+   날짜 글씨와 조 배지가 겹치거나 칸 밖으로 넘치면 안 됩니다. */
+const monthAllProvider = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'MonthAllGroupsWidgetProvider.java'),
+  'utf8'
+);
+const monthAllLayout = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'layout', 'widget_month_all_groups.xml'),
+  'utf8'
+);
+const monthAllInfo = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'xml', 'month_all_groups_widget_info.xml'),
+  'utf8'
+);
+
+assert(manifest.includes('.MonthAllGroupsWidgetProvider'), '6×7 4개 조 위젯이 매니페스트에 없습니다.');
+assert(renderer.includes('renderMonthAllGroups('), '6×7 4개 조 월간 위젯 렌더링이 없습니다.');
+assert(renderer.includes('drawMonthAllGroups('), '월간 격자 안의 4개 조 렌더링이 없습니다.');
+assert(
+  /static Result renderMonthAllGroups\([\s\S]*?int bitmapHeight = fittedBitmapHeight\(\s*MONTH_ALL_WIDTH/.test(renderer),
+  '6×7 위젯이 자기 폭에 맞춘 비트맵 높이를 쓰지 않습니다.'
+);
+assert(
+  monthAllProvider.includes('MONTH_ALL_PREVIOUS') && monthAllProvider.includes('MONTH_ALL_NEXT'),
+  '6×7 위젯의 월 이동 동작이 없습니다.'
+);
+assert(monthAllProvider.includes('MONTH_ALL_GROUP'), '6×7 위젯의 내 조 전환 동작이 없습니다.');
+assert(
+  monthAllProvider.includes('WidgetSize.widthDp(') && monthAllProvider.includes('WidgetSize.heightDp('),
+  '6×7 위젯 크기가 방향별로 계산되지 않습니다.'
+);
+assert(monthAllLayout.includes('@+id/month_all_widget_image'), '6×7 위젯 달력 이미지 영역이 없습니다.');
+assert(monthAllLayout.includes('@+id/month_all_widget_group'), '6×7 위젯에 내 조 전환 칩이 없습니다.');
+assert(monthAllLayout.includes('android:scaleType="fitCenter"'), '6×7 위젯의 비율 유지 scaleType이 없습니다.');
+assert(!monthAllLayout.includes('fitXY'), '6×7 위젯에 fitXY 왜곡이 있습니다.');
+assert(monthAllInfo.includes('android:targetCellWidth="6"'), '6×7 위젯의 기본 가로 칸 수가 6이 아닙니다.');
+assert(monthAllInfo.includes('android:targetCellHeight="7"'), '6×7 위젯의 기본 세로 칸 수가 7이 아닙니다.');
+assert(monthAllInfo.includes('android:resizeMode="horizontal|vertical"'), '6×7 위젯 크기 조절이 막혀 있습니다.');
+assert(
+  fs.readFileSync(
+    path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'MainActivity.java'),
+    'utf8'
+  ).includes('MonthAllGroupsWidgetProvider.updateWidgets('),
+  '앱에서 근무표를 저장할 때 6×7 위젯이 갱신되지 않습니다.'
+);
+
+function number(name){
+  const found = renderer.match(new RegExp(name + '\\s*=\\s*([0-9.]+)f?;'));
+  assert(found, `${name} 값을 렌더러에서 읽지 못했습니다.`);
+  return Number(found[1]);
+}
+const monthAllWidth = number('MONTH_ALL_WIDTH');
+const monthAllScale = number('MONTH_ALL_RENDER_SCALE');
+const monthAllHeader = number('MONTH_ALL_HEADER_HEIGHT');
+const monthAllMin = number('MONTH_ALL_MIN_HEIGHT');
+const monthAllMax = number('MONTH_ALL_MAX_HEIGHT');
+const monthAllDefault = number('MONTH_ALL_DEFAULT_HEIGHT');
+
+/* RemoteViews 비트맵이 기존 월간 위젯(560×520 @2.5배)보다 커지면
+   런처가 그리기를 거부할 수 있습니다. */
+const provenBitmapBytes = 560 * 2.5 * 520 * 2.5 * 4;
+const monthAllBitmapBytes = monthAllWidth * monthAllScale * monthAllMax * monthAllScale * 4;
+assert(
+  monthAllBitmapBytes <= provenBitmapBytes * 1.1,
+  `6×7 위젯 비트맵이 검증된 크기보다 큽니다: ${Math.round(monthAllBitmapBytes / 1048576)}MB`
+);
+assert(
+  monthAllWidth * monthAllScale >= 1080,
+  '6×7 위젯이 화면 폭보다 낮은 해상도로 그려집니다.'
+);
+
+[monthAllMin, monthAllDefault, monthAllMax].forEach(height => {
+  const columnWidth = monthAllWidth / 7;
+  const rowHeight = (height - monthAllHeader) / 6;
+  /* 날짜는 top+17 기준선에 14px 굵은 글씨로 그립니다. */
+  const dateBottom = 17 + 14 * 0.25;
+  const slotsTop = 22;
+  const slot = (rowHeight - 5 - slotsTop) / 4;
+  const badgeHeight = Math.min(20, Math.max(9, slot - 2.5));
+  const lastBadgeBottom = slotsTop + 3 * slot + (slot - badgeHeight) / 2 + badgeHeight;
+  const badgeWidth = (columnWidth - 7) - 19;
+
+  assert(slotsTop >= dateBottom, `높이 ${height}에서 날짜와 조 배지가 겹칩니다.`);
+  assert(badgeHeight >= 9, `높이 ${height}에서 조 배지가 읽을 수 없을 만큼 낮습니다: ${badgeHeight}`);
+  assert(
+    lastBadgeBottom <= rowHeight - 3.5,
+    `높이 ${height}에서 D조 배지가 날짜 칸 밖으로 넘칩니다: ${lastBadgeBottom} > ${rowHeight - 3.5}`
+  );
+  assert(badgeWidth >= 30, `높이 ${height}에서 조 배지 폭이 너무 좁습니다: ${badgeWidth}`);
+});
+
+/* 레이아웃 여백 합계가 렌더러에 넘긴 chrome 값과 다르면 달력이 눌립니다. */
+[
+  { name: 'month-all 300x420', width: 300, height: 420 },
+  { name: 'month-all 360x560', width: 360, height: 560 },
+  { name: 'month-all 250x300', width: 250, height: 300 },
+].forEach(sample => {
+  const horizontalChrome = 20;
+  const verticalChrome = 96;
+  const availableWidth = Math.max(1, sample.width - horizontalChrome);
+  const availableHeight = Math.max(1, sample.height - verticalChrome);
+  const bitmapHeight = Math.max(1, Math.round(monthAllWidth * availableHeight / availableWidth));
+  const axisRatio = (availableHeight / bitmapHeight) / (availableWidth / monthAllWidth);
+  assert(
+    axisRatio >= 0.95 && axisRatio <= 1.05,
+    `${sample.name} 위젯의 세로/가로 배율이 다릅니다: ${axisRatio}`
+  );
+});
+assert(
+  /paddingLeft="10dp"[\s\S]*?paddingRight="10dp"/.test(monthAllLayout),
+  '6×7 위젯 좌우 여백이 렌더러의 20dp 계산과 다릅니다.'
+);
+
 const weekRendererStart = renderer.indexOf('private static void drawWeekGroups(');
 const weekRendererEnd = renderer.indexOf('private static JSONArray dayEntry(', weekRendererStart);
 const weekRenderer = renderer.slice(weekRendererStart, weekRendererEnd);

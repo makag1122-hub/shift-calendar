@@ -61,6 +61,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/four_group_week_widget_info" />
         </receiver>
+
+        <receiver
+            android:name=".MonthAllGroupsWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/month_all_groups_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

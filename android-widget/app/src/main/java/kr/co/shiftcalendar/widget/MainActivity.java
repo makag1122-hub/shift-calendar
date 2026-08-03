@@ -494,6 +494,13 @@ public class MainActivity extends Activity {
                     manager,
                     manager.getAppWidgetIds(weekComponent)
             );
+            ComponentName monthAllComponent =
+                    new ComponentName(context, MonthAllGroupsWidgetProvider.class);
+            MonthAllGroupsWidgetProvider.updateWidgets(
+                    context,
+                    manager,
+                    manager.getAppWidgetIds(monthAllComponent)
+            );
         }
 
         /* 앱에서는 안드로이드 공유창을 한 번 더 거치지 않고 카카오톡을 먼저 엽니다.

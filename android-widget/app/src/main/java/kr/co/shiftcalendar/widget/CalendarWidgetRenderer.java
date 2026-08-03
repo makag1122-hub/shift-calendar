@@ -27,6 +27,20 @@ final class CalendarWidgetRenderer {
     private static final float RENDER_SCALE = 2.5f;
     private static final int WEEK_HEIGHT = 32;
     private static final int ROWS = 6;
+    /*
+     * 6행 7열 월간 격자에 4개 조를 모두 담는 큰 위젯입니다.
+     * 한 칸에 날짜 + A/B/C/D 네 줄이 들어가므로 기본 달력보다 넓게 그립니다.
+     */
+    private static final int MONTH_ALL_WIDTH = 700;
+    /*
+     * 이 위젯은 화면 폭을 거의 다 쓰므로 1.7배면 기기 픽셀보다 촘촘합니다.
+     * 배율을 더 올리면 RemoteViews 비트맵이 기존 위젯보다 커져 안전하지 않습니다.
+     */
+    private static final float MONTH_ALL_RENDER_SCALE = 1.7f;
+    private static final int MONTH_ALL_DEFAULT_HEIGHT = 760;
+    private static final int MONTH_ALL_MIN_HEIGHT = 600;
+    private static final int MONTH_ALL_MAX_HEIGHT = 950;
+    private static final float MONTH_ALL_HEADER_HEIGHT = 30f;
     private static final String[] WEEKDAYS = {"일", "월", "화", "수", "목", "금", "토"};
     private static final String[] GROUPS = {"A", "B", "C", "D"};
     private static final int COLOR_BRAND = Color.rgb(79, 70, 229);
@@ -87,12 +101,18 @@ final class CalendarWidgetRenderer {
                         | Paint.FILTER_BITMAP_FLAG
         );
         canvas.drawColor(COLOR_SURFACE);
-        int height = prepareContentCanvas(canvas, bitmapHeight, MIN_HEIGHT, MAX_HEIGHT);
+        int height = prepareContentCanvas(
+                canvas,
+                WIDTH,
+                bitmapHeight,
+                MIN_HEIGHT,
+                MAX_HEIGHT
+        );
 
         JSONObject root = payload(context);
         JSONArray days = monthDays(root, year, month, group);
         if (root == null || days == null) {
-            drawEmpty(canvas, paint, height);
+            drawEmpty(canvas, paint, WIDTH, height);
             return new Result(bitmap, "앱을 열어 달력을 동기화해 주세요");
         }
 
@@ -142,6 +162,7 @@ final class CalendarWidgetRenderer {
         canvas.drawColor(COLOR_SURFACE);
         int height = prepareContentCanvas(
                 canvas,
+                WIDTH,
                 bitmapHeight,
                 MIN_WEEK_HEIGHT,
                 MAX_WEEK_HEIGHT
@@ -149,7 +170,7 @@ final class CalendarWidgetRenderer {
 
         JSONObject root = payload(context);
         if (root == null) {
-            drawEmpty(canvas, paint, height);
+            drawEmpty(canvas, paint, WIDTH, height);
             return new Result(bitmap, "앱을 열어 근무표를 동기화해 주세요");
         }
         drawWeekGroups(
@@ -162,6 +183,289 @@ final class CalendarWidgetRenderer {
                 height
         );
         return new Result(bitmap, "");
+    }
+
+    /**
+     * 6행 7열 월간 격자에 네 개 조를 함께 그립니다.
+     * 월간 위젯의 달력 틀과 4개 조 위젯의 조별 비교를 한 화면에 합친 형태입니다.
+     */
+    static Result renderMonthAllGroups(
+            Context context,
+            int year,
+            int month,
+            String activeGroup,
+            int widgetWidthDp,
+            int widgetHeightDp
+    ) {
+        int bitmapHeight = fittedBitmapHeight(
+                MONTH_ALL_WIDTH,
+                widgetWidthDp,
+                widgetHeightDp,
+                20f,
+                96f,
+                MONTH_ALL_DEFAULT_HEIGHT
+        );
+        Bitmap bitmap = Bitmap.createBitmap(
+                Math.round(MONTH_ALL_WIDTH * MONTH_ALL_RENDER_SCALE),
+                Math.round(bitmapHeight * MONTH_ALL_RENDER_SCALE),
+                Bitmap.Config.ARGB_8888
+        );
+        Canvas canvas = new Canvas(bitmap);
+        canvas.scale(MONTH_ALL_RENDER_SCALE, MONTH_ALL_RENDER_SCALE);
+        Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG
+                        | Paint.SUBPIXEL_TEXT_FLAG
+                        | Paint.DITHER_FLAG
+                        | Paint.FILTER_BITMAP_FLAG
+        );
+        canvas.drawColor(COLOR_SURFACE);
+        int height = prepareContentCanvas(
+                canvas,
+                MONTH_ALL_WIDTH,
+                bitmapHeight,
+                MONTH_ALL_MIN_HEIGHT,
+                MONTH_ALL_MAX_HEIGHT
+        );
+
+        JSONObject root = payload(context);
+        if (root == null || monthDays(root, year, month, activeGroup) == null) {
+            drawEmpty(canvas, paint, MONTH_ALL_WIDTH, height);
+            return new Result(bitmap, "앱을 열어 달력을 동기화해 주세요");
+        }
+        drawMonthAllGroups(
+                canvas,
+                paint,
+                root,
+                root.optJSONObject("shifts"),
+                year,
+                month,
+                activeGroup,
+                height
+        );
+        return new Result(bitmap, allGroupsSummary(root, activeGroup));
+    }
+
+    private static void drawMonthAllGroups(
+            Canvas canvas,
+            Paint paint,
+            JSONObject root,
+            JSONObject shifts,
+            int year,
+            int month,
+            String activeGroup,
+            int height
+    ) {
+        final float columnWidth = MONTH_ALL_WIDTH / 7f;
+        final float rowHeight = (height - MONTH_ALL_HEADER_HEIGHT) / ROWS;
+
+        paint.setTypeface(TYPEFACE_BOLD);
+        paint.setTextSize(13f);
+        paint.setTextAlign(Paint.Align.CENTER);
+        for (int column = 0; column < 7; column++) {
+            paint.setColor(column == 0
+                    ? COLOR_SUNDAY
+                    : column == 6
+                    ? COLOR_SATURDAY
+                    : Color.rgb(119, 127, 143));
+            canvas.drawText(
+                    WEEKDAYS[column],
+                    column * columnWidth + columnWidth / 2f,
+                    19f,
+                    paint
+            );
+        }
+
+        JSONArray[] groupDays = new JSONArray[GROUPS.length];
+        int activeIndex = 0;
+        for (int index = 0; index < GROUPS.length; index++) {
+            groupDays[index] = monthDays(root, year, month, GROUPS[index]);
+            if (GROUPS[index].equals(activeGroup)) {
+                activeIndex = index;
+            }
+        }
+
+        Calendar first = Calendar.getInstance();
+        first.set(year, month, 1, 12, 0, 0);
+        int firstColumn = first.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
+        int daysInMonth = first.getActualMaximum(Calendar.DAY_OF_MONTH);
+        Calendar today = Calendar.getInstance();
+        boolean currentMonth =
+                today.get(Calendar.YEAR) == year && today.get(Calendar.MONTH) == month;
+
+        for (int day = 1; day <= daysInMonth; day++) {
+            int position = firstColumn + day - 1;
+            int row = position / 7;
+            int column = position % 7;
+            float left = column * columnWidth;
+            float top = MONTH_ALL_HEADER_HEIGHT + row * rowHeight;
+            float right = left + columnWidth;
+            float bottom = top + rowHeight;
+
+            JSONArray activeEntry = groupDays[activeIndex] == null
+                    ? null
+                    : groupDays[activeIndex].optJSONArray(day - 1);
+            String tag = activeEntry == null ? "" : activeEntry.optString(1, "");
+            String memo = memoText(activeEntry);
+            boolean holiday = activeEntry != null && activeEntry.optInt(4, 0) == 1;
+            JSONObject activeShift = shifts == null || activeEntry == null
+                    ? null
+                    : shifts.optJSONObject(activeEntry.optString(0, ""));
+            int activeColor = parseColor(
+                    activeShift == null ? "#94a3b8" : activeShift.optString("color", "#94a3b8")
+            );
+
+            RectF cell = new RectF(left + 2.5f, top + 2.5f, right - 2.5f, bottom - 2.5f);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(blendWithWhite(activeColor, 0.07f));
+            canvas.drawRoundRect(cell, 9f, 9f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(0.9f);
+            paint.setColor(COLOR_LINE);
+            canvas.drawRoundRect(cell, 9f, 9f, paint);
+            paint.setStyle(Paint.Style.FILL);
+
+            int cellSave = canvas.save();
+            canvas.clipRect(cell.left + 1f, cell.top + 1f, cell.right - 1f, cell.bottom - 1f);
+
+            paint.setTypeface(TYPEFACE_BOLD);
+            paint.setTextAlign(Paint.Align.LEFT);
+            paint.setTextSize(14f);
+            paint.setColor(
+                    holiday || column == 0
+                            ? COLOR_SUNDAY
+                            : column == 6
+                            ? COLOR_SATURDAY
+                            : COLOR_INK
+            );
+            String dayLabel = String.valueOf(day);
+            canvas.drawText(dayLabel, left + 8f, top + 17f, paint);
+            if (!memo.isEmpty()) {
+                paint.setColor(COLOR_MEMO);
+                canvas.drawCircle(
+                        left + 8f + paint.measureText(dayLabel) + 5f,
+                        top + 12.5f,
+                        2.6f,
+                        paint
+                );
+            }
+            if (!tag.isEmpty()) {
+                drawTag(canvas, paint, tag, right - 6f, top + 4.5f, true);
+            }
+
+            /* 날짜 줄 아래를 네 등분해 A·B·C·D를 위에서 아래로 쌓습니다. */
+            float slotsTop = top + 22f;
+            float slot = (bottom - 5f - slotsTop) / GROUPS.length;
+            for (int index = 0; index < GROUPS.length; index++) {
+                JSONArray entry = groupDays[index] == null
+                        ? null
+                        : groupDays[index].optJSONArray(day - 1);
+                String shiftKey = entry == null ? "" : entry.optString(0, "");
+                JSONObject shift = shifts == null ? null : shifts.optJSONObject(shiftKey);
+                int shiftColor = parseColor(
+                        shift == null ? "#94a3b8" : shift.optString("color", "#94a3b8")
+                );
+                boolean selected = index == activeIndex;
+
+                float badgeHeight = Math.min(20f, Math.max(9f, slot - 2.5f));
+                float badgeTop = slotsTop + index * slot + (slot - badgeHeight) / 2f;
+                float badgeCenterY = badgeTop + badgeHeight / 2f;
+
+                paint.setTypeface(TYPEFACE_BOLD);
+                paint.setTextAlign(Paint.Align.CENTER);
+                paint.setTextSize(9f);
+                paint.setColor(selected ? COLOR_BRAND : COLOR_INK_SOFT);
+                canvas.drawText(
+                        GROUPS[index],
+                        left + 11f,
+                        badgeCenterY - (paint.ascent() + paint.descent()) / 2f,
+                        paint
+                );
+
+                RectF badge = new RectF(
+                        left + 19f,
+                        badgeTop,
+                        right - 7f,
+                        badgeTop + badgeHeight
+                );
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(selected ? shiftColor : blendWithWhite(shiftColor, 0.16f));
+                canvas.drawRoundRect(badge, 5.5f, 5.5f, paint);
+                if (!selected) {
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(0.8f);
+                    paint.setColor(blendWithWhite(shiftColor, 0.42f));
+                    canvas.drawRoundRect(badge, 5.5f, 5.5f, paint);
+                    paint.setStyle(Paint.Style.FILL);
+                }
+
+                String label = shift == null
+                        ? "-"
+                        : shift.optString("short", shift.optString("label", shiftKey));
+                paint.setTypeface(TYPEFACE_BOLD);
+                paint.setTextAlign(Paint.Align.CENTER);
+                paint.setTextSize(selected ? 10.5f : 9.5f);
+                paint.setColor(selected ? Color.WHITE : blendWithBlack(shiftColor, 0.62f));
+                canvas.drawText(
+                        ellipsize(paint, trimLabel(label), badge.width() - 6f),
+                        badge.centerX(),
+                        badgeCenterY - (paint.ascent() + paint.descent()) / 2f,
+                        paint
+                );
+            }
+
+            canvas.restoreToCount(cellSave);
+
+            if (currentMonth && today.get(Calendar.DAY_OF_MONTH) == day) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(2.6f);
+                paint.setColor(COLOR_BRAND);
+                canvas.drawRoundRect(cell, 9f, 9f, paint);
+                paint.setStyle(Paint.Style.FILL);
+            }
+        }
+    }
+
+    /** 하단 요약도 네 개 조를 함께 보여 줍니다. */
+    private static String allGroupsSummary(JSONObject root, String activeGroup) {
+        Calendar now = Calendar.getInstance();
+        JSONObject shifts = root.optJSONObject("shifts");
+        StringBuilder summary = new StringBuilder(
+                String.format(
+                        Locale.KOREA,
+                        "오늘 %d/%d",
+                        now.get(Calendar.MONTH) + 1,
+                        now.get(Calendar.DAY_OF_MONTH)
+                )
+        );
+        String activeMemo = "";
+        for (String group : GROUPS) {
+            JSONArray days = monthDays(
+                    root,
+                    now.get(Calendar.YEAR),
+                    now.get(Calendar.MONTH),
+                    group
+            );
+            JSONArray entry = days == null
+                    ? null
+                    : days.optJSONArray(now.get(Calendar.DAY_OF_MONTH) - 1);
+            JSONObject shift = shifts == null || entry == null
+                    ? null
+                    : shifts.optJSONObject(entry.optString(0, ""));
+            String label = shift == null
+                    ? "-"
+                    : shift.optString("short", shift.optString("label", "-"));
+            summary.append(" · ")
+                    .append(group)
+                    .append(' ')
+                    .append(trimLabel(label));
+            if (group.equals(activeGroup)) {
+                activeMemo = memoText(entry);
+            }
+        }
+        if (!activeMemo.isEmpty()) {
+            summary.append(" · 메모 ").append(trimMemo(activeMemo, 14));
+        }
+        return summary.toString();
     }
 
     private static void drawWeekGroups(
@@ -320,11 +624,19 @@ final class CalendarWidgetRenderer {
     }
 
     private static int calendarHeight(int widgetWidthDp, int widgetHeightDp) {
-        return fittedBitmapHeight(widgetWidthDp, widgetHeightDp, 22f, 105f, DEFAULT_HEIGHT);
+        return fittedBitmapHeight(
+                WIDTH,
+                widgetWidthDp,
+                widgetHeightDp,
+                22f,
+                105f,
+                DEFAULT_HEIGHT
+        );
     }
 
     private static int weekHeight(int widgetWidthDp, int widgetHeightDp) {
         return fittedBitmapHeight(
+                WIDTH,
                 widgetWidthDp,
                 widgetHeightDp,
                 18f,
@@ -335,6 +647,7 @@ final class CalendarWidgetRenderer {
 
     /** ImageView의 실제 내용 박스와 같은 종횡비로 비트맵을 만듭니다. */
     private static int fittedBitmapHeight(
+            int contentWidth,
             int widgetWidthDp,
             int widgetHeightDp,
             float horizontalChromeDp,
@@ -346,7 +659,7 @@ final class CalendarWidgetRenderer {
         }
         float availableWidth = Math.max(1f, widgetWidthDp - horizontalChromeDp);
         float availableHeight = Math.max(1f, widgetHeightDp - verticalChromeDp);
-        return Math.max(1, Math.round(WIDTH * availableHeight / availableWidth));
+        return Math.max(1, Math.round(contentWidth * availableHeight / availableWidth));
     }
 
     /**
@@ -355,6 +668,7 @@ final class CalendarWidgetRenderer {
      */
     private static int prepareContentCanvas(
             Canvas canvas,
+            int contentWidth,
             int bitmapHeight,
             int minContentHeight,
             int maxContentHeight
@@ -364,10 +678,10 @@ final class CalendarWidgetRenderer {
                 Math.min(maxContentHeight, bitmapHeight)
         );
         float scale = Math.min(1f, bitmapHeight / (float) contentHeight);
-        float scaledWidth = WIDTH * scale;
+        float scaledWidth = contentWidth * scale;
         float scaledHeight = contentHeight * scale;
         canvas.translate(
-                (WIDTH - scaledWidth) / 2f,
+                (contentWidth - scaledWidth) / 2f,
                 Math.max(0f, (bitmapHeight - scaledHeight) / 2f)
         );
         canvas.scale(scale, scale);
@@ -814,16 +1128,16 @@ final class CalendarWidgetRenderer {
         return memo.isEmpty() ? summary : summary + " · 메모 " + trimMemo(memo, 18);
     }
 
-    private static void drawEmpty(Canvas canvas, Paint paint, int height) {
+    private static void drawEmpty(Canvas canvas, Paint paint, int width, int height) {
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setTypeface(TYPEFACE_BOLD);
         paint.setColor(COLOR_INK);
         paint.setTextSize(25f);
-        canvas.drawText("교대캘린더", WIDTH / 2f, height / 2f - 10f, paint);
+        canvas.drawText("교대캘린더", width / 2f, height / 2f - 10f, paint);
         paint.setTypeface(TYPEFACE_REGULAR);
         paint.setColor(COLOR_INK_SOFT);
         paint.setTextSize(18f);
-        canvas.drawText("앱을 한 번 열면 근무표가 표시됩니다", WIDTH / 2f, height / 2f + 25f, paint);
+        canvas.drawText("앱을 한 번 열면 근무표가 표시됩니다", width / 2f, height / 2f + 25f, paint);
     }
 
     private static int parseColor(String value) {
