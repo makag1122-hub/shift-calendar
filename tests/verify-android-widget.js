@@ -152,9 +152,9 @@ function fittedBitmapHeight(width, height, horizontalChrome, verticalChrome){
     `${sample.name} 위젯의 세로/가로 배율이 다릅니다: ${axisRatio}`
   );
 });
-/* ---------- 6×7 4개 조 월간 위젯 ----------
-   한 칸에 날짜와 A·B·C·D 네 줄이 함께 들어가므로, 칸이 낮아져도
-   날짜 글씨와 조 배지가 겹치거나 칸 밖으로 넘치면 안 됩니다. */
+/* ---------- 6×7 큰 달력 위젯 ----------
+   이 위젯의 목적은 메모를 크게 보는 것입니다. 위쪽 달력 칸에는 날짜·근무 배지
+   아래로 메모가 들어가야 하고, 4개 조는 하단 얇은 띠에만 나와야 합니다. */
 const monthAllProvider = fs.readFileSync(
   path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'MonthAllGroupsWidgetProvider.java'),
   'utf8'
@@ -169,8 +169,14 @@ const monthAllInfo = fs.readFileSync(
 );
 
 assert(manifest.includes('.MonthAllGroupsWidgetProvider'), '6×7 4개 조 위젯이 매니페스트에 없습니다.');
-assert(renderer.includes('renderMonthAllGroups('), '6×7 4개 조 월간 위젯 렌더링이 없습니다.');
-assert(renderer.includes('drawMonthAllGroups('), '월간 격자 안의 4개 조 렌더링이 없습니다.');
+assert(renderer.includes('renderMonthAllGroups('), '6×7 큰 달력 위젯 렌더링이 없습니다.');
+assert(renderer.includes('drawMonthWithMemos('), '큰 달력의 메모 표시 렌더링이 없습니다.');
+assert(renderer.includes('wrapMemo('), '메모를 여러 줄로 나누는 처리가 없습니다.');
+assert(renderer.includes('drawGroupBand('), '하단 4개 조 요약 띠 렌더링이 없습니다.');
+assert(
+  !renderer.includes('drawMonthAllGroups('),
+  '달력 칸마다 4개 조를 쌓던 예전 렌더링이 남아 있습니다.'
+);
 assert(
   /static Result renderMonthAllGroups\([\s\S]*?int bitmapHeight = fittedBitmapHeight\(\s*MONTH_ALL_WIDTH/.test(renderer),
   '6×7 위젯이 자기 폭에 맞춘 비트맵 높이를 쓰지 않습니다.'
@@ -224,24 +230,55 @@ assert(
   '6×7 위젯이 화면 폭보다 낮은 해상도로 그려집니다.'
 );
 
-[monthAllMin, monthAllDefault, monthAllMax].forEach(height => {
-  const columnWidth = monthAllWidth / 7;
-  const rowHeight = (height - monthAllHeader) / 6;
-  /* 날짜는 top+17 기준선에 14px 굵은 글씨로 그립니다. */
-  const dateBottom = 17 + 14 * 0.25;
-  const slotsTop = 22;
-  const slot = (rowHeight - 5 - slotsTop) / 4;
-  const badgeHeight = Math.min(20, Math.max(9, slot - 2.5));
-  const lastBadgeBottom = slotsTop + 3 * slot + (slot - badgeHeight) / 2 + badgeHeight;
-  const badgeWidth = (columnWidth - 7) - 19;
+const bandMin = number('MONTH_ALL_BAND_MIN');
+const bandMax = number('MONTH_ALL_BAND_MAX');
+const bandRatio = number('MONTH_ALL_BAND_RATIO');
 
-  assert(slotsTop >= dateBottom, `높이 ${height}에서 날짜와 조 배지가 겹칩니다.`);
-  assert(badgeHeight >= 9, `높이 ${height}에서 조 배지가 읽을 수 없을 만큼 낮습니다: ${badgeHeight}`);
+[
+  { height: monthAllMin, memoLines: 1 },
+  { height: monthAllDefault, memoLines: 2 },
+  { height: monthAllMax, memoLines: 2 },
+].forEach(sample => {
+  const height = sample.height;
+  const bandHeight = Math.min(bandMax, Math.max(bandMin, height * bandRatio));
+  const calendarHeight = height - bandHeight;
+  const columnWidth = monthAllWidth / 7;
+  const rowHeight = (calendarHeight - monthAllHeader) / 6;
+
+  /* 날짜는 top+21 기준선에 16px 굵은 글씨, 근무 배지는 top+27부터입니다. */
+  const dateBottom = 21 + 16 * 0.25;
+  const pillTop = 27;
+  const pillHeight = Math.min(26, Math.max(17, rowHeight * 0.26));
+  const memoTop = pillTop + pillHeight + 4;
+  const memoRoom = Math.floor((rowHeight - 5 - memoTop) / 12);
+
+  assert(pillTop >= dateBottom, `높이 ${height}에서 날짜와 근무 배지가 겹칩니다.`);
   assert(
-    lastBadgeBottom <= rowHeight - 3.5,
-    `높이 ${height}에서 D조 배지가 날짜 칸 밖으로 넘칩니다: ${lastBadgeBottom} > ${rowHeight - 3.5}`
+    memoRoom >= sample.memoLines,
+    `높이 ${height}에서 메모가 ${sample.memoLines}줄 들어가지 않습니다: ${memoRoom}줄`
   );
-  assert(badgeWidth >= 30, `높이 ${height}에서 조 배지 폭이 너무 좁습니다: ${badgeWidth}`);
+  assert(
+    memoTop + memoRoom * 12 <= rowHeight - 3,
+    `높이 ${height}에서 메모가 날짜 칸 밖으로 넘칩니다.`
+  );
+  assert(columnWidth - 26 >= 55, `높이 ${height}에서 메모 글자 폭이 너무 좁습니다.`);
+
+  /* 하단 띠: 한 달 31일을 4행으로 압축해도 글자가 보여야 합니다. */
+  const bandInner = bandHeight - 9;
+  const bandRowHeight = (bandInner - 13) / 4;
+  const bandColumnWidth = (monthAllWidth - 30) / 31;
+  assert(
+    bandRowHeight >= 14,
+    `높이 ${height}에서 하단 4개 조 줄이 너무 얇습니다: ${bandRowHeight}`
+  );
+  assert(
+    bandColumnWidth >= 15,
+    `높이 ${height}에서 하단 띠의 하루 폭이 너무 좁습니다: ${bandColumnWidth}`
+  );
+  assert(
+    calendarHeight >= height * 0.75,
+    `높이 ${height}에서 하단 띠가 달력을 너무 많이 차지합니다.`
+  );
 });
 
 /* 레이아웃 여백 합계가 렌더러에 넘긴 chrome 값과 다르면 달력이 눌립니다. */

@@ -125,7 +125,7 @@ public class MainActivity extends Activity {
                 );
             }
         });
-        webView.loadUrl(launchUrl(getIntent()));
+        webView.loadUrl(consumeLaunchUrl(getIntent()));
 
         checkForUpdate();
     }
@@ -135,8 +135,22 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (webView != null) {
-            webView.loadUrl(launchUrl(intent));
+            webView.loadUrl(consumeLaunchUrl(intent));
         }
+    }
+
+    /*
+     * 초대 토큰은 한 번만 씁니다. 액티비티가 다시 만들어질 때 같은 인텐트가
+     * 그대로 남아 있으면 초대 링크가 또 적용되어, 방을 만든 사람이
+     * 자기 링크 때문에 보기 전용으로 바뀔 수 있습니다.
+     */
+    private String consumeLaunchUrl(Intent intent) {
+        String url = launchUrl(intent);
+        if (intent != null && intent.getData() != null) {
+            intent.setData(null);
+            setIntent(intent);
+        }
+        return url;
     }
 
     private static String launchUrl(Intent intent) {

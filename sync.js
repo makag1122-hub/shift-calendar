@@ -103,6 +103,7 @@
       db,
       uid,
       doc: fsMod.doc,
+      getDoc: fsMod.getDoc,
       setDoc: fsMod.setDoc,
       updateDoc: fsMod.updateDoc,
       deleteDoc: fsMod.deleteDoc,
@@ -120,6 +121,7 @@
     try{
       const f = await ensureFirebase(cfg.config, !!(cfg.managed || cfg.secured));
       docRef = f.doc(f.db, 'calendars', cfg.code);
+      await restoreOwnership(f);
       if(cfg.role === 'viewer'){
         if(f.uid && f.arrayUnion){
           await f.updateDoc(docRef, { memberUids: f.arrayUnion(f.uid) });
@@ -153,6 +155,25 @@
         setStatus('live');
       }
     }catch(e){ setStatus('error', friendly(e)); }
+  }
+
+  /*
+   * 내가 만든 공유방인데 초대 링크를 눌러 보기 전용으로 바뀐 기기를 되돌립니다.
+   * 진짜 주인은 이 기기에 저장된 역할이 아니라 클라우드의 ownerUid가 정합니다.
+   * (익명 로그인 uid는 이 기기에 계속 남아 있으므로 재설치 전까지 그대로입니다.)
+   */
+  async function restoreOwnership(f){
+    if(!cfg || cfg.role === 'owner' || !f || !f.uid || !f.getDoc || !docRef) return;
+    try{
+      const snap = await f.getDoc(docRef);
+      const data = snap && typeof snap.exists === 'function' && snap.exists() ? snap.data() : null;
+      if(data && data.ownerUid && data.ownerUid === f.uid){
+        cfg = Object.assign({}, cfg, { role: 'owner' });
+        saveCfg(cfg);
+      }
+    }catch(e){
+      /* 진짜 보기 전용 참여자는 아직 멤버가 아니라 읽기가 막힙니다. 그대로 진행합니다. */
+    }
   }
 
   function friendly(e){
@@ -330,13 +351,24 @@
   window.Sync = {
     init(){
       // 공유 링크로 열렸는지 확인 (#share=...)
+      const saved = loadCfg();
       const m = location.hash.match(/[#&]share=([^&]+)/);
       if(m){
         const decoded = decodeShare(m[1]);
         const linkConfig = decoded && validConfig(decoded.config)
           ? decoded.config
           : managedConfig();
-        if(decoded && linkConfig && decoded.code){
+        /*
+         * 내가 보낸 초대 링크를 내가 다시 눌러도 방을 만든 사람 자격을 잃으면 안 됩니다.
+         * 이걸 막지 않으면 링크를 한 번 확인하는 것만으로 보기 전용이 되어
+         * 다음에 앱을 열었을 때 초대 링크와 공유 버튼이 사라집니다.
+         */
+        const ownRoom = !!(saved && saved.role === 'owner'
+          && decoded && saved.code === decoded.code);
+        if(ownRoom){
+          cfg = saved;
+        }
+        if(decoded && linkConfig && decoded.code && !ownRoom){
           cfg = {
             config: linkConfig,
             code: decoded.code,

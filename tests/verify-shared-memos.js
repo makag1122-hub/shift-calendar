@@ -18,13 +18,22 @@ function wait(ms){
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function makeSandbox(role, remoteData){
-  const calls = { setDoc: [], updateDoc: [], deleteDoc: [], renders: 0 };
+function makeSandbox(role, remoteData, options){
+  const opts = options || {};
+  const calls = { setDoc: [], updateDoc: [], deleteDoc: [], getDoc: [], renders: 0 };
   const cfg = {
     config: { apiKey: 'test-key', projectId: 'test-project' },
-    code: 'shared-calendar',
+    code: opts.code || 'shared-calendar',
     role,
   };
+  if(opts.managed){
+    cfg.managed = true;
+    cfg.secured = true;
+  }
+  /* 클라우드 문서의 ownerUid가 이 기기의 익명 uid와 같으면 진짜 주인입니다. */
+  const remoteDoc = Object.prototype.hasOwnProperty.call(opts, 'remoteDoc')
+    ? opts.remoteDoc
+    : { ownerUid: 'someone-else' };
   const storage = new Map(role ? [['shiftcal.sync', JSON.stringify(cfg)]] : []);
   const sandbox = {
     console,
@@ -50,7 +59,12 @@ function makeSandbox(role, remoteData){
       setItem: (key, value) => storage.set(key, value),
       removeItem: key => storage.delete(key),
     },
-    location: { hash: '', pathname: '/', search: '', origin: 'https://example.test' },
+    location: {
+      hash: opts.hash || '',
+      pathname: '/',
+      search: '',
+      origin: 'https://example.test',
+    },
     history: { replaceState: () => {} },
     document: { getElementById: () => null },
     window: {},
@@ -69,6 +83,10 @@ function makeSandbox(role, remoteData){
     __fsMod: {
       getFirestore: app => ({ app }),
       doc: (_db, ...parts) => parts.join('/'),
+      getDoc: async ref => {
+        calls.getDoc.push(ref);
+        return { exists: () => !!remoteDoc, data: () => remoteDoc };
+      },
       collection: (_db, ...parts) => parts.join('/'),
       setDoc: async (...args) => { calls.setDoc.push(args); },
       updateDoc: async (...args) => { calls.updateDoc.push(args); },
@@ -197,7 +215,91 @@ async function verifyViewer(){
   );
 }
 
-Promise.all([verifyOwner(), verifyViewer(), verifyManagedSetup(), verifyParticipantName()])
+/* ---------- 내 초대 링크를 내가 눌렀을 때 ----------
+   방을 만든 사람이 카톡에 보낸 링크를 확인차 한 번 눌렀다는 이유로
+   보기 전용이 되면, 다음에 앱을 열었을 때 초대 링크와 공유 버튼이 사라집니다. */
+const OWN_CODE = 'abcdefghijkmnpqrstuv';
+
+async function verifyOwnerKeepsRoleOnOwnLink(){
+  const { sandbox } = makeSandbox('owner', null, {
+    code: OWN_CODE,
+    managed: true,
+    hash: '#share=' + OWN_CODE,
+  });
+  sandbox.SHIFT_CALENDAR_FIREBASE_CONFIG = {
+    apiKey: 'managed-key',
+    projectId: 'managed-project',
+  };
+  vm.runInNewContext(source, sandbox);
+  sandbox.Sync.init();
+  await wait(20);
+
+  assert(
+    sandbox.Sync.role() === 'owner',
+    '내가 만든 초대 링크를 내가 열었더니 보기 전용으로 바뀌었습니다.'
+  );
+  assert(
+    sandbox.Sync.shareLink().includes('#share=' + OWN_CODE),
+    '내 초대 링크를 연 뒤 공유 링크가 사라졌습니다.'
+  );
+  const stored = JSON.parse(sandbox.localStorage.getItem('shiftcal.sync'));
+  assert(
+    stored && stored.role === 'owner',
+    '보기 전용 역할이 이 기기에 저장되어 다음 실행에도 남습니다.'
+  );
+}
+
+async function verifyDemotedOwnerRestored(){
+  const { sandbox } = makeSandbox('viewer', null, {
+    code: OWN_CODE,
+    managed: true,
+    remoteDoc: { ownerUid: 'anonymous-test-user' },
+  });
+  sandbox.SHIFT_CALENDAR_FIREBASE_CONFIG = {
+    apiKey: 'managed-key',
+    projectId: 'managed-project',
+  };
+  vm.runInNewContext(source, sandbox);
+  sandbox.Sync.init();
+  await wait(20);
+
+  assert(
+    sandbox.Sync.role() === 'owner',
+    '이미 보기 전용으로 바뀐 기기가 클라우드의 ownerUid로 복구되지 않았습니다.'
+  );
+  const stored = JSON.parse(sandbox.localStorage.getItem('shiftcal.sync'));
+  assert(stored && stored.role === 'owner', '복구된 소유자 역할이 저장되지 않았습니다.');
+}
+
+async function verifyRealViewerStaysViewer(){
+  const { sandbox } = makeSandbox('viewer', null, {
+    code: OWN_CODE,
+    managed: true,
+    remoteDoc: { ownerUid: 'someone-else' },
+  });
+  sandbox.SHIFT_CALENDAR_FIREBASE_CONFIG = {
+    apiKey: 'managed-key',
+    projectId: 'managed-project',
+  };
+  vm.runInNewContext(source, sandbox);
+  sandbox.Sync.init();
+  await wait(20);
+
+  assert(
+    sandbox.Sync.role() === 'viewer',
+    '초대받은 친구가 방 주인으로 승격됐습니다.'
+  );
+}
+
+Promise.all([
+  verifyOwner(),
+  verifyViewer(),
+  verifyManagedSetup(),
+  verifyParticipantName(),
+  verifyOwnerKeepsRoleOnOwnLink(),
+  verifyDemotedOwnerRestored(),
+  verifyRealViewerStaysViewer(),
+])
   .then(() => console.log('공동 메모 동기화 검사 통과'))
   .catch(error => {
     console.error(error.message);
