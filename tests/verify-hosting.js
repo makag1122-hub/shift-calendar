@@ -133,12 +133,30 @@ for(const source of ['/service-worker.js', '/index.html']){
   );
 }
 
+/*
+ * 형식이 어긋난 값이 하나라도 섞이면 Google 검증기가 이 파일을 통째로 거부합니다.
+ * 그래서 자리표시자를 남겨 두느니 아직 모르는 지문은 빼 두는 편이 낫습니다.
+ */
+const UPLOAD_KEY_SHA256 =
+  '55:82:03:91:B2:E6:D1:02:A2:71:0B:AE:0F:6E:D8:2A:73:34:99:68:3C:06:48:5D:0B:8A:46:38:B5:07:B6:22';
 const fingerprints = assetLinks[0].target.sha256_cert_fingerprints;
-const placeholders = fingerprints.filter(value => !/^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(value));
-if(placeholders.length){
+
+assert(Array.isArray(fingerprints) && fingerprints.length >= 1, 'assetlinks.json에 인증서 지문이 없습니다.');
+for(const value of fingerprints){
+  assert(
+    /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(value),
+    `assetlinks.json의 지문 형식이 잘못됐습니다(대문자 16진수 32바이트, 콜론 구분): ${value}`
+  );
+}
+assert(
+  fingerprints.includes(UPLOAD_KEY_SHA256),
+  '직접 배포 APK 서명키 지문이 빠졌습니다. GitHub 릴리스로 받은 APK가 초대 링크를 못 엽니다.'
+);
+
+if(fingerprints.length < 2){
   console.log(
-    `Hosting 배포 설정 검사 통과 (⚠ assetlinks.json 지문 ${placeholders.length}개가 아직 자리표시자입니다 — `
-      + 'Play Console > 앱 서명에서 SHA-256을 넣어야 초대 링크가 앱으로 열립니다)'
+    'Hosting 배포 설정 검사 통과 (⚠ Play 앱 서명 키 지문이 아직 없습니다 — '
+      + 'Play Console > 앱 서명의 SHA-256을 추가해야 스토어 설치본에서 초대 링크가 앱으로 열립니다)'
   );
 } else {
   console.log(`Hosting 배포 설정 검사 통과 (지문 ${fingerprints.length}개 등록됨)`);

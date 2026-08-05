@@ -5,8 +5,7 @@
       "namespace": "android_app",
       "package_name": "kr.co.shiftcalendar.widget",
       "sha256_cert_fingerprints": [
-        "PLAY_APP_SIGNING_SHA256_HERE",
-        "UPLOAD_OR_DIRECT_KEYSTORE_SHA256_HERE"
+        "55:82:03:91:B2:E6:D1:02:A2:71:0B:AE:0F:6E:D8:2A:73:34:99:68:3C:06:48:5D:0B:8A:46:38:B5:07:B6:22"
       ]
     }
   }

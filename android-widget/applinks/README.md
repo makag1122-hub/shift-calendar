@@ -22,27 +22,33 @@ GitHub Pages를 쓸 때처럼 별도 저장소를 만들 필요가 없습니다.
 
 `firebase.json`에 이 파일을 `application/json`으로 내려주는 헤더도 넣어 뒀습니다.
 
-## 2. 지문(SHA-256) 채우기 — 여기가 남은 작업
+## 2. 지문(SHA-256)
 
-[`.well-known/assetlinks.json`](../../.well-known/assetlinks.json)의 자리표시자 두 개를
-실제 인증서 지문으로 바꿉니다.
+[`.well-known/assetlinks.json`](../../.well-known/assetlinks.json)에는 지문이 두 개 필요합니다.
 
-**Play 스토어 설치본** (필수)
-Play Console > 앱 > 테스트 및 출시 > 설정 > **앱 서명** >
-"앱 서명 키 인증서"의 SHA-256 인증서 지문을 복사합니다.
-(Play Console의 딥 링크 화면에서 완성된 JSON을 그대로 복사할 수도 있습니다.)
+**직접 배포 APK 서명키 — ✅ 이미 등록됨**
 
-**직접 배포 APK** (GitHub 릴리스로 받은 APK도 앱으로 열리게 하려면)
-
-```bash
-keytool -list -v -keystore shift-calendar.p12 -storetype PKCS12 -alias <ALIAS>
+```
+55:82:03:91:B2:E6:D1:02:A2:71:0B:AE:0F:6E:D8:2A:73:34:99:68:3C:06:48:5D:0B:8A:46:38:B5:07:B6:22
 ```
 
-출력의 `SHA256:` 줄을 씁니다. `AB:CD:...` 형식 그대로 넣으면 됩니다.
-둘 중 하나만 쓸 거라면 나머지 한 줄은 지웁니다.
+CI가 만든 서명 APK의 APK Signing Block(v2)에서 인증서를 꺼내 계산했고,
+`openssl x509 -fingerprint -sha256` 으로 교차 확인했습니다
+(`O=Personal, CN=Shift Calendar Widget`, 2026-07-28 ~ 2056-07-29).
+로컬에 키스토어가 없어도 같은 방법으로 다시 뽑을 수 있습니다.
 
+**Play 앱 서명 키 — ⬜ 아직 필요**
+Play는 업로드한 AAB를 **구글 키로 다시 서명**하므로, 스토어 설치본은 위 지문과 다릅니다.
+Play Console > 앱 > 테스트 및 출시 > 설정 > **앱 서명** >
+"앱 서명 키 인증서"의 SHA-256을 복사해 배열에 한 줄 더 넣으세요.
+(같은 화면의 딥 링크 섹션에서 완성된 JSON을 통째로 복사해도 됩니다.)
+
+> **자리표시자 문자열을 넣어 두지 마세요.** 형식이 어긋난 값이 하나라도 있으면
+> Google 검증기가 이 파일을 통째로 거부합니다. 모르는 지문은 아예 빼 두는 편이 낫습니다.
+> `tests/verify-hosting.js` 가 형식과 누락을 검사합니다.
+>
 > 옆 프로젝트 `Light_weight_baby/public/.well-known/assetlinks.json` 이
-> 지문 두 개를 채워 넣은 실제 예시입니다.
+> 지문 두 개를 다 채워 넣은 실제 예시입니다.
 
 ## 3. 배포하고 확인
 
