@@ -137,8 +137,14 @@ for(const source of ['/service-worker.js', '/index.html']){
  * 형식이 어긋난 값이 하나라도 섞이면 Google 검증기가 이 파일을 통째로 거부합니다.
  * 그래서 자리표시자를 남겨 두느니 아직 모르는 지문은 빼 두는 편이 낫습니다.
  */
-const UPLOAD_KEY_SHA256 =
-  '55:82:03:91:B2:E6:D1:02:A2:71:0B:AE:0F:6E:D8:2A:73:34:99:68:3C:06:48:5D:0B:8A:46:38:B5:07:B6:22';
+const REQUIRED_FINGERPRINTS = {
+  /* Play가 AAB를 다시 서명하는 키. 스토어에서 설치한 사용자가 이걸 씁니다. */
+  'Play 앱 서명 키':
+    '7C:DF:56:22:AD:AE:D4:A4:BC:B2:A2:65:EE:3A:D2:9F:1D:B1:8D:14:06:61:CC:1E:7D:EA:19:C0:BA:E7:A5:F3',
+  /* CI가 APK·AAB에 서명하는 키. GitHub 릴리스로 직접 받은 APK가 이걸 씁니다. */
+  '업로드·직접배포 키':
+    '55:82:03:91:B2:E6:D1:02:A2:71:0B:AE:0F:6E:D8:2A:73:34:99:68:3C:06:48:5D:0B:8A:46:38:B5:07:B6:22',
+};
 const fingerprints = assetLinks[0].target.sha256_cert_fingerprints;
 
 assert(Array.isArray(fingerprints) && fingerprints.length >= 1, 'assetlinks.json에 인증서 지문이 없습니다.');
@@ -148,16 +154,11 @@ for(const value of fingerprints){
     `assetlinks.json의 지문 형식이 잘못됐습니다(대문자 16진수 32바이트, 콜론 구분): ${value}`
   );
 }
-assert(
-  fingerprints.includes(UPLOAD_KEY_SHA256),
-  '직접 배포 APK 서명키 지문이 빠졌습니다. GitHub 릴리스로 받은 APK가 초대 링크를 못 엽니다.'
-);
-
-if(fingerprints.length < 2){
-  console.log(
-    'Hosting 배포 설정 검사 통과 (⚠ Play 앱 서명 키 지문이 아직 없습니다 — '
-      + 'Play Console > 앱 서명의 SHA-256을 추가해야 스토어 설치본에서 초대 링크가 앱으로 열립니다)'
+for(const [label, value] of Object.entries(REQUIRED_FINGERPRINTS)){
+  assert(
+    fingerprints.includes(value),
+    `${label} 지문이 빠졌습니다. 해당 경로로 설치한 사용자는 초대 링크가 앱으로 열리지 않습니다.`
   );
-} else {
-  console.log(`Hosting 배포 설정 검사 통과 (지문 ${fingerprints.length}개 등록됨)`);
 }
+
+console.log(`Hosting 배포 설정 검사 통과 (지문 ${fingerprints.length}개 등록됨)`);
