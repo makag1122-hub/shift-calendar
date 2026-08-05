@@ -1,0 +1,45 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      ".firebase/**",
+      ".git/**",
+      ".github/**",
+      ".gitignore",
+      ".claude/**",
+      ".playwright-cli/**",
+      "README.md",
+      "firestore.rules",
+      "android-widget/**",
+      "android-test-*/**",
+      "play-upload*/**",
+      "tests/**",
+      "output/**",
+      "**/node_modules/**",
+      "**/Thumbs.db",
+      "**/.DS_Store"
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json" }
+        ]
+      },
+      {
+        "source": "/service-worker.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      }
+    ]
+  }
+}

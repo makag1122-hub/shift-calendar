@@ -30,6 +30,47 @@
                     android:scheme="shiftcalendar" />
             </intent-filter>
 
+            <!--
+                초대 https 링크를 이 앱이 직접 엽니다(App Links).
+                카카오톡 카드가 아니라 문자·링크 복사·QR로 받은 초대도 앱으로 들어옵니다.
+                앱이 없는 친구에게는 같은 주소가 그대로 브라우저에서 열립니다.
+                두 호스트는 Firebase Hosting이 같은 내용을 서빙하며,
+                autoVerify는 각 호스트의 /.well-known/assetlinks.json 을 확인합니다.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="gyodae-calendar.web.app"
+                    android:scheme="https" />
+                <data
+                    android:host="gyodae-calendar.firebaseapp.com"
+                    android:scheme="https" />
+            </intent-filter>
+
+            <!--
+                예전 GitHub Pages 주소로 이미 보낸 초대 링크를 위한 필터입니다.
+                호스트마다 경로 조건이 달라 필터를 따로 씁니다
+                (한 필터 안의 host와 pathPrefix는 서로 조합되어 적용됩니다).
+
+                여기에는 autoVerify를 일부러 넣지 않습니다.
+                Android 11 이하에서는 App Links 검증이 앱 전체 단위라,
+                assetlinks.json이 없는 이 호스트를 함께 검증시키면
+                위의 Firebase 호스트까지 같이 검증에 실패합니다.
+                검증이 없으면 옛 링크는 선택창을 거치거나 브라우저로 열리는데,
+                브라우저로 열려도 같은 웹 화면이라 공유는 그대로 동작합니다.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="makag1122-hub.github.io"
+                    android:pathPrefix="/shift-calendar"
+                    android:scheme="https" />
+            </intent-filter>
+
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

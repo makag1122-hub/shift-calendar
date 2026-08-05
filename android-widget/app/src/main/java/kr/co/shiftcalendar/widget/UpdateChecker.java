@@ -13,13 +13,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/* GitHub Pages에 올려둔 widget-version.json을 읽어 새 버전이 있는지 확인합니다.
-   달력 내용은 웹에서 바로 갱신되므로, 이 확인은 위젯을 그리는 네이티브 코드가
-   바뀌었을 때만 의미가 있습니다. */
+/* 앱 화면과 같은 곳(Firebase Hosting)에 올려둔 widget-version.json을 읽어
+   새 버전이 있는지 확인합니다. 달력 내용은 웹에서 바로 갱신되므로,
+   이 확인은 위젯을 그리는 네이티브 코드가 바뀌었을 때만 의미가 있습니다. */
 final class UpdateChecker {
 
     static final String VERSION_URL =
-            "https://makag1122-hub.github.io/shift-calendar/widget-version.json";
+            "https://gyodae-calendar.web.app/widget-version.json";
 
     private static final int TIMEOUT_MS = 7000;
     private static final int MAX_BODY_BYTES = 16 * 1024;

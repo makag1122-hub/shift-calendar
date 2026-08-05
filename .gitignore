@@ -9,7 +9,14 @@ Thumbs.db
 .playwright-cli/
 output/
 
+# Firebase CLI 배포 캐시
+.firebase/
+
 # Android 빌드 산출물·로컬 서명키
 android-widget/.gradle/
 android-widget/**/build/
 android-widget/app/*.p12
+
+# 배포용으로 내려받은 AAB·APK (저장소에 들어가면 안 됩니다)
+play-upload*/
+android-test-*/

@@ -172,7 +172,11 @@ assert(manifest.includes('.MonthAllGroupsWidgetProvider'), '6×7 4개 조 위젯
 assert(renderer.includes('renderMonthAllGroups('), '6×7 큰 달력 위젯 렌더링이 없습니다.');
 assert(renderer.includes('drawMonthWithMemos('), '큰 달력의 메모 표시 렌더링이 없습니다.');
 assert(renderer.includes('wrapMemo('), '메모를 여러 줄로 나누는 처리가 없습니다.');
-assert(renderer.includes('drawGroupBand('), '하단 4개 조 요약 띠 렌더링이 없습니다.');
+assert(renderer.includes('drawGroupWeekBand('), '하단 4개 조 주간 띠 렌더링이 없습니다.');
+assert(
+  !/drawGroupBand\(/.test(renderer),
+  '한 달을 통째로 압축하던 예전 4개 조 띠가 남아 있습니다.'
+);
 assert(
   !renderer.includes('drawMonthAllGroups('),
   '달력 칸마다 4개 조를 쌓던 예전 렌더링이 남아 있습니다.'
@@ -197,6 +201,54 @@ assert(!monthAllLayout.includes('fitXY'), '6×7 위젯에 fitXY 왜곡이 있습
 assert(monthAllInfo.includes('android:targetCellWidth="6"'), '6×7 위젯의 기본 가로 칸 수가 6이 아닙니다.');
 assert(monthAllInfo.includes('android:targetCellHeight="7"'), '6×7 위젯의 기본 세로 칸 수가 7이 아닙니다.');
 assert(monthAllInfo.includes('android:resizeMode="horizontal|vertical"'), '6×7 위젯 크기 조절이 막혀 있습니다.');
+
+/* ---------- 4개 조 띠를 옆으로 넘기기 ----------
+   한 달치를 한 줄에 다 그리면 하루 폭이 21px라 이니셜조차 붙습니다.
+   한 주씩 끊어 보여 주고 ‹ › 로 넘기는 동작이 빠지면 시인성 개선이 무의미해집니다. */
+assert(
+  monthAllProvider.includes('MONTH_ALL_WEEK_PREVIOUS')
+    && monthAllProvider.includes('MONTH_ALL_WEEK_NEXT'),
+  '6×7 위젯의 주간 이동 동작이 없습니다.'
+);
+assert(
+  monthAllLayout.includes('@+id/month_all_widget_week_previous')
+    && monthAllLayout.includes('@+id/month_all_widget_week_next'),
+  '6×7 위젯 레이아웃에 주간 이동 버튼이 없습니다.'
+);
+assert(
+  monthAllLayout.includes('@+id/month_all_widget_week'),
+  '6×7 위젯에 지금 보는 주를 알려 주는 문구가 없습니다.'
+);
+assert(
+  monthAllProvider.includes('month_all_week_'),
+  '위젯마다 보고 있는 주가 저장되지 않습니다.'
+);
+assert(
+  /onDeleted[\s\S]*?remove\(weekKey\(widgetId\)\)/.test(monthAllProvider),
+  '위젯을 지워도 저장된 주간 위치가 남습니다.'
+);
+assert(
+  renderer.includes('static int weekRowCount(') && renderer.includes('static int weekRowOfToday('),
+  '주간 이동 범위와 오늘 주 계산이 없습니다.'
+);
+/* 달 경계에서 멈추면 마지막 주 다음이 안 보입니다. */
+assert(
+  /ACTION_WEEK_NEXT[\s\S]*?putInt\(offsetKey, offset \+ 1\)/.test(monthAllProvider),
+  '달의 마지막 주에서 다음 달 첫 주로 넘어가지 않습니다.'
+);
+assert(
+  /ACTION_WEEK_PREVIOUS[\s\S]*?weekRows\(previous\) - 1/.test(monthAllProvider),
+  '달의 첫 주에서 지난달 마지막 주로 넘어가지 않습니다.'
+);
+/* 띠와 위 달력이 같은 주를 가리키는지 눈으로 알 수 있어야 합니다. */
+assert(
+  /drawMonthWithMemos\([\s\S]*?int highlightRow/.test(renderer),
+  '위 달력이 지금 보는 주를 표시하지 않습니다.'
+);
+assert(
+  renderer.includes('130f'),
+  '레이아웃에 주간 이동 줄이 늘었는데 렌더러의 여백 계산이 그대로입니다.'
+);
 assert(
   fs.readFileSync(
     path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'MainActivity.java'),
@@ -263,17 +315,28 @@ const bandRatio = number('MONTH_ALL_BAND_RATIO');
   );
   assert(columnWidth - 26 >= 55, `높이 ${height}에서 메모 글자 폭이 너무 좁습니다.`);
 
-  /* 하단 띠: 한 달 31일을 4행으로 압축해도 글자가 보여야 합니다. */
+  /* 하단 띠: 한 주(7일)만 그리므로 근무 이름이 한 글자로 잘리면 안 됩니다.
+     예전처럼 31일을 밀어 넣으면 하루 폭이 21px라 이니셜만 겨우 들어갔습니다. */
   const bandInner = bandHeight - 9;
-  const bandRowHeight = (bandInner - 13) / 4;
-  const bandColumnWidth = (monthAllWidth - 30) / 31;
+  const bandRowHeight = (bandInner - 19) / 4;
+  const bandColumnWidth = (monthAllWidth - 34) / 7;
+  const bandTextSize = Math.min(15, Math.max(9, bandRowHeight * 0.44));
   assert(
-    bandRowHeight >= 14,
+    bandRowHeight >= 26,
     `높이 ${height}에서 하단 4개 조 줄이 너무 얇습니다: ${bandRowHeight}`
   );
   assert(
-    bandColumnWidth >= 15,
+    bandColumnWidth >= 60,
     `높이 ${height}에서 하단 띠의 하루 폭이 너무 좁습니다: ${bandColumnWidth}`
+  );
+  assert(
+    bandTextSize >= 13,
+    `높이 ${height}에서 하단 띠 근무 글자가 너무 작습니다: ${bandTextSize}`
+  );
+  /* 근무 이름 두 글자(예: '주간')가 칸에 들어가야 이니셜 축약을 피합니다. */
+  assert(
+    bandColumnWidth - 6 >= bandTextSize * 2,
+    `높이 ${height}에서 하단 띠에 근무 이름 두 글자가 들어가지 않습니다.`
   );
   assert(
     calendarHeight >= height * 0.75,
@@ -288,7 +351,8 @@ const bandRatio = number('MONTH_ALL_BAND_RATIO');
   { name: 'month-all 250x300', width: 250, height: 300 },
 ].forEach(sample => {
   const horizontalChrome = 20;
-  const verticalChrome = 96;
+  /* 위아래 여백 9+8 + 달 이동 40 + 이미지 여백 3+4 + 주간 이동 30+4 + 요약 32 */
+  const verticalChrome = 130;
   const availableWidth = Math.max(1, sample.width - horizontalChrome);
   const availableHeight = Math.max(1, sample.height - verticalChrome);
   const bitmapHeight = Math.max(1, Math.round(monthAllWidth * availableHeight / availableWidth));
@@ -427,6 +491,90 @@ assert(
 assert(
   appSource.includes("typeof bridge.shareToKakao === 'function'"),
   'app.js가 Android 카카오톡 공유 브리지를 사용하지 않습니다.'
+);
+
+/* ---------- 초대 https 링크를 앱이 직접 열기 (App Links) ----------
+   카카오톡 카드는 실행 파라미터로 앱을 열지만, 링크 복사·문자·QR로 받은
+   초대는 앱이 깔려 있어도 브라우저로 새 나갑니다. autoVerify가 있어야
+   초대 링크가 앱 ↔ 앱으로 이어집니다. */
+const HOSTING_HOST = 'gyodae-calendar.web.app';
+
+assert(
+  manifest.includes('android:autoVerify="true"'),
+  '초대 https 링크를 앱이 직접 여는 App Links 설정이 없습니다.'
+);
+const verifiedFilter = (manifest.match(
+  /<intent-filter android:autoVerify="true">[\s\S]*?<\/intent-filter>/
+) || [''])[0];
+assert(
+  verifiedFilter.includes(`android:host="${HOSTING_HOST}"`),
+  'App Links 대상 주소가 초대 링크 주소와 다릅니다.'
+);
+assert(
+  verifiedFilter.includes('android:host="gyodae-calendar.firebaseapp.com"'),
+  'Firebase Hosting의 두 번째 기본 도메인이 App Links에 없습니다.'
+);
+assert(
+  verifiedFilter.includes('android:scheme="https"'),
+  'App Links가 https 주소를 대상으로 하지 않습니다.'
+);
+
+/* 앱이 여는 주소와 App Links가 가로채는 주소가 같아야 초대가 앱으로 들어옵니다. */
+assert(
+  mainActivity.includes(`https://${HOSTING_HOST}/?androidWidget=1`),
+  '앱이 여는 주소가 Firebase Hosting 주소가 아닙니다.'
+);
+assert(
+  updateChecker.includes(`https://${HOSTING_HOST}/widget-version.json`),
+  '버전 확인 주소가 앱 화면과 다른 곳을 봅니다.'
+);
+
+/* Android 11 이하는 App Links 검증이 앱 전체 단위입니다.
+   assetlinks.json을 올리지 않는 옛 GitHub Pages 호스트에 autoVerify를 걸면
+   Firebase 호스트까지 함께 검증에 실패합니다. */
+assert(
+  !verifiedFilter.includes('makag1122-hub.github.io'),
+  '검증되는 App Links 필터에 assetlinks.json이 없는 옛 호스트가 섞여 있습니다.'
+);
+assert(
+  manifest.includes('android:host="makag1122-hub.github.io"'),
+  '이미 보낸 옛 초대 링크를 받는 필터가 사라졌습니다.'
+);
+
+/* 소유 증명 파일은 Firebase Hosting이 도메인 최상위로 서빙합니다. */
+const assetLinksPath = path.join(ROOT, '.well-known', 'assetlinks.json');
+assert(fs.existsSync(assetLinksPath), 'App Links 소유 증명 파일(.well-known/assetlinks.json)이 없습니다.');
+assert(
+  !fs.existsSync(path.join(ROOT, 'android-widget', 'applinks', 'assetlinks.json')),
+  'assetlinks.json 사본이 남아 있어 실제 배포본과 갈라질 수 있습니다.'
+);
+const assetLinks = JSON.parse(fs.readFileSync(assetLinksPath, 'utf8'));
+assert(
+  assetLinks[0] && assetLinks[0].target && assetLinks[0].target.package_name === 'kr.co.shiftcalendar.widget',
+  'assetlinks.json의 패키지 이름이 앱과 다릅니다.'
+);
+assert(
+  assetLinks[0].relation.includes('delegate_permission/common.handle_all_urls'),
+  'assetlinks.json에 링크 처리 위임 권한이 없습니다.'
+);
+
+/* ---------- 초대받은 친구에게 앱 설치 안내 ----------
+   링크를 브라우저로 연 친구가 앱을 깔아야 앱 ↔ 앱 공유가 완성됩니다. */
+assert(
+  appSource.includes('renderInstallBanner('),
+  '초대받은 친구용 앱 설치 안내가 없습니다.'
+);
+assert(
+  appSource.includes('play.google.com/store/apps/details?id=kr.co.shiftcalendar.widget'),
+  '설치 안내가 Play 스토어 주소를 가리키지 않습니다.'
+);
+assert(
+  /renderInstallBanner[\s\S]*?const inApp = !!androidBridge\(\)/.test(appSource),
+  '앱 안에서도 설치 안내가 뜹니다.'
+);
+assert(
+  fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').includes('id="installBanner"'),
+  'index.html에 설치 안내 자리가 없습니다.'
 );
 /* ---------- 이름은 카카오 로그인 대신 직접 입력 ---------- */
 assert(

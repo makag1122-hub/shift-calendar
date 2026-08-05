@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192-v2.png" />
   <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
-  <link rel="stylesheet" href="style.css?v=20260804a" />
+  <link rel="stylesheet" href="style.css?v=20260806a" />
 </head>
 <body>
   <div class="app">
@@ -31,6 +31,9 @@
 
     <!-- 공유 보기 + 공동 메모 배너 -->
     <div class="sync-banner" id="syncBanner" hidden></div>
+
+    <!-- 초대 링크를 브라우저로 연 친구에게만 보이는 앱 설치 안내 -->
+    <div class="install-banner" id="installBanner" hidden></div>
 
     <!-- 오늘 조별 배치 -->
     <section class="team-board" id="teamBoard"></section>
@@ -181,9 +184,9 @@
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20260804a"></script>
-  <script src="sync.js?v=20260804a"></script>
-  <script src="app.js?v=20260804a"></script>
+  <script src="sync-config.js?v=20260806a"></script>
+  <script src="sync.js?v=20260806a"></script>
+  <script src="app.js?v=20260806a"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -193,7 +196,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20260804a', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20260806a', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });

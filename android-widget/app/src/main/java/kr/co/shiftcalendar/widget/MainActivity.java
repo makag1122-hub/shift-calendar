@@ -40,8 +40,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
+    /*
+     * 앱 화면은 Firebase Hosting에서 받습니다(공유에 쓰는 Firestore와 같은 프로젝트).
+     * 그래서 초대 링크에 GitHub 주소가 나오지 않고, App Links 검증에 필요한
+     * /.well-known/assetlinks.json 을 도메인 최상위에서 바로 서빙할 수 있습니다.
+     * 예전 GitHub Pages 주소도 계속 살아 있어, 옛 버전 앱과 이미 보낸 링크는 그대로 열립니다.
+     */
     private static final String CALENDAR_URL =
-            "https://makag1122-hub.github.io/shift-calendar/?androidWidget=1";
+            "https://gyodae-calendar.web.app/?androidWidget=1";
     private static final String SHARE_SCHEME = "shiftcalendar";
     private static final String SHARE_HOST = "share";
     private static final String KAKAO_SHARE_SCHEME =

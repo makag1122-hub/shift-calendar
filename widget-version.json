@@ -1,6 +1,6 @@
 {
-  "versionCode": 22,
-  "versionName": "1.21.0",
+  "versionCode": 23,
+  "versionName": "1.22.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "내가 보낸 초대 링크를 내가 눌러도 공유 버튼이 사라지지 않도록 고쳤습니다. 이미 보기 전용으로 바뀐 기기는 앱을 열면 자동으로 되돌아옵니다. 6×7 큰 위젯은 메모가 잘 보이는 달력으로 바꾸고, 4개 조는 아래쪽 얇은 띠로 옮겼습니다."
+  "notes": "6×7 큰 위젯의 4개 조 비교를 한 주씩 보여 주고 ‹ › 로 옆으로 넘길 수 있게 했습니다. 칸이 넓어져 근무 이름이 그대로 보이고, 지금 보는 주는 위 달력에도 함께 표시됩니다. 초대 링크는 앱이 깔려 있으면 브라우저 대신 앱이 바로 엽니다."
 }

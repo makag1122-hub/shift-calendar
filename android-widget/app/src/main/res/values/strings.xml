@@ -11,6 +11,8 @@
     <string name="month_all_widget_description">메모까지 보이는 6×7 큰 달력 · 아래에 4개 조 요약</string>
     <string name="month_all_widget_calendar_description">날짜별 메모가 보이는 큰 월간 교대근무 달력과 4개 조 요약 띠</string>
     <string name="month_all_widget_open_hint">이번 달 근무와 메모를 불러오는 중</string>
+    <string name="month_all_widget_week_hint">4개 조 주간 비교</string>
+    <string name="month_all_widget_week_label">%1$s · 4개 조 비교</string>
 
     <string name="update_title">새 버전 %1$s</string>
     <string name="update_message_default">새 버전으로 업데이트할까요?</string>

@@ -43,10 +43,14 @@ final class CalendarWidgetRenderer {
     private static final int MONTH_ALL_MIN_HEIGHT = 600;
     private static final int MONTH_ALL_MAX_HEIGHT = 950;
     private static final float MONTH_ALL_HEADER_HEIGHT = 30f;
-    /* 아래쪽 4개 조 띠는 달력을 가리지 않도록 전체 높이의 1/5 정도만 씁니다. */
-    private static final float MONTH_ALL_BAND_MIN = 110f;
-    private static final float MONTH_ALL_BAND_MAX = 190f;
-    private static final float MONTH_ALL_BAND_RATIO = 0.21f;
+    /*
+     * 아래쪽 4개 조 띠는 한 주(7일)만 보여 줍니다.
+     * 한 달 31일을 한 줄에 밀어 넣으면 칸이 20px 남짓이라 근무 글자를 읽을 수 없었습니다.
+     * 7일만 그리면 같은 자리에서 칸이 4배 넓어져 근무 이름이 그대로 들어갑니다.
+     */
+    private static final float MONTH_ALL_BAND_MIN = 140f;
+    private static final float MONTH_ALL_BAND_MAX = 220f;
+    private static final float MONTH_ALL_BAND_RATIO = 0.25f;
     private static final String[] WEEKDAYS = {"일", "월", "화", "수", "목", "금", "토"};
     private static final String[] GROUPS = {"A", "B", "C", "D"};
     private static final int COLOR_BRAND = Color.rgb(79, 70, 229);
@@ -70,10 +74,17 @@ final class CalendarWidgetRenderer {
     static final class Result {
         final Bitmap bitmap;
         final String footer;
+        /** 4개 조 띠가 지금 보여 주는 주간 범위입니다. 위젯의 주간 이동 줄에 그대로 씁니다. */
+        final String weekLabel;
 
         Result(Bitmap bitmap, String footer) {
+            this(bitmap, footer, "");
+        }
+
+        Result(Bitmap bitmap, String footer, String weekLabel) {
             this.bitmap = bitmap;
             this.footer = footer;
+            this.weekLabel = weekLabel;
         }
     }
 
@@ -191,24 +202,59 @@ final class CalendarWidgetRenderer {
         return new Result(bitmap, "");
     }
 
+    /** 이 달의 달력이 몇 줄(주)을 쓰는지입니다. 주간 이동 범위를 정할 때 씁니다. */
+    static int weekRowCount(int year, int month) {
+        Calendar first = Calendar.getInstance();
+        first.set(year, month, 1, 12, 0, 0);
+        int firstColumn = first.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
+        int daysInMonth = first.getActualMaximum(Calendar.DAY_OF_MONTH);
+        return (int) Math.ceil((firstColumn + daysInMonth) / 7f);
+    }
+
+    /** 오늘이 이 달의 몇 번째 줄에 있는지입니다. 다른 달이면 첫 줄을 씁니다. */
+    static int weekRowOfToday(int year, int month) {
+        Calendar today = Calendar.getInstance();
+        if (today.get(Calendar.YEAR) != year || today.get(Calendar.MONTH) != month) {
+            return 0;
+        }
+        Calendar first = Calendar.getInstance();
+        first.set(year, month, 1, 12, 0, 0);
+        int firstColumn = first.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
+        return (firstColumn + today.get(Calendar.DAY_OF_MONTH) - 1) / 7;
+    }
+
+    /** 달력 weekIndex 줄의 맨 왼쪽(일요일) 날짜입니다. 지난달 날짜일 수도 있습니다. */
+    private static Calendar weekStartDate(int year, int month, int weekIndex) {
+        Calendar date = Calendar.getInstance();
+        date.set(year, month, 1, 12, 0, 0);
+        date.set(Calendar.MILLISECOND, 0);
+        int firstColumn = date.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
+        date.add(Calendar.DAY_OF_MONTH, weekIndex * 7 - firstColumn);
+        return date;
+    }
+
     /**
      * 6행 7열 큰 달력 위젯입니다.
-     * 위쪽은 메모가 그대로 보이는 내 조 달력, 아래쪽은 네 개 조를 요약한 얇은 띠입니다.
+     * 위쪽은 메모가 그대로 보이는 내 조 달력, 아래쪽은 네 개 조를 나란히 보여 주는 띠입니다.
+     * 띠는 weekIndex 줄(한 주)만 그리고, 위 달력에서 그 줄을 함께 표시해 둘을 이어 줍니다.
      */
     static Result renderMonthAllGroups(
             Context context,
             int year,
             int month,
             String activeGroup,
+            int weekIndex,
             int widgetWidthDp,
             int widgetHeightDp
     ) {
+        int weekRow = Math.max(0, Math.min(weekRowCount(year, month) - 1, weekIndex));
         int bitmapHeight = fittedBitmapHeight(
                 MONTH_ALL_WIDTH,
                 widgetWidthDp,
                 widgetHeightDp,
                 20f,
-                96f,
+                /* 위아래 여백 + 달 이동 줄 + 주간 이동 줄 + 아래 요약 줄 */
+                130f,
                 MONTH_ALL_DEFAULT_HEIGHT
         );
         Bitmap bitmap = Bitmap.createBitmap(
@@ -233,15 +279,18 @@ final class CalendarWidgetRenderer {
                 MONTH_ALL_MAX_HEIGHT
         );
 
+        Calendar weekStart = weekStartDate(year, month, weekRow);
+        String weekLabel = weekRangeLabel(weekStart);
+
         JSONObject root = payload(context);
         JSONArray days = monthDays(root, year, month, activeGroup);
         if (root == null || days == null) {
             drawEmpty(canvas, paint, MONTH_ALL_WIDTH, height);
-            return new Result(bitmap, "앱을 열어 달력을 동기화해 주세요");
+            return new Result(bitmap, "앱을 열어 달력을 동기화해 주세요", weekLabel);
         }
         JSONObject shifts = root.optJSONObject("shifts");
 
-        /* 위쪽은 메모까지 보이는 내 조 달력, 아래쪽은 네 개 조를 요약한 얇은 띠입니다. */
+        /* 위쪽은 메모까지 보이는 내 조 달력, 아래쪽은 그중 한 주의 네 개 조 비교입니다. */
         float bandHeight = Math.min(
                 MONTH_ALL_BAND_MAX,
                 Math.max(MONTH_ALL_BAND_MIN, height * MONTH_ALL_BAND_RATIO)
@@ -256,6 +305,7 @@ final class CalendarWidgetRenderer {
                 days,
                 year,
                 month,
+                weekRow,
                 MONTH_ALL_WIDTH,
                 calendarHeight
         );
@@ -266,20 +316,33 @@ final class CalendarWidgetRenderer {
 
         int bandSave = canvas.save();
         canvas.translate(0f, calendarHeight + 5f);
-        drawGroupBand(
+        drawGroupWeekBand(
                 canvas,
                 paint,
                 root,
                 shifts,
-                year,
-                month,
+                weekStart,
                 activeGroup,
                 MONTH_ALL_WIDTH,
                 bandHeight - 9f
         );
         canvas.restoreToCount(bandSave);
 
-        return new Result(bitmap, todaySummary(root, activeGroup));
+        return new Result(bitmap, todaySummary(root, activeGroup), weekLabel);
+    }
+
+    /** 주간 이동 줄에 쓰는 "8/3 ~ 8/9" 형태의 범위 문구입니다. */
+    private static String weekRangeLabel(Calendar weekStart) {
+        Calendar end = (Calendar) weekStart.clone();
+        end.add(Calendar.DAY_OF_MONTH, 6);
+        return String.format(
+                Locale.KOREA,
+                "%d/%d ~ %d/%d",
+                weekStart.get(Calendar.MONTH) + 1,
+                weekStart.get(Calendar.DAY_OF_MONTH),
+                end.get(Calendar.MONTH) + 1,
+                end.get(Calendar.DAY_OF_MONTH)
+        );
     }
 
     /**
@@ -293,6 +356,7 @@ final class CalendarWidgetRenderer {
             JSONArray days,
             int year,
             int month,
+            int highlightRow,
             float width,
             float height
     ) {
@@ -306,6 +370,18 @@ final class CalendarWidgetRenderer {
         Calendar today = Calendar.getInstance();
         boolean currentMonth =
                 today.get(Calendar.YEAR) == year && today.get(Calendar.MONTH) == month;
+
+        /*
+         * 아래 띠가 보여 주는 줄을 달력에서도 옅게 칠해 둡니다.
+         * 이게 없으면 띠의 7일이 달력의 어느 줄인지 눈으로 찾아야 합니다.
+         */
+        if (highlightRow >= 0 && highlightRow < ROWS) {
+            float top = MONTH_ALL_HEADER_HEIGHT + highlightRow * rowHeight;
+            RectF row = new RectF(0f, top, width, top + rowHeight);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(blendWithWhite(COLOR_BRAND, 0.93f));
+            canvas.drawRoundRect(row, 8f, 8f, paint);
+        }
 
         for (int day = 1; day <= daysInMonth; day++) {
             int position = firstColumn + day - 1;
@@ -443,123 +519,159 @@ final class CalendarWidgetRenderer {
     }
 
     /**
-     * 달력 아래에 붙는 얇은 띠입니다.
-     * 이 달 전체를 네 개 조 × 날짜로 압축해, 내 조는 진하게 나머지는 옅게 그립니다.
+     * 달력 아래에 붙는 4개 조 비교 띠입니다.
+     * 한 달 31일을 한 줄에 밀어 넣지 않고 한 주(7일)만 그립니다.
+     * 그래서 칸이 네 배 넓어지고, 이니셜 한 글자 대신 근무 이름이 그대로 들어갑니다.
+     * 위 달력에서 같은 줄이 옅게 칠해져 있어 지금 어느 주를 보는지 바로 보입니다.
      */
-    private static void drawGroupBand(
+    private static void drawGroupWeekBand(
             Canvas canvas,
             Paint paint,
             JSONObject root,
             JSONObject shifts,
-            int year,
-            int month,
+            Calendar weekStart,
             String activeGroup,
             float width,
             float height
     ) {
-        Calendar first = Calendar.getInstance();
-        first.set(year, month, 1, 12, 0, 0);
-        int daysInMonth = first.getActualMaximum(Calendar.DAY_OF_MONTH);
-        Calendar today = Calendar.getInstance();
-        boolean currentMonth =
-                today.get(Calendar.YEAR) == year && today.get(Calendar.MONTH) == month;
-
-        final float labelWidth = 30f;
-        final float headerHeight = 13f;
-        final float columnWidth = (width - labelWidth) / daysInMonth;
+        final float labelWidth = 34f;
+        final float headerHeight = 19f;
+        final float columnWidth = (width - labelWidth) / 7f;
         final float rowHeight = (height - headerHeight) / GROUPS.length;
 
-        /* 날짜는 5일 간격과 오늘만 적어 띠가 복잡해지지 않게 합니다. */
-        paint.setTypeface(TYPEFACE_BOLD);
-        paint.setTextAlign(Paint.Align.CENTER);
-        paint.setTextSize(7.5f);
-        for (int day = 1; day <= daysInMonth; day++) {
-            boolean isToday = currentMonth && today.get(Calendar.DAY_OF_MONTH) == day;
-            if (day != 1 && day % 5 != 0 && !isToday) {
-                continue;
+        Calendar today = Calendar.getInstance();
+        int todayColumn = -1;
+        for (int column = 0; column < 7; column++) {
+            Calendar date = (Calendar) weekStart.clone();
+            date.add(Calendar.DAY_OF_MONTH, column);
+            if (sameDate(date, today)) {
+                todayColumn = column;
+                break;
             }
-            paint.setColor(isToday ? COLOR_BRAND : COLOR_INK_SOFT);
-            canvas.drawText(
-                    String.valueOf(day),
-                    labelWidth + (day - 0.5f) * columnWidth,
-                    9f,
+        }
+
+        if (todayColumn >= 0) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(blendWithWhite(COLOR_BRAND, 0.90f));
+            canvas.drawRoundRect(
+                    new RectF(
+                            labelWidth + todayColumn * columnWidth + 1f,
+                            0f,
+                            labelWidth + (todayColumn + 1) * columnWidth - 1f,
+                            height
+                    ),
+                    7f,
+                    7f,
                     paint
             );
         }
 
-        for (int index = 0; index < GROUPS.length; index++) {
-            String group = GROUPS[index];
-            JSONArray days = monthDays(root, year, month, group);
-            float top = headerHeight + index * rowHeight;
+        /* 요일과 날짜를 띠에도 적어 둡니다. 위 달력과 눈으로 대조하지 않아도 읽힙니다. */
+        for (int column = 0; column < 7; column++) {
+            Calendar date = (Calendar) weekStart.clone();
+            date.add(Calendar.DAY_OF_MONTH, column);
+            int weekday = date.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
+            paint.setTypeface(TYPEFACE_BOLD);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(11f);
+            paint.setColor(
+                    column == todayColumn ? COLOR_BRAND
+                            : weekday == 0 ? COLOR_SUNDAY
+                            : weekday == 6 ? COLOR_SATURDAY
+                            : COLOR_INK
+            );
+            canvas.drawText(
+                    String.format(
+                            Locale.KOREA,
+                            "%s %d",
+                            WEEKDAYS[weekday],
+                            date.get(Calendar.DAY_OF_MONTH)
+                    ),
+                    labelWidth + (column + 0.5f) * columnWidth,
+                    13.5f,
+                    paint
+            );
+        }
+
+        for (int row = 0; row < GROUPS.length; row++) {
+            String group = GROUPS[row];
+            float top = headerHeight + row * rowHeight;
             float bottom = top + rowHeight;
             boolean selected = group.equals(activeGroup);
 
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(selected ? COLOR_BRAND : Color.rgb(235, 238, 245));
             canvas.drawRoundRect(
-                    new RectF(2f, top + 1.5f, labelWidth - 5f, bottom - 1.5f),
+                    new RectF(2f, top + 2f, labelWidth - 6f, bottom - 2f),
                     6f,
                     6f,
                     paint
             );
             paint.setTypeface(TYPEFACE_BOLD);
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(9.5f);
+            paint.setTextSize(12f);
             paint.setColor(selected ? Color.WHITE : COLOR_INK);
             canvas.drawText(
                     group,
-                    (2f + labelWidth - 5f) / 2f,
+                    (2f + labelWidth - 6f) / 2f,
                     (top + bottom) / 2f - (paint.ascent() + paint.descent()) / 2f,
                     paint
             );
 
-            if (days == null) {
-                continue;
-            }
-            for (int day = 1; day <= daysInMonth; day++) {
-                JSONArray entry = days.optJSONArray(day - 1);
+            for (int column = 0; column < 7; column++) {
+                Calendar date = (Calendar) weekStart.clone();
+                date.add(Calendar.DAY_OF_MONTH, column);
+                JSONArray entry = dayEntry(root, date, group);
                 String shiftKey = entry == null ? "" : entry.optString(0, "");
                 JSONObject shift = shifts == null ? null : shifts.optJSONObject(shiftKey);
                 int shiftColor = parseColor(
                         shift == null ? "#94a3b8" : shift.optString("color", "#94a3b8")
                 );
-                float left = labelWidth + (day - 1) * columnWidth;
-                RectF box = new RectF(
-                        left + 0.8f,
-                        top + 1.5f,
-                        left + columnWidth - 0.8f,
-                        bottom - 1.5f
+                float left = labelWidth + column * columnWidth;
+                RectF cell = new RectF(
+                        left + 2.5f,
+                        top + 2f,
+                        left + columnWidth - 2.5f,
+                        bottom - 2f
                 );
+
+                /* 내 조만 색을 꽉 채웁니다. 네 줄을 함께 봐도 내 줄이 먼저 눈에 들어옵니다. */
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(selected ? shiftColor : blendWithWhite(shiftColor, 0.30f));
-                canvas.drawRoundRect(box, 3.5f, 3.5f, paint);
+                paint.setColor(selected ? shiftColor : blendWithWhite(shiftColor, 0.80f));
+                canvas.drawRoundRect(cell, 6f, 6f, paint);
+                if (!selected) {
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(0.9f);
+                    paint.setColor(blendWithWhite(shiftColor, 0.45f));
+                    canvas.drawRoundRect(cell, 6f, 6f, paint);
+                    paint.setStyle(Paint.Style.FILL);
+                }
 
                 String label = shift == null
                         ? "-"
                         : shift.optString("short", shift.optString("label", shiftKey));
-                String initial = label.isEmpty() ? "-" : label.substring(0, 1);
                 paint.setTypeface(TYPEFACE_BOLD);
                 paint.setTextAlign(Paint.Align.CENTER);
-                paint.setTextSize(Math.min(9.5f, columnWidth * 0.52f));
-                paint.setColor(selected ? Color.WHITE : blendWithBlack(shiftColor, 0.55f));
+                paint.setTextSize(Math.min(15f, Math.max(9f, rowHeight * 0.44f)));
+                paint.setColor(selected ? Color.WHITE : blendWithBlack(shiftColor, 0.45f));
                 canvas.drawText(
-                        initial,
-                        box.centerX(),
-                        box.centerY() - (paint.ascent() + paint.descent()) / 2f,
+                        ellipsize(paint, trimLabel(label), cell.width() - 6f),
+                        cell.centerX(),
+                        cell.centerY() - (paint.ascent() + paint.descent()) / 2f,
                         paint
                 );
             }
         }
 
-        if (currentMonth) {
-            float left = labelWidth + (today.get(Calendar.DAY_OF_MONTH) - 1) * columnWidth;
+        if (todayColumn >= 0) {
+            float left = labelWidth + todayColumn * columnWidth;
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.6f);
+            paint.setStrokeWidth(1.8f);
             paint.setColor(COLOR_BRAND);
             canvas.drawRoundRect(
-                    new RectF(left + 0.2f, headerHeight - 1f, left + columnWidth - 0.2f, height - 0.8f),
-                    4f,
-                    4f,
+                    new RectF(left + 0.6f, 0.6f, left + columnWidth - 0.6f, height - 0.6f),
+                    8f,
+                    8f,
                     paint
             );
             paint.setStyle(Paint.Style.FILL);

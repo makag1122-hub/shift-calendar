@@ -15,6 +15,7 @@ import java.util.Locale;
 /**
  * 6행 7열 월간 달력에 A/B/C/D 네 개 조를 함께 담는 큰 위젯입니다.
  * 월간 달력 위젯과 4개 조 비교 위젯을 하나로 합친 형태입니다.
+ * 아래쪽 4개 조 띠는 한 주씩만 보여 주고 ‹ › 로 주를 넘깁니다.
  */
 public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
     private static final String ACTION_PREVIOUS =
@@ -25,8 +26,15 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
             "kr.co.shiftcalendar.widget.action.MONTH_ALL_TODAY";
     private static final String ACTION_GROUP =
             "kr.co.shiftcalendar.widget.action.MONTH_ALL_GROUP";
+    private static final String ACTION_WEEK_PREVIOUS =
+            "kr.co.shiftcalendar.widget.action.MONTH_ALL_WEEK_PREVIOUS";
+    private static final String ACTION_WEEK_NEXT =
+            "kr.co.shiftcalendar.widget.action.MONTH_ALL_WEEK_NEXT";
     private static final String EXTRA_WIDGET_ID = "widget_id";
     private static final String[] GROUPS = {"A", "B", "C", "D"};
+    private static final int MONTH_LIMIT = 18;
+    /** 저장된 주가 없으면 오늘이 든 주를 씁니다. 달을 옮길 때마다 이 값으로 되돌립니다. */
+    private static final int AUTO_WEEK = -1;
 
     @Override
     public void onUpdate(
@@ -54,7 +62,9 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
         if (!ACTION_PREVIOUS.equals(action)
                 && !ACTION_NEXT.equals(action)
                 && !ACTION_TODAY.equals(action)
-                && !ACTION_GROUP.equals(action)) {
+                && !ACTION_GROUP.equals(action)
+                && !ACTION_WEEK_PREVIOUS.equals(action)
+                && !ACTION_WEEK_NEXT.equals(action)) {
             return;
         }
 
@@ -71,19 +81,46 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
                 Context.MODE_PRIVATE
         );
         String offsetKey = offsetKey(widgetId);
-        String groupKey = groupKey(widgetId);
+        String weekKey = weekKey(widgetId);
+        int offset = preferences.getInt(offsetKey, 0);
 
         if (ACTION_TODAY.equals(action)) {
-            preferences.edit().putInt(offsetKey, 0).apply();
+            preferences.edit().putInt(offsetKey, 0).putInt(weekKey, AUTO_WEEK).apply();
         } else if (ACTION_PREVIOUS.equals(action)) {
-            int offset = Math.max(-18, preferences.getInt(offsetKey, 0) - 1);
-            preferences.edit().putInt(offsetKey, offset).apply();
+            preferences.edit()
+                    .putInt(offsetKey, Math.max(-MONTH_LIMIT, offset - 1))
+                    .putInt(weekKey, AUTO_WEEK)
+                    .apply();
         } else if (ACTION_NEXT.equals(action)) {
-            int offset = Math.min(18, preferences.getInt(offsetKey, 0) + 1);
-            preferences.edit().putInt(offsetKey, offset).apply();
+            preferences.edit()
+                    .putInt(offsetKey, Math.min(MONTH_LIMIT, offset + 1))
+                    .putInt(weekKey, AUTO_WEEK)
+                    .apply();
+        } else if (ACTION_WEEK_PREVIOUS.equals(action)) {
+            int week = resolveWeek(preferences, widgetId, offset);
+            if (week > 0) {
+                preferences.edit().putInt(weekKey, week - 1).apply();
+            } else if (offset > -MONTH_LIMIT) {
+                /* 달의 첫 줄에서 더 넘기면 지난달 마지막 줄로 이어집니다. */
+                int previous = offset - 1;
+                preferences.edit()
+                        .putInt(offsetKey, previous)
+                        .putInt(weekKey, weekRows(previous) - 1)
+                        .apply();
+            }
+        } else if (ACTION_WEEK_NEXT.equals(action)) {
+            int week = resolveWeek(preferences, widgetId, offset);
+            if (week < weekRows(offset) - 1) {
+                preferences.edit().putInt(weekKey, week + 1).apply();
+            } else if (offset < MONTH_LIMIT) {
+                preferences.edit()
+                        .putInt(offsetKey, offset + 1)
+                        .putInt(weekKey, 0)
+                        .apply();
+            }
         } else {
             String current = preferences.getString(
-                    groupKey,
+                    groupKey(widgetId),
                     CalendarWidgetRenderer.activeGroup(context)
             );
             int index = 0;
@@ -94,7 +131,7 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
                 }
             }
             preferences.edit()
-                    .putString(groupKey, GROUPS[(index + 1) % GROUPS.length])
+                    .putString(groupKey(widgetId), GROUPS[(index + 1) % GROUPS.length])
                     .apply();
         }
 
@@ -114,6 +151,7 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
         for (int widgetId : appWidgetIds) {
             editor.remove(offsetKey(widgetId));
             editor.remove(groupKey(widgetId));
+            editor.remove(weekKey(widgetId));
         }
         editor.apply();
     }
@@ -145,11 +183,10 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
                 groupKey(widgetId),
                 CalendarWidgetRenderer.activeGroup(context)
         );
-        Calendar target = Calendar.getInstance();
-        target.set(Calendar.DAY_OF_MONTH, 1);
-        target.add(Calendar.MONTH, offset);
+        Calendar target = monthOf(offset);
         int year = target.get(Calendar.YEAR);
         int month = target.get(Calendar.MONTH);
+        int week = resolveWeek(preferences, widgetId, offset);
 
         Bundle options = manager.getAppWidgetOptions(widgetId);
         int widgetWidthDp = WidgetSize.widthDp(context, options, 360);
@@ -160,6 +197,7 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
                         year,
                         month,
                         group,
+                        week,
                         widgetWidthDp,
                         widgetHeightDp
                 );
@@ -174,6 +212,12 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
         );
         views.setTextViewText(R.id.month_all_widget_group, group + "조");
         views.setImageViewBitmap(R.id.month_all_widget_image, result.bitmap);
+        views.setTextViewText(
+                R.id.month_all_widget_week,
+                result.weekLabel.isEmpty()
+                        ? context.getString(R.string.month_all_widget_week_hint)
+                        : context.getString(R.string.month_all_widget_week_label, result.weekLabel)
+        );
         views.setTextViewText(R.id.month_all_widget_footer, result.footer);
 
         views.setOnClickPendingIntent(
@@ -196,6 +240,19 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
                 R.id.month_all_widget_group,
                 broadcastIntent(context, widgetId, ACTION_GROUP, 5)
         );
+        views.setOnClickPendingIntent(
+                R.id.month_all_widget_week_previous,
+                broadcastIntent(context, widgetId, ACTION_WEEK_PREVIOUS, 6)
+        );
+        views.setOnClickPendingIntent(
+                R.id.month_all_widget_week_next,
+                broadcastIntent(context, widgetId, ACTION_WEEK_NEXT, 7)
+        );
+        /* 주간 문구를 누르면 오늘이 든 주로 한 번에 돌아옵니다. */
+        views.setOnClickPendingIntent(
+                R.id.month_all_widget_week,
+                broadcastIntent(context, widgetId, ACTION_TODAY, 8)
+        );
 
         Intent openIntent = new Intent(context, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -207,6 +264,42 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
         );
         views.setOnClickPendingIntent(R.id.month_all_widget_image, openApp);
         manager.updateAppWidget(widgetId, views);
+    }
+
+    private static Calendar monthOf(int offset) {
+        Calendar target = Calendar.getInstance();
+        target.set(Calendar.DAY_OF_MONTH, 1);
+        target.add(Calendar.MONTH, offset);
+        return target;
+    }
+
+    private static int weekRows(int offset) {
+        Calendar target = monthOf(offset);
+        return CalendarWidgetRenderer.weekRowCount(
+                target.get(Calendar.YEAR),
+                target.get(Calendar.MONTH)
+        );
+    }
+
+    /**
+     * 지금 띠가 보여 줄 주입니다.
+     * 저장된 값이 없으면(달을 막 옮겼거나 위젯을 막 놓았으면) 오늘이 든 주를 씁니다.
+     * 달마다 줄 수가 달라지므로 저장된 값도 이 달의 범위로 다시 맞춥니다.
+     */
+    private static int resolveWeek(
+            SharedPreferences preferences,
+            int widgetId,
+            int offset
+    ) {
+        Calendar target = monthOf(offset);
+        int year = target.get(Calendar.YEAR);
+        int month = target.get(Calendar.MONTH);
+        int stored = preferences.getInt(weekKey(widgetId), AUTO_WEEK);
+        if (stored == AUTO_WEEK) {
+            return CalendarWidgetRenderer.weekRowOfToday(year, month);
+        }
+        int rows = CalendarWidgetRenderer.weekRowCount(year, month);
+        return Math.max(0, Math.min(rows - 1, stored));
     }
 
     private static PendingIntent broadcastIntent(
@@ -232,5 +325,9 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
 
     private static String groupKey(int widgetId) {
         return "month_all_group_" + widgetId;
+    }
+
+    private static String weekKey(int widgetId) {
+        return "month_all_week_" + widgetId;
     }
 }

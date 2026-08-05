@@ -1422,9 +1422,48 @@ function renderSyncBanner(){
   }
 }
 
+/*
+ * 초대 링크를 받은 친구가 브라우저로 열었을 때만 앱 설치를 안내합니다.
+ * 앱으로 열었거나(브리지 존재) 초대받은 사람이 아니면 보여 주지 않습니다.
+ * 초대 링크 자체는 앱이 깔려 있으면 앱이 직접 받습니다(App Links).
+ */
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=kr.co.shiftcalendar.widget';
+const INSTALL_HIDE_KEY = 'shiftcal.installHidden';
+
+function renderInstallBanner(){
+  const el = $('installBanner');
+  if(!el) return;
+  const invited = !!(window.Sync && Sync.role() === 'viewer');
+  const inApp = !!androidBridge();
+  const onAndroid = /android/i.test(navigator.userAgent || '');
+  let hidden = false;
+  try{ hidden = localStorage.getItem(INSTALL_HIDE_KEY) === '1'; }catch(e){}
+  if(!invited || inApp || !onAndroid || hidden){
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = `
+    <img src="icons/icon-192-v2.png" alt="" />
+    <div class="install-text">
+      <strong>앱으로 보면 더 편해요</strong>
+      <span>홈 화면 위젯으로 근무표를 바로 확인할 수 있어요.</span>
+    </div>
+    <a href="${PLAY_STORE_URL}" target="_blank" rel="noopener">설치</a>
+    <button type="button" id="installClose" aria-label="설치 안내 닫기">✕</button>`;
+  const close = $('installClose');
+  if(close){
+    close.onclick = ()=>{
+      try{ localStorage.setItem(INSTALL_HIDE_KEY, '1'); }catch(e){}
+      el.hidden = true;
+    };
+  }
+}
+
 // sync.js가 상태 변화 때 호출
 window.onSyncStatus = function(){
   renderSyncBanner();
+  renderInstallBanner();
   if($('settingsModal') && !$('settingsModal').hidden) renderSyncBox();
 };
 
@@ -1785,4 +1824,4 @@ function wire(){
 renderWeekdays();
 renderAll();
 wire();
-if(window.Sync && Sync.init){ renderSyncBanner(); Sync.init(); }  // 공유 링크 감지 + 실시간 연결
+if(window.Sync && Sync.init){ renderSyncBanner(); renderInstallBanner(); Sync.init(); }  // 공유 링크 감지 + 실시간 연결

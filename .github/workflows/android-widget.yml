@@ -10,6 +10,9 @@ on:
       - "android-widget/**"
       - "app.js"
       - "widget-version.json"
+      - "firebase.json"
+      - ".well-known/**"
+      - "tests/**"
       - ".github/workflows/android-widget.yml"
   workflow_dispatch:
     inputs:
@@ -31,6 +34,9 @@ jobs:
 
       - name: Verify widget data and version
         run: node tests/verify-android-widget.js
+
+      - name: Verify hosting deploy list
+        run: node tests/verify-hosting.js
 
       - name: Set up Java
         uses: actions/setup-java@v4
