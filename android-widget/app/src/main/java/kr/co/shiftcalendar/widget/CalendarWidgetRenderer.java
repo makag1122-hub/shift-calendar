@@ -253,8 +253,8 @@ final class CalendarWidgetRenderer {
                 widgetWidthDp,
                 widgetHeightDp,
                 20f,
-                /* 위아래 여백 + 달 이동 줄 + 주간 이동 줄 + 아래 요약 줄 */
-                130f,
+                /* 위아래 여백 17 + 달 이동 줄 40 + 이미지 여백 7 + 아래 요약·주간 이동 줄 34 */
+                98f,
                 MONTH_ALL_DEFAULT_HEIGHT
         );
         Bitmap bitmap = Bitmap.createBitmap(
@@ -310,12 +310,9 @@ final class CalendarWidgetRenderer {
                 calendarHeight
         );
 
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(COLOR_LINE);
-        canvas.drawRect(0f, calendarHeight - 1f, MONTH_ALL_WIDTH, calendarHeight, paint);
-
+        /* 띠가 카드로 그려지므로 구분선을 따로 긋지 않습니다(선이 겹치면 지저분해집니다). */
         int bandSave = canvas.save();
-        canvas.translate(0f, calendarHeight + 5f);
+        canvas.translate(0f, calendarHeight + 4f);
         drawGroupWeekBand(
                 canvas,
                 paint,
@@ -323,8 +320,9 @@ final class CalendarWidgetRenderer {
                 shifts,
                 weekStart,
                 activeGroup,
+                weekLabel,
                 MONTH_ALL_WIDTH,
-                bandHeight - 9f
+                bandHeight - 6f
         );
         canvas.restoreToCount(bandSave);
 
@@ -519,10 +517,10 @@ final class CalendarWidgetRenderer {
     }
 
     /**
-     * 달력 아래에 붙는 4개 조 비교 띠입니다.
-     * 한 달 31일을 한 줄에 밀어 넣지 않고 한 주(7일)만 그립니다.
-     * 그래서 칸이 네 배 넓어지고, 이니셜 한 글자 대신 근무 이름이 그대로 들어갑니다.
-     * 위 달력에서 같은 줄이 옅게 칠해져 있어 지금 어느 주를 보는지 바로 보입니다.
+     * 달력 아래에 붙는 4개 조 비교 카드입니다.
+     * 한 달 31일을 한 줄에 밀어 넣지 않고 한 주(7일)만 그리므로
+     * 칸이 네 배 넓어지고, 이니셜 한 글자 대신 근무 이름이 그대로 들어갑니다.
+     * 보고 있는 주는 카드 머리글과 위 달력의 옅은 칠로 함께 알려 줍니다.
      */
     private static void drawGroupWeekBand(
             Canvas canvas,
@@ -531,13 +529,31 @@ final class CalendarWidgetRenderer {
             JSONObject shifts,
             Calendar weekStart,
             String activeGroup,
+            String weekLabel,
             float width,
             float height
     ) {
-        final float labelWidth = 34f;
-        final float headerHeight = 19f;
-        final float columnWidth = (width - labelWidth) / 7f;
-        final float rowHeight = (height - headerHeight) / GROUPS.length;
+        /* 카드로 감싸면 달력과 구분되어 구분선을 따로 긋지 않아도 됩니다. */
+        RectF card = new RectF(0f, 0f, width, height);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.rgb(248, 249, 252));
+        canvas.drawRoundRect(card, 13f, 13f, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1f);
+        paint.setColor(COLOR_LINE);
+        canvas.drawRoundRect(card, 13f, 13f, paint);
+        paint.setStyle(Paint.Style.FILL);
+
+        /* 위젯을 작게 줄이면 여백과 머리글이 칸을 다 먹습니다. 높이에 맞춰 같이 줄입니다. */
+        final float padding = Math.max(5f, Math.min(8f, height * 0.045f));
+        final float labelWidth = 30f;
+        final float titleHeight = Math.max(13f, Math.min(17f, height * 0.10f));
+        final float daysHeight = Math.max(12.5f, Math.min(16f, height * 0.09f));
+        final float left0 = padding;
+        final float right0 = width - padding;
+        final float columnWidth = (right0 - left0 - labelWidth) / 7f;
+        final float rowsTop = padding + titleHeight + daysHeight;
+        final float rowHeight = (height - padding - rowsTop) / GROUPS.length;
 
         Calendar today = Calendar.getInstance();
         int todayColumn = -1;
@@ -550,35 +566,50 @@ final class CalendarWidgetRenderer {
             }
         }
 
+        /* 카드 머리글 — 어느 주를 보고 있는지. 위젯 바깥에 줄을 하나 더 두지 않으려고 여기 넣습니다. */
+        paint.setTypeface(TYPEFACE_BOLD);
+        paint.setTextAlign(Paint.Align.LEFT);
+        paint.setTextSize(12f);
+        paint.setColor(COLOR_INK);
+        canvas.drawText(weekLabel, left0, padding + 12f, paint);
+        paint.setTypeface(TYPEFACE_MEDIUM);
+        paint.setTextAlign(Paint.Align.RIGHT);
+        paint.setTextSize(10f);
+        paint.setColor(COLOR_INK_SOFT);
+        canvas.drawText("4개 조 비교", right0, padding + 12f, paint);
+
+        float gridTop = padding + titleHeight;
+        float gridBottom = height - padding;
+
         if (todayColumn >= 0) {
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(blendWithWhite(COLOR_BRAND, 0.90f));
             canvas.drawRoundRect(
                     new RectF(
-                            labelWidth + todayColumn * columnWidth + 1f,
-                            0f,
-                            labelWidth + (todayColumn + 1) * columnWidth - 1f,
-                            height
+                            left0 + labelWidth + todayColumn * columnWidth + 1f,
+                            gridTop,
+                            left0 + labelWidth + (todayColumn + 1) * columnWidth - 1f,
+                            gridBottom
                     ),
-                    7f,
-                    7f,
+                    8f,
+                    8f,
                     paint
             );
         }
 
-        /* 요일과 날짜를 띠에도 적어 둡니다. 위 달력과 눈으로 대조하지 않아도 읽힙니다. */
+        /* 요일과 날짜 — 카드가 위 달력과 다른 주를 보여 줄 수 있으므로 여기에도 적습니다. */
         for (int column = 0; column < 7; column++) {
             Calendar date = (Calendar) weekStart.clone();
             date.add(Calendar.DAY_OF_MONTH, column);
             int weekday = date.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
             paint.setTypeface(TYPEFACE_BOLD);
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(11f);
+            paint.setTextSize(10.5f);
             paint.setColor(
                     column == todayColumn ? COLOR_BRAND
                             : weekday == 0 ? COLOR_SUNDAY
                             : weekday == 6 ? COLOR_SATURDAY
-                            : COLOR_INK
+                            : COLOR_INK_SOFT
             );
             canvas.drawText(
                     String.format(
@@ -587,33 +618,33 @@ final class CalendarWidgetRenderer {
                             WEEKDAYS[weekday],
                             date.get(Calendar.DAY_OF_MONTH)
                     ),
-                    labelWidth + (column + 0.5f) * columnWidth,
-                    13.5f,
+                    left0 + labelWidth + (column + 0.5f) * columnWidth,
+                    gridTop + 12f,
                     paint
             );
         }
 
         for (int row = 0; row < GROUPS.length; row++) {
             String group = GROUPS[row];
-            float top = headerHeight + row * rowHeight;
+            float top = rowsTop + row * rowHeight;
             float bottom = top + rowHeight;
             boolean selected = group.equals(activeGroup);
 
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(selected ? COLOR_BRAND : Color.rgb(235, 238, 245));
+            paint.setColor(selected ? COLOR_BRAND : Color.rgb(233, 236, 243));
             canvas.drawRoundRect(
-                    new RectF(2f, top + 2f, labelWidth - 6f, bottom - 2f),
-                    6f,
-                    6f,
+                    new RectF(left0, top + 2.5f, left0 + labelWidth - 7f, bottom - 2.5f),
+                    7f,
+                    7f,
                     paint
             );
             paint.setTypeface(TYPEFACE_BOLD);
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(12f);
-            paint.setColor(selected ? Color.WHITE : COLOR_INK);
+            paint.setTextSize(11.5f);
+            paint.setColor(selected ? Color.WHITE : COLOR_INK_SOFT);
             canvas.drawText(
                     group,
-                    (2f + labelWidth - 6f) / 2f,
+                    left0 + (labelWidth - 7f) / 2f,
                     (top + bottom) / 2f - (paint.ascent() + paint.descent()) / 2f,
                     paint
             );
@@ -627,33 +658,26 @@ final class CalendarWidgetRenderer {
                 int shiftColor = parseColor(
                         shift == null ? "#94a3b8" : shift.optString("color", "#94a3b8")
                 );
-                float left = labelWidth + column * columnWidth;
+                float left = left0 + labelWidth + column * columnWidth;
                 RectF cell = new RectF(
-                        left + 2.5f,
-                        top + 2f,
-                        left + columnWidth - 2.5f,
-                        bottom - 2f
+                        left + 2f,
+                        top + 2.5f,
+                        left + columnWidth - 2f,
+                        bottom - 2.5f
                 );
 
                 /* 내 조만 색을 꽉 채웁니다. 네 줄을 함께 봐도 내 줄이 먼저 눈에 들어옵니다. */
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(selected ? shiftColor : blendWithWhite(shiftColor, 0.80f));
-                canvas.drawRoundRect(cell, 6f, 6f, paint);
-                if (!selected) {
-                    paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(0.9f);
-                    paint.setColor(blendWithWhite(shiftColor, 0.45f));
-                    canvas.drawRoundRect(cell, 6f, 6f, paint);
-                    paint.setStyle(Paint.Style.FILL);
-                }
+                paint.setColor(selected ? shiftColor : blendWithWhite(shiftColor, 0.82f));
+                canvas.drawRoundRect(cell, 7f, 7f, paint);
 
                 String label = shift == null
                         ? "-"
                         : shift.optString("short", shift.optString("label", shiftKey));
                 paint.setTypeface(TYPEFACE_BOLD);
                 paint.setTextAlign(Paint.Align.CENTER);
-                paint.setTextSize(Math.min(15f, Math.max(9f, rowHeight * 0.44f)));
-                paint.setColor(selected ? Color.WHITE : blendWithBlack(shiftColor, 0.45f));
+                paint.setTextSize(Math.min(14.5f, Math.max(9f, rowHeight * 0.44f)));
+                paint.setColor(selected ? Color.WHITE : blendWithBlack(shiftColor, 0.42f));
                 canvas.drawText(
                         ellipsize(paint, trimLabel(label), cell.width() - 6f),
                         cell.centerX(),
@@ -664,12 +688,12 @@ final class CalendarWidgetRenderer {
         }
 
         if (todayColumn >= 0) {
-            float left = labelWidth + todayColumn * columnWidth;
+            float left = left0 + labelWidth + todayColumn * columnWidth;
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.8f);
+            paint.setStrokeWidth(1.6f);
             paint.setColor(COLOR_BRAND);
             canvas.drawRoundRect(
-                    new RectF(left + 0.6f, 0.6f, left + columnWidth - 0.6f, height - 0.6f),
+                    new RectF(left + 0.5f, gridTop + 0.5f, left + columnWidth - 0.5f, gridBottom - 0.5f),
                     8f,
                     8f,
                     paint

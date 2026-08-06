@@ -1176,7 +1176,7 @@ service cloud.firestore {
 }`;
 
 function syncStatusText(s){
-  return ({ connecting:'⏳ 연결 중…', live:'🟢 실시간 공유 중', readonly:'💬 공유 연결됨 · 메모 작성 가능', error:'⚠️ 오류', off:'꺼짐' })[s] || s;
+  return ({ connecting:'⏳ 연결 중…', live:'🟢 실시간 공유 중', readonly:'💬 공유 연결됨 · 메모 작성 가능', removed:'🚪 공유방에서 나가졌습니다', error:'⚠️ 오류', off:'꺼짐' })[s] || s;
 }
 
 // 입력 중인 이름 — 공유 상태가 갱신돼도 타이핑하던 값이 날아가지 않게 잠시 들고 있습니다.
@@ -1217,18 +1217,47 @@ function renderParticipantNames(){
   if(!window.Sync || !Sync.isOn()) return '';
   const people = Sync.participants ? Sync.participants() : [];
   const status = Sync.getStatus ? Sync.getStatus() : {};
+  /* 방장만 내보낼 수 있고, 자기 자신은 못 내보냅니다. */
+  const canRemove = !!(Sync.canRemoveMembers && Sync.canRemoveMembers());
+  const ownerMissing = Sync.ownerNamed ? !Sync.ownerNamed() : false;
+
+  const rows = people.map(person=>{
+    const badge = person.isOwner ? '<b class="role owner">방장</b>' : '<b class="role">참여자</b>';
+    const me = person.isMe ? '<span class="me">나</span>' : '';
+    const kick = (canRemove && !person.isOwner && !person.isMe)
+      ? `<button type="button" class="participant-kick" data-kick="${escapeHtml(person.uid)}"
+           data-name="${escapeHtml(person.name)}" aria-label="${escapeHtml(person.name)} 내보내기">✕</button>`
+      : '';
+    return `<li class="participant-row${person.isOwner ? ' owner' : ''}">
+      <i class="participant-avatar">${escapeHtml(person.name.slice(0,1))}</i>
+      <span class="participant-name">${escapeHtml(person.name)}${me}</span>
+      ${badge}${kick}
+    </li>`;
+  }).join('');
+
   const list = people.length
-    ? `<div class="participant-list">${people.map(person=>`
-        <span class="participant-chip ${person.role==='owner'?'owner':''}">
-          <i>${escapeHtml(person.name.slice(0,1))}</i>${escapeHtml(person.name)}
-          ${person.role==='owner'?'<b>공유자</b>':''}
-        </span>`).join('')}</div>`
+    ? `<ul class="participant-list">${rows}</ul>`
     : '<p class="participant-empty">이름을 정한 참여자가 여기에 표시됩니다.</p>';
+
   return `<div class="participants-card">
     <div class="participants-title"><strong>공유방 참여자</strong><span>${people.length}명</span></div>
     ${list}
+    ${ownerMissing ? '<p class="participant-note">방장이 아직 이름을 정하지 않아 목록에 표시되지 않습니다.</p>' : ''}
+    ${canRemove && people.length > 1 ? '<p class="participant-note">✕ 를 누르면 그 사람은 근무표를 더 이상 볼 수 없습니다.</p>' : ''}
     ${status.participantError ? `<p class="kakao-login-error">이름 동기화 오류 · ${escapeHtml(status.participantError)}</p>` : ''}
   </div>`;
+}
+
+/* 내보내기는 되돌릴 수 없습니다(다시 초대 링크를 보내야 함). 반드시 한 번 묻습니다. */
+function kickParticipant(uid, name){
+  if(!window.Sync || !Sync.removeMember) return;
+  if(!confirm(`${name}님을 공유방에서 내보낼까요?\n\n내보내면 근무표와 메모를 더 이상 볼 수 없습니다.\n다시 들어오려면 초대 링크를 새로 보내야 합니다.`)) return;
+  Sync.removeMember(uid)
+    .then(()=>{ renderSyncBox(); })
+    .catch(err=>{
+      alert('내보내지 못했습니다.\n' + (err && err.message ? err.message : err));
+      renderSyncBox();
+    });
 }
 
 function saveDisplayName(value){
@@ -1291,6 +1320,14 @@ function renderSyncBox(){
   const st = Sync.getStatus();
   if(Sync.role() === 'viewer'){
     const last = st.updatedAt;
+    /* 방장이 내보낸 경우입니다. 설정 오류로 오해하지 않도록 따로 안내합니다. */
+    if(st.status === 'removed'){
+      box.innerHTML = `
+        <div class="sync-status err">${syncStatusText(st.status)}</div>
+        <p class="sync-note">방장이 이 공유방에서 나를 내보냈습니다. 마지막으로 받은 근무표는 이 기기에 남아 있지만 더 이상 갱신되지 않습니다. 다시 보려면 초대 링크를 새로 받아 주세요.</p>
+        <button class="btn-text-danger" id="syncDisableBtn">이 공유방 정리하기</button>`;
+      return;
+    }
     box.innerHTML = `
       <div class="sync-status on">${syncStatusText(st.status)}</div>
       ${last ? `<div class="sync-updated">🔄 <b data-reltime="${last}">${relTime(last)}</b> 업데이트됨</div>` : ''}
@@ -1700,7 +1737,8 @@ function wire(){
   // 공유(실시간 동기화) 버튼
   $('syncBox').addEventListener('click', (e)=>{
     const t = e.target.closest('button'); if(!t) return;
-    if(t.id === 'syncEnableBtn'){ enableOwnerSync(); }
+    if(t.dataset && t.dataset.kick){ kickParticipant(t.dataset.kick, t.dataset.name || '이 참여자'); }
+    else if(t.id === 'syncEnableBtn'){ enableOwnerSync(); }
     else if(t.id === 'syncShareBtn'){ shareSyncLink(t); }
     else if(t.id === 'syncCopyBtn'){ copyToClipboard($('syncLink').value, t); }
     else if(t.id === 'syncCopyRules'){ copyToClipboard(FIRESTORE_RULES, t); }

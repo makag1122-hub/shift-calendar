@@ -1,0 +1,51 @@
+name: Firebase Hosting
+
+# 웹 파일이 바뀌면 자동으로 배포합니다.
+# 이게 없으면 화면을 한 줄 고칠 때마다 사람이 firebase login을 해야 합니다.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "index.html"
+      - "privacy.html"
+      - "app.js"
+      - "sync.js"
+      - "sync-config.js"
+      - "qrcode.js"
+      - "style.css"
+      - "service-worker.js"
+      - "manifest.json"
+      - "widget-version.json"
+      - "icons/**"
+      - ".well-known/**"
+      - "firebase.json"
+      - ".github/workflows/firebase-hosting.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      # 배포 대상 목록에 서명키나 앱 번들이 섞이지 않았는지 먼저 확인합니다.
+      - name: Verify hosting deploy list
+        run: node tests/verify-hosting.js
+
+      - name: Verify PWA cache version
+        run: node tests/verify-cache-version.js
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GYODAE_CALENDAR }}
+          projectId: gyodae-calendar
+          channelId: live

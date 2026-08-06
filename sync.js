@@ -31,6 +31,10 @@
   let profileResolved = !!profileName;
   let participantError = '';
   let participantList = [];
+  // 방장이 누구인지는 클라우드 문서가 정합니다. 참여자 목록에서 방장을 표시할 때 씁니다.
+  let remoteOwnerUid = '';
+  // 방장이 내보내면 읽기 권한이 사라집니다. 그냥 '오류'로 두면 원인을 알 수 없어 따로 표시합니다.
+  let removedFromRoom = false;
 
   /* ---------- 저장/불러오기 ---------- */
   function loadCfg(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); }catch(e){ return null; } }
@@ -117,6 +121,7 @@
 
   async function connect(){
     if(!cfg || !validConfig(cfg.config)){ setStatus('off'); return; }
+    removedFromRoom = false;
     setStatus('connecting');
     try{
       const f = await ensureFirebase(cfg.config, !!(cfg.managed || cfg.secured));
@@ -130,12 +135,13 @@
           (snap)=>{
             const d = snap.data();
             if(d){
+              if(d.ownerUid) remoteOwnerUid = d.ownerUid;
               if(d.state) applyRemoteState(d.state, d.sharedMemos);
               lastUpdated = Math.max(Number(d.updatedAt)||0, Number(d.memoUpdatedAt)||0);
             }
             setStatus('readonly');
           },
-          (err)=>{ setStatus('error', friendly(err)); });
+          (err)=>{ handleViewerError(err); });
         subscribeParticipants();
         await syncParticipantProfile();
       }else{
@@ -144,6 +150,7 @@
           (snap)=>{
             const d = snap.data();
             if(d){
+              if(d.ownerUid) remoteOwnerUid = d.ownerUid;
               if(d.sharedMemos) applyRemoteMemos(d.sharedMemos);
               lastUpdated = Math.max(Number(d.updatedAt)||0, Number(d.memoUpdatedAt)||0);
             }
@@ -194,10 +201,14 @@
     return fb.doc(fb.db, 'calendars', cfg.code, 'participants', fb.uid);
   }
 
+  /*
+   * 참여자 목록은 앱뿐 아니라 브라우저에서도 보여 줍니다.
+   * 초대받은 사람이 "방장이 누구고 누가 들어와 있는지"를 확인할 곳이 여기뿐입니다.
+   */
   function subscribeParticipants(){
     if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
     participantList = [];
-    if(!window.AndroidWidget || !fb || !fb.collection || !cfg || !docRef) return;
+    if(!fb || !fb.collection || !cfg || !docRef) return;
     const ref = fb.collection(fb.db, 'calendars', cfg.code, 'participants');
     participantsUnsub = fb.onSnapshot(ref,
       (snap)=>{
@@ -205,6 +216,7 @@
         participantList = (snap.docs || []).map(item=>{
           const value = item.data ? item.data() : {};
           return {
+            uid: item.id,                       // 내보내기에 필요합니다
             name: cleanProfileName(value && value.name),
             role: value && value.role === 'owner' ? 'owner' : 'viewer',
             joinedAt: Number(value && value.joinedAt) || 0,
@@ -219,6 +231,38 @@
         participantError = friendly(err);
         if(typeof window.onSyncStatus === 'function') window.onSyncStatus();
       });
+  }
+
+  /*
+   * 방장이 내보내면 문서를 더 읽을 수 없어 permission-denied가 옵니다.
+   * 설정이 잘못됐을 때와 메시지가 같으면 원인을 알 수 없으므로 구분해 줍니다.
+   */
+  function handleViewerError(err){
+    const message = (err && (err.code || err.message)) ? String(err.code || err.message) : '';
+    if(/permission-denied/i.test(message) && lastUpdated){
+      removedFromRoom = true;
+      if(unsub){ unsub(); unsub = null; }
+      if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
+      participantList = [];
+      setStatus('removed');
+      return;
+    }
+    setStatus('error', friendly(err));
+  }
+
+  /* 방장만 씁니다. 참여자 문서를 지우고 멤버 목록에서도 빼야 실제로 접근이 끊깁니다. */
+  async function removeMember(uid){
+    if(!cfg || cfg.role !== 'owner' || !fb || !docRef) throw new Error('방장만 내보낼 수 있어요.');
+    if(!uid || uid === fb.uid) throw new Error('자기 자신은 내보낼 수 없어요.');
+    const snap = await fb.getDoc(docRef);
+    const data = snap && typeof snap.exists === 'function' && snap.exists() ? snap.data() : null;
+    const members = (data && Array.isArray(data.memberUids)) ? data.memberUids : [];
+    await fb.updateDoc(docRef, { memberUids: members.filter(item=>item !== uid) });
+    try{
+      await fb.deleteDoc(fb.doc(fb.db, 'calendars', cfg.code, 'participants', uid));
+    }catch(e){
+      /* 멤버 목록에서 빠지면 이미 접근은 끊깁니다. 남은 이름표는 다음 정리 때 사라집니다. */
+    }
   }
 
   async function upsertParticipant(){
@@ -400,8 +444,21 @@
     role(){ return cfg ? cfg.role : null; },
     code(){ return cfg ? cfg.code : null; },
     lastUpdated(){ return lastUpdated || null; },
-    getStatus(){ return { status, error: lastError, participantError, code: cfg?cfg.code:null, role: cfg?cfg.role:null, updatedAt: lastUpdated || null }; },
-    participants(){ return participantList.map(item=>({ ...item })); },
+    getStatus(){ return { status, error: lastError, participantError, removed: removedFromRoom, code: cfg?cfg.code:null, role: cfg?cfg.role:null, updatedAt: lastUpdated || null }; },
+    participants(){
+      return participantList.map(item=>({
+        ...item,
+        isMe: !!(fb && fb.uid && item.uid === fb.uid),
+        isOwner: item.role === 'owner' || (!!remoteOwnerUid && item.uid === remoteOwnerUid),
+      }));
+    },
+    /* 방장이 이름을 안 정했으면 목록에 안 뜹니다. 그때도 방장 유무는 알려 줍니다. */
+    ownerNamed(){
+      if(!remoteOwnerUid) return true;
+      return participantList.some(item=>item.uid === remoteOwnerUid);
+    },
+    canRemoveMembers(){ return !!(cfg && cfg.role === 'owner' && fb && docRef); },
+    async removeMember(uid){ await removeMember(uid); },
     profileName(){ return profileName; },
     async setProfile(name){
       profileName = cleanProfileName(name);
@@ -460,6 +517,7 @@
       if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
       clearCfg(); cfg = null; docRef = null; fb = null; lastUpdated = 0;
       participantList = []; participantError = '';
+      remoteOwnerUid = ''; removedFromRoom = false;
       pushTimer && clearTimeout(pushTimer);
       memoPushTimer && clearTimeout(memoPushTimer);
       pendingMemoUpdates = {};

@@ -212,12 +212,7 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
         );
         views.setTextViewText(R.id.month_all_widget_group, group + "조");
         views.setImageViewBitmap(R.id.month_all_widget_image, result.bitmap);
-        views.setTextViewText(
-                R.id.month_all_widget_week,
-                result.weekLabel.isEmpty()
-                        ? context.getString(R.string.month_all_widget_week_hint)
-                        : context.getString(R.string.month_all_widget_week_label, result.weekLabel)
-        );
+        /* 보고 있는 주는 띠 카드 머리글에 그려집니다. 아래 줄은 오늘 근무 요약만 맡습니다. */
         views.setTextViewText(R.id.month_all_widget_footer, result.footer);
 
         views.setOnClickPendingIntent(
@@ -247,11 +242,6 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
         views.setOnClickPendingIntent(
                 R.id.month_all_widget_week_next,
                 broadcastIntent(context, widgetId, ACTION_WEEK_NEXT, 7)
-        );
-        /* 주간 문구를 누르면 오늘이 든 주로 한 번에 돌아옵니다. */
-        views.setOnClickPendingIntent(
-                R.id.month_all_widget_week,
-                broadcastIntent(context, widgetId, ACTION_TODAY, 8)
         );
 
         Intent openIntent = new Intent(context, MainActivity.class)

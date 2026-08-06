@@ -1018,13 +1018,40 @@ body.readonly-mode .cal-hint{ display:none; }
 .participants-title{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 .participants-title strong{ font-size:12.5px; }
 .participants-title span{ padding:3px 7px; border-radius:999px; background:#e8eafc; color:var(--brand); font-size:10.5px; font-weight:800; }
-.participant-list{ display:flex; flex-wrap:wrap; gap:6px; }
-.participant-chip{ display:inline-flex; align-items:center; gap:5px; padding:5px 8px 5px 5px; border:1px solid #dfe3ea; border-radius:999px; background:#fff; color:var(--ink); font-size:11.5px; font-weight:750; }
-.participant-chip i{ width:22px; height:22px; border-radius:50%; display:grid; place-items:center; background:#eef1f6; color:var(--ink-soft); font-size:10px; font-style:normal; font-weight:900; }
-.participant-chip.owner{ border-color:#c7cdfd; background:#f4f5ff; }
-.participant-chip.owner i{ background:var(--brand); color:#fff; }
-.participant-chip b{ color:var(--brand); font-size:9.5px; }
+/* 한 줄에 한 명씩 — 방장·나 표시와 내보내기 버튼을 같이 놓아야 읽힙니다. */
+.participant-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.participant-row{
+  display:flex; align-items:center; gap:8px;
+  padding:7px 8px; border:1px solid #dfe3ea; border-radius:11px; background:#fff;
+}
+.participant-row.owner{ border-color:#c7cdfd; background:#f4f5ff; }
+.participant-avatar{
+  flex:0 0 auto; width:24px; height:24px; border-radius:50%;
+  display:grid; place-items:center; background:#eef1f6; color:var(--ink-soft);
+  font-size:10.5px; font-style:normal; font-weight:900;
+}
+.participant-row.owner .participant-avatar{ background:var(--brand); color:#fff; }
+.participant-name{
+  flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:12.5px; font-weight:750; color:var(--ink);
+}
+.participant-name .me{
+  margin-left:5px; padding:1px 5px; border-radius:999px;
+  background:#eef1f6; color:var(--ink-soft); font-size:9.5px; font-weight:800;
+}
+.participant-row .role{
+  flex:0 0 auto; padding:2px 7px; border-radius:999px;
+  background:#eef1f6; color:var(--ink-soft); font-size:9.5px; font-weight:800;
+}
+.participant-row .role.owner{ background:var(--brand); color:#fff; }
+.participant-kick{
+  flex:0 0 auto; width:26px; height:26px; padding:0;
+  border:1px solid #f2c7c7; border-radius:8px; background:#fff;
+  color:#c0392b; font-size:12px; font-weight:900; line-height:1; cursor:pointer;
+}
+.participant-kick:active{ background:#fdeaea; }
 .participant-empty{ margin:0; color:var(--ink-soft); font-size:11px; line-height:1.45; }
+.participant-note{ margin:8px 0 0; color:var(--ink-soft); font-size:10.5px; line-height:1.5; }
 .kakao-mark{
   position:relative;
   display:inline-block;

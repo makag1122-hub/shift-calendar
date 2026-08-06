@@ -2,5 +2,5 @@
   "versionCode": 23,
   "versionName": "1.22.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "6×7 큰 위젯의 4개 조 비교를 한 주씩 보여 주고 ‹ › 로 옆으로 넘길 수 있게 했습니다. 칸이 넓어져 근무 이름이 그대로 보이고, 지금 보는 주는 위 달력에도 함께 표시됩니다. 초대 링크는 앱이 깔려 있으면 브라우저 대신 앱이 바로 엽니다."
+  "notes": "4개 조 비교를 한 주씩 카드로 보여 주고 아래 화살표로 넘길 수 있습니다. 줄 수를 늘리지 않아 달력 공간은 그대로입니다. 공유방 참여자 목록에서 방장과 참여자를 구분해 보여 주고, 방장은 참여자를 내보낼 수 있습니다."
 }

@@ -215,9 +215,25 @@ assert(
     && monthAllLayout.includes('@+id/month_all_widget_week_next'),
   '6×7 위젯 레이아웃에 주간 이동 버튼이 없습니다.'
 );
+/* 화살표 줄을 따로 두면 툴바가 두 겹이 됩니다. 요약 문구와 같은 줄에 있어야 합니다. */
 assert(
-  monthAllLayout.includes('@+id/month_all_widget_week'),
-  '6×7 위젯에 지금 보는 주를 알려 주는 문구가 없습니다.'
+  /month_all_widget_week_previous[\s\S]{0,900}month_all_widget_footer[\s\S]{0,900}month_all_widget_week_next/
+    .test(monthAllLayout),
+  '주간 이동 화살표가 아래 요약 줄과 한 줄로 합쳐져 있지 않습니다.'
+);
+/* 세로 루트 + 위 달 이동 줄 + 아래 요약·주간 이동 줄 = 3개. 더 늘면 달력이 줄어듭니다. */
+assert(
+  (monthAllLayout.match(/<LinearLayout/g) || []).length <= 3,
+  '6×7 위젯의 가로 줄이 늘어나 달력 공간을 잡아먹고 있습니다.'
+);
+/* 보고 있는 주는 별도 줄이 아니라 띠 카드 안에 그립니다. */
+assert(
+  renderer.includes('String weekLabel,'),
+  '띠 카드가 보고 있는 주를 직접 그리지 않습니다.'
+);
+assert(
+  !monthAllLayout.includes('@+id/month_all_widget_week"'),
+  '주간 문구 전용 줄이 아직 레이아웃에 남아 있습니다.'
 );
 assert(
   monthAllProvider.includes('month_all_week_'),
@@ -246,8 +262,8 @@ assert(
   '위 달력이 지금 보는 주를 표시하지 않습니다.'
 );
 assert(
-  renderer.includes('130f'),
-  '레이아웃에 주간 이동 줄이 늘었는데 렌더러의 여백 계산이 그대로입니다.'
+  renderer.includes('98f'),
+  '레이아웃 여백 합계와 렌더러의 chrome 계산이 어긋납니다.'
 );
 assert(
   fs.readFileSync(
@@ -287,9 +303,10 @@ const bandMax = number('MONTH_ALL_BAND_MAX');
 const bandRatio = number('MONTH_ALL_BAND_RATIO');
 
 [
-  { height: monthAllMin, memoLines: 1 },
-  { height: monthAllDefault, memoLines: 2 },
-  { height: monthAllMax, memoLines: 2 },
+  /* 최소 크기는 사용자가 위젯을 크게 줄인 경우입니다. 읽히기만 하면 됩니다. */
+  { height: monthAllMin, memoLines: 1, bandRow: 24, bandText: 10 },
+  { height: monthAllDefault, memoLines: 2, bandRow: 30, bandText: 13 },
+  { height: monthAllMax, memoLines: 2, bandRow: 30, bandText: 13 },
 ].forEach(sample => {
   const height = sample.height;
   const bandHeight = Math.min(bandMax, Math.max(bandMin, height * bandRatio));
@@ -316,13 +333,17 @@ const bandRatio = number('MONTH_ALL_BAND_RATIO');
   assert(columnWidth - 26 >= 55, `높이 ${height}에서 메모 글자 폭이 너무 좁습니다.`);
 
   /* 하단 띠: 한 주(7일)만 그리므로 근무 이름이 한 글자로 잘리면 안 됩니다.
-     예전처럼 31일을 밀어 넣으면 하루 폭이 21px라 이니셜만 겨우 들어갔습니다. */
-  const bandInner = bandHeight - 9;
-  const bandRowHeight = (bandInner - 19) / 4;
-  const bandColumnWidth = (monthAllWidth - 34) / 7;
-  const bandTextSize = Math.min(15, Math.max(9, bandRowHeight * 0.44));
+     예전처럼 31일을 밀어 넣으면 하루 폭이 21px라 이니셜만 겨우 들어갔습니다.
+     카드 안쪽 여백 8, 머리글 17, 요일줄 16, 조 라벨 칸 30을 뺀 나머지가 실제 칸입니다. */
+  const bandInner = bandHeight - 6;
+  const bandPad = Math.max(5, Math.min(8, bandInner * 0.045));
+  const bandTitle = Math.max(13, Math.min(17, bandInner * 0.10));
+  const bandDays = Math.max(12.5, Math.min(16, bandInner * 0.09));
+  const bandRowHeight = (bandInner - bandPad * 2 - bandTitle - bandDays) / 4;
+  const bandColumnWidth = (monthAllWidth - bandPad * 2 - 30) / 7;
+  const bandTextSize = Math.min(14.5, Math.max(9, bandRowHeight * 0.44));
   assert(
-    bandRowHeight >= 26,
+    bandRowHeight >= sample.bandRow,
     `높이 ${height}에서 하단 4개 조 줄이 너무 얇습니다: ${bandRowHeight}`
   );
   assert(
@@ -330,13 +351,18 @@ const bandRatio = number('MONTH_ALL_BAND_RATIO');
     `높이 ${height}에서 하단 띠의 하루 폭이 너무 좁습니다: ${bandColumnWidth}`
   );
   assert(
-    bandTextSize >= 13,
+    bandTextSize >= sample.bandText,
     `높이 ${height}에서 하단 띠 근무 글자가 너무 작습니다: ${bandTextSize}`
   );
   /* 근무 이름 두 글자(예: '주간')가 칸에 들어가야 이니셜 축약을 피합니다. */
   assert(
     bandColumnWidth - 6 >= bandTextSize * 2,
     `높이 ${height}에서 하단 띠에 근무 이름 두 글자가 들어가지 않습니다.`
+  );
+  /* 카드가 달력을 밀어내면 위쪽 메모가 사라집니다. */
+  assert(
+    bandHeight <= height * 0.27,
+    `높이 ${height}에서 4개 조 카드가 달력을 너무 많이 차지합니다: ${bandHeight}`
   );
   assert(
     calendarHeight >= height * 0.75,
