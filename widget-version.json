@@ -1,6 +1,6 @@
 {
-  "versionCode": 23,
-  "versionName": "1.22.0",
+  "versionCode": 24,
+  "versionName": "1.23.0",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "4개 조 비교를 한 주씩 카드로 보여 주고 아래 화살표로 넘길 수 있습니다. 줄 수를 늘리지 않아 달력 공간은 그대로입니다. 공유방 참여자 목록에서 방장과 참여자를 구분해 보여 주고, 방장은 참여자를 내보낼 수 있습니다."
+  "notes": "4개 조 비교를 한 주씩 카드로 보여 주고 아래 화살표로 넘깁니다. 줄 수를 늘리지 않아 달력 공간은 그대로입니다. 초대 코드(8자리)로도 친구와 연결할 수 있고, 공유방 참여자 목록에서 방장과 참여자를 구분해 보여 줍니다."
 }
