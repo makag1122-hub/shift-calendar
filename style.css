@@ -1065,6 +1065,8 @@ body.readonly-mode .cal-hint{ display:none; }
   color:var(--brand); font-size:19px; font-weight:900; letter-spacing:.06em;
   font-family:ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
+/* 예전 방의 20자리 코드는 같은 크기로는 칸을 넘칩니다. */
+.code-card.long .code-value{ font-size:13.5px; letter-spacing:.02em; }
 .code-help{ margin:0 0 12px; color:var(--ink-soft); font-size:11px; line-height:1.55; }
 
 .join-card{

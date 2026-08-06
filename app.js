@@ -1249,6 +1249,27 @@ function renderParticipantNames(){
 }
 
 /*
+ * 방장에게 보여 주는 초대 코드입니다.
+ * 8자리는 새로 만든 방에만 붙습니다. 예전 방의 코드를 바꾸면 이미 들어온 참여자가
+ * 끊기므로 그대로 두고, 대신 화면이 거짓말하지 않도록 문구와 크기를 길이에 맞춥니다.
+ */
+function renderInviteCode(){
+  const code = Sync.code ? Sync.code() : '';
+  const shown = Sync.displayCode ? Sync.displayCode() : code;
+  const legacy = code.length > 8;
+  return `<div class="code-card${legacy ? ' long' : ''}">
+    <span class="code-label">초대 코드</span>
+    <b class="code-value" id="syncCodeValue">${escapeHtml(shown)}</b>
+    <button class="btn-soft sm" id="syncCodeCopy">복사</button>
+  </div>
+  <p class="code-help">친구가 <b>설정 › 친구와 공유하기</b>에서 이 코드를 넣으면 바로 연결됩니다. 링크가 앱에서 안 열릴 때 확실한 방법이에요.${
+    legacy
+      ? ' <br><b>이 방은 예전에 만들어 코드가 깁니다.</b> 짧은 8자리로 바꾸려면 아래 <b>공유방 닫기</b> 후 다시 만드세요. 지금 들어와 있는 분들은 새 코드로 다시 참여해야 합니다.'
+      : ''
+  }</p>`;
+}
+
+/*
  * 초대 코드로 참여하는 칸입니다.
  * 링크는 카톡 인앱 브라우저·주소창 붙여넣기처럼 앱으로 넘어오지 못하는 경로가 많습니다.
  * 코드는 그런 경로와 무관하게 항상 동작하므로 링크와 함께 열어 둡니다.
@@ -1256,7 +1277,7 @@ function renderParticipantNames(){
 function renderJoinByCode(){
   return `<div class="join-card">
     <strong>초대 코드를 받으셨나요?</strong>
-    <p>친구가 알려 준 8자리 코드를 넣으면 바로 연결됩니다. 링크가 앱에서 안 열릴 때도 이 방법은 됩니다.</p>
+    <p>친구가 알려 준 코드를 넣으면 바로 연결됩니다. 링크가 앱에서 안 열릴 때도 이 방법은 됩니다.</p>
     <div class="join-row">
       <input id="syncJoinInput" class="join-input" type="text" maxlength="24"
         placeholder="예: abcd-efgh" autocomplete="off" autocapitalize="none" spellcheck="false" />
@@ -1388,12 +1409,7 @@ function renderSyncBox(){
         <strong>친구를 초대할 준비가 됐어요</strong>
         <span>초대 코드를 불러 주거나, 아래 버튼으로 링크를 보내세요.</span>
       </div>
-      <div class="code-card">
-        <span class="code-label">초대 코드</span>
-        <b class="code-value" id="syncCodeValue">${escapeHtml(Sync.displayCode ? Sync.displayCode() : Sync.code())}</b>
-        <button class="btn-soft sm" id="syncCodeCopy">복사</button>
-      </div>
-      <p class="code-help">친구가 <b>설정 › 친구와 공유하기</b>에서 이 코드를 넣으면 바로 연결됩니다. 링크가 앱에서 안 열릴 때 확실한 방법이에요.</p>
+      ${renderInviteCode()}
       <button class="btn-kakao sync-send" id="syncShareBtn">
         <span class="kakao-mark" aria-hidden="true"></span>
         카카오톡으로 친구 초대
