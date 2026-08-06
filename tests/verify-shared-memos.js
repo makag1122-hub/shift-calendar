@@ -153,7 +153,9 @@ async function verifyManagedSetup(){
     '근무표 갱신이 이미 초대한 친구 목록을 덮어쓰려고 합니다.'
   );
   const link = sandbox.Sync.shareLink();
-  assert(/#share=[a-z2-9]{20}$/.test(link), '간편 공유 링크가 짧은 공유 코드 형식이 아닙니다.');
+  /* 새 방은 사람이 옮겨 적을 수 있는 8자리, 예전 방은 20자리 그대로 열려야 합니다. */
+  assert(/#share=[a-z2-9]{8,20}$/.test(link), '간편 공유 링크가 공유 코드 형식이 아닙니다.');
+  assert(/#share=[a-z2-9]{8}$/.test(link), '새 공유방 코드가 8자리가 아닙니다(사람이 옮겨 적기 어렵습니다).');
   assert(!link.includes('managed-key'), '간편 공유 링크에 Firebase 설정이 포함됐습니다.');
 }
 

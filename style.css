@@ -1052,6 +1052,35 @@ body.readonly-mode .cal-hint{ display:none; }
 .participant-kick:active{ background:#fdeaea; }
 .participant-empty{ margin:0; color:var(--ink-soft); font-size:11px; line-height:1.45; }
 .participant-note{ margin:8px 0 0; color:var(--ink-soft); font-size:10.5px; line-height:1.5; }
+
+/* 초대 코드 — 링크가 앱으로 안 열리는 환경에서 쓰는 확실한 경로 */
+.code-card{
+  display:flex; align-items:center; gap:10px;
+  margin:0 0 6px; padding:11px 12px;
+  border:1px dashed var(--brand); border-radius:13px; background:#f5f6ff;
+}
+.code-label{ flex:0 0 auto; color:var(--ink-soft); font-size:10.5px; font-weight:800; }
+.code-value{
+  flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  color:var(--brand); font-size:19px; font-weight:900; letter-spacing:.06em;
+  font-family:ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+.code-help{ margin:0 0 12px; color:var(--ink-soft); font-size:11px; line-height:1.55; }
+
+.join-card{
+  margin:14px 0 0; padding:12px;
+  border:1px solid var(--line); border-radius:14px; background:rgba(248,250,252,.9);
+}
+.join-card strong{ display:block; font-size:12.5px; color:var(--ink); }
+.join-card p{ margin:3px 0 9px; color:var(--ink-soft); font-size:11px; line-height:1.55; }
+.join-row{ display:flex; gap:7px; }
+.join-input{
+  flex:1; min-width:0; padding:9px 11px;
+  border:1px solid var(--line); border-radius:10px; background:#fff;
+  font-size:14px; font-weight:800; letter-spacing:.05em;
+  font-family:ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+.join-row .btn-primary{ flex:0 0 auto; padding:9px 15px; }
 .kakao-mark{
   position:relative;
   display:inline-block;

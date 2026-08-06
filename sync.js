@@ -71,12 +71,34 @@
     return validConfig(value) ? value : null;
   }
 
+  /*
+   * 초대 코드입니다. 링크가 앱으로 안 열리는 환경(카톡 인앱 브라우저, 주소창 붙여넣기)에서도
+   * 이 코드만 불러 주면 연결되므로, 사람이 옮겨 적을 수 있는 길이여야 합니다.
+   * 글자표에서 l·o·0·1을 뺐습니다(서로 헷갈립니다). 32글자 × 8자리 = 1조 가지라
+   * 남의 방 코드를 찍어 맞히는 건 사실상 불가능합니다.
+   * 20자로 만든 예전 공유방도 그대로 열려야 하므로 길이 검사는 8~20으로 둡니다.
+   */
+  const CODE_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
+  const CODE_LENGTH = 8;
+
   function randomCode(){
-    const s = 'abcdefghijkmnpqrstuvwxyz23456789';
     let out = '';
-    const arr = crypto.getRandomValues(new Uint8Array(20));
-    for(const n of arr) out += s[n % s.length];
+    const arr = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
+    for(const n of arr) out += CODE_ALPHABET[n % CODE_ALPHABET.length];
     return out;
+  }
+
+  /*
+   * 사람이 옮겨 적은 코드는 대문자·공백·하이픈이 섞입니다.
+   * 구분자만 걷어내고 나머지는 그대로 둡니다. 잘못된 글자까지 지워 버리면
+   * 길이가 줄어 "형식이 아니에요" 대신 엉뚱한 오류로 보이기 때문입니다.
+   */
+  function normalizeCode(value){
+    return String(value || '').toLowerCase().replace(/[\s._-]/g, '');
+  }
+
+  function validCode(code){
+    return /^[a-z2-9]{8,20}$/.test(code);
   }
 
   function setStatus(s, err){
@@ -185,6 +207,7 @@
 
   function friendly(e){
     const m = (e && (e.code || e.message)) ? (e.code || e.message) : String(e);
+    if(/not-found/i.test(m)) return '그런 초대 코드가 없어요. 코드를 다시 확인해 주세요.';
     if(/permission-denied/i.test(m)) return '권한 거부됨 — Firestore 보안 규칙을 확인해 주세요.';
     if(/failed to fetch|network|offline/i.test(m)) return '네트워크 연결을 확인해 주세요.';
     if(/invalid-api-key|api-key/i.test(m)) return 'API 키가 올바르지 않아요. 설정을 다시 붙여넣어 주세요.';
@@ -497,6 +520,40 @@
       saveCfg(cfg);
       await connect();
     },
+    /* 사람이 보기 좋은 형태: abcd-efgh */
+    displayCode(){
+      const code = cfg ? cfg.code : '';
+      return code.length === 8 ? code.slice(0, 4) + '-' + code.slice(4) : code;
+    },
+    /*
+     * 초대 코드로 참여합니다. 링크를 거치지 않으므로 App Links·카카오 설정과 무관하게 동작합니다.
+     * 코드가 틀렸으면 이전 상태로 되돌려, 잘못된 방에 묶인 채로 남지 않게 합니다.
+     */
+    async joinByCode(rawCode){
+      const code = normalizeCode(rawCode);
+      if(!validCode(code)) throw new Error('초대 코드 형식이 아니에요. 8자리 코드를 확인해 주세요.');
+      const config = managedConfig();
+      if(!validConfig(config)) throw new Error('앱의 공유 서버 설정이 아직 끝나지 않았어요.');
+      if(cfg && cfg.role === 'owner' && cfg.code === code){
+        throw new Error('내가 만든 공유방이에요. 친구에게 이 코드를 알려 주세요.');
+      }
+      const previous = cfg;
+      if(unsub){ unsub(); unsub = null; }
+      if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
+      fb = null;
+      cfg = { config, code, role:'viewer', managed:true, secured:true };
+      saveCfg(cfg);
+      await connect();
+      if(status === 'error'){
+        const failure = lastError;
+        cfg = previous;
+        if(previous) saveCfg(previous); else clearCfg();
+        docRef = null; fb = null;
+        setStatus(previous ? 'connecting' : 'off');
+        if(previous) await connect();
+        throw new Error(failure || '공유방에 들어가지 못했어요.');
+      }
+    },
     async disable(){
       await removeParticipant(true);
       if(cfg && cfg.role === 'owner' && docRef && fb && fb.deleteDoc){
@@ -541,7 +598,8 @@
   };
 
   function decodeShare(token){
-    if(/^[abcdefghijkmnpqrstuvwxyz23456789]{14,32}$/.test(token)){
+    /* 8자리 새 코드와 20자리 예전 코드를 모두 받습니다. */
+    if(validCode(token)){
       return { code: token };
     }
     try{

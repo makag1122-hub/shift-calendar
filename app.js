@@ -1248,6 +1248,44 @@ function renderParticipantNames(){
   </div>`;
 }
 
+/*
+ * 초대 코드로 참여하는 칸입니다.
+ * 링크는 카톡 인앱 브라우저·주소창 붙여넣기처럼 앱으로 넘어오지 못하는 경로가 많습니다.
+ * 코드는 그런 경로와 무관하게 항상 동작하므로 링크와 함께 열어 둡니다.
+ */
+function renderJoinByCode(){
+  return `<div class="join-card">
+    <strong>초대 코드를 받으셨나요?</strong>
+    <p>친구가 알려 준 8자리 코드를 넣으면 바로 연결됩니다. 링크가 앱에서 안 열릴 때도 이 방법은 됩니다.</p>
+    <div class="join-row">
+      <input id="syncJoinInput" class="join-input" type="text" maxlength="24"
+        placeholder="예: abcd-efgh" autocomplete="off" autocapitalize="none" spellcheck="false" />
+      <button class="btn-primary" id="syncJoinBtn">참여</button>
+    </div>
+    <div class="sync-msg" id="syncJoinMsg"></div>
+  </div>`;
+}
+
+async function joinByInviteCode(btn){
+  const input = $('syncJoinInput');
+  const msg = $('syncJoinMsg');
+  const code = input ? input.value : '';
+  if(!code.trim()){
+    if(msg){ msg.className = 'sync-msg err'; msg.textContent = '초대 코드를 입력해 주세요.'; }
+    return;
+  }
+  if(btn) btn.disabled = true;
+  if(msg){ msg.className = 'sync-msg'; msg.textContent = '연결 중…'; }
+  try{
+    await Sync.joinByCode(code);
+    renderSyncBox();
+    renderAll();
+  }catch(e){
+    if(btn) btn.disabled = false;
+    if(msg){ msg.className = 'sync-msg err'; msg.textContent = e && e.message ? e.message : String(e); }
+  }
+}
+
 /* 내보내기는 되돌릴 수 없습니다(다시 초대 링크를 보내야 함). 반드시 한 번 묻습니다. */
 function kickParticipant(uid, name){
   if(!window.Sync || !Sync.removeMember) return;
@@ -1348,8 +1386,14 @@ function renderSyncBox(){
       ${renderParticipantNames()}
       <div class="sync-ready-copy">
         <strong>친구를 초대할 준비가 됐어요</strong>
-        <span>아래 버튼을 누르면 카카오톡으로 초대 링크를 보낼 수 있어요.</span>
+        <span>초대 코드를 불러 주거나, 아래 버튼으로 링크를 보내세요.</span>
       </div>
+      <div class="code-card">
+        <span class="code-label">초대 코드</span>
+        <b class="code-value" id="syncCodeValue">${escapeHtml(Sync.displayCode ? Sync.displayCode() : Sync.code())}</b>
+        <button class="btn-soft sm" id="syncCodeCopy">복사</button>
+      </div>
+      <p class="code-help">친구가 <b>설정 › 친구와 공유하기</b>에서 이 코드를 넣으면 바로 연결됩니다. 링크가 앱에서 안 열릴 때 확실한 방법이에요.</p>
       <button class="btn-kakao sync-send" id="syncShareBtn">
         <span class="kakao-mark" aria-hidden="true"></span>
         카카오톡으로 친구 초대
@@ -1379,11 +1423,12 @@ function renderSyncBox(){
       </div>
       <div class="sync-flow" aria-label="공유 순서">
         <span><b>1</b> 공유방 만들기</span>
-        <span><b>2</b> 카카오톡으로 초대</span>
+        <span><b>2</b> 코드나 링크 전달</span>
         <span><b>3</b> 메모 함께 쓰기</span>
       </div>
       <button class="btn-primary" id="syncEnableBtn">공유방 만들기</button>
-      <div class="sync-msg" id="syncMsg"></div>`;
+      <div class="sync-msg" id="syncMsg"></div>
+      ${renderJoinByCode()}`;
     return;
   }
 
@@ -1738,6 +1783,8 @@ function wire(){
   $('syncBox').addEventListener('click', (e)=>{
     const t = e.target.closest('button'); if(!t) return;
     if(t.dataset && t.dataset.kick){ kickParticipant(t.dataset.kick, t.dataset.name || '이 참여자'); }
+    else if(t.id === 'syncJoinBtn'){ joinByInviteCode(t); }
+    else if(t.id === 'syncCodeCopy'){ copyToClipboard(Sync.code(), t); }
     else if(t.id === 'syncEnableBtn'){ enableOwnerSync(); }
     else if(t.id === 'syncShareBtn'){ shareSyncLink(t); }
     else if(t.id === 'syncCopyBtn'){ copyToClipboard($('syncLink').value, t); }

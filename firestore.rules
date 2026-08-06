@@ -12,8 +12,9 @@ service cloud.firestore {
         return signedIn() && request.auth.uid in resource.data.memberUids;
       }
 
+      /* 초대 코드는 8자리(사람이 옮겨 적는 용). 20자리로 만든 예전 방도 계속 허용합니다. */
       allow create: if signedIn()
-        && code.matches('^[a-z2-9]{20}$')
+        && code.matches('^[a-z2-9]{8,20}$')
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.memberUids == [request.auth.uid];
 
