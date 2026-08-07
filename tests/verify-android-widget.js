@@ -256,10 +256,32 @@ assert(
   /ACTION_WEEK_PREVIOUS[\s\S]*?weekRows\(previous\) - 1/.test(monthAllProvider),
   '달의 첫 주에서 지난달 마지막 주로 넘어가지 않습니다.'
 );
-/* 띠와 위 달력이 같은 주를 가리키는지 눈으로 알 수 있어야 합니다. */
+/* 지금 보는 주는 띠 카드 머리글이 알려 줍니다(달력에 줄 표시를 하면 오늘 칸과 헷갈립니다). */
 assert(
-  /drawMonthWithMemos\([\s\S]*?int highlightRow/.test(renderer),
-  '위 달력이 지금 보는 주를 표시하지 않습니다.'
+  /drawGroupWeekBand\([\s\S]*?drawText\(weekLabel/.test(renderer),
+  '띠 카드가 지금 보는 주를 적어 주지 않습니다.'
+);
+assert(
+  !/int highlightRow/.test(renderer),
+  '달력에 주 단위 표시가 남아 있어 오늘 칸 테두리와 경쟁합니다.'
+);
+/* 달력에서 테두리·동그라미가 붙는 칸은 오늘 하루뿐이어야 합니다. */
+assert(
+  /drawMonthWithMemos\([\s\S]*?boolean isToday = currentMonth/.test(renderer),
+  '큰 달력이 오늘을 따로 계산하지 않습니다.'
+);
+assert(
+  /if \(isToday\) \{[\s\S]{0,400}drawCircle\(/.test(renderer),
+  '오늘 날짜 숫자에 채운 동그라미 표시가 없습니다.'
+);
+/* 메모는 색이 깔린 칸 위에 얹히므로 회색이면 안 읽힙니다. */
+assert(
+  renderer.includes('COLOR_MEMO_TEXT'),
+  '메모 글자색이 본문 회색과 분리되지 않았습니다.'
+);
+assert(
+  !/setColor\(COLOR_INK_SOFT\);\s*\n\s*String\[\] lines = wrapMemo\(/.test(renderer),
+  '큰 달력 메모가 아직 회색으로 그려집니다.'
 );
 assert(
   renderer.includes('98f'),

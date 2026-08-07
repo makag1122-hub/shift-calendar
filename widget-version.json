@@ -1,6 +1,6 @@
 {
-  "versionCode": 25,
-  "versionName": "1.23.1",
+  "versionCode": 26,
+  "versionName": "1.23.2",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "위젯에서 선택된 주와 오늘 칸을 파랗게 칠하던 것을 얇은 테두리 표시로 바꿨습니다. 흰 달력 위에 색 띠가 얹힌 것처럼 보이던 문제를 없앴습니다."
+  "notes": "달력에서 주 단위 표시를 없애고 오늘 날짜에 동그라미를 넣어 오늘이 바로 보이게 했습니다. 메모 글자는 검정색 굵게로 바꿔 색이 깔린 칸 위에서도 읽히도록 했습니다."
 }

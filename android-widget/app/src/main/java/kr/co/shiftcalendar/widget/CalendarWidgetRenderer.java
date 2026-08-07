@@ -61,6 +61,11 @@ final class CalendarWidgetRenderer {
     private static final int COLOR_SUNDAY = Color.rgb(214, 70, 57);
     private static final int COLOR_SATURDAY = Color.rgb(48, 105, 184);
     private static final int COLOR_MEMO = Color.rgb(245, 158, 11);
+    /*
+     * 메모 글자입니다. 회색(COLOR_INK_SOFT)으로 뒀더니 색이 깔린 칸 위에서 읽기 힘들었습니다.
+     * 8~10px로 작게 들어가는 글자라 본문보다 오히려 진해야 눈에 들어옵니다.
+     */
+    private static final int COLOR_MEMO_TEXT = Color.rgb(24, 30, 42);
     private static final Typeface TYPEFACE_BOLD =
             Typeface.create("sans-serif", Typeface.BOLD);
     private static final Typeface TYPEFACE_MEDIUM =
@@ -305,7 +310,6 @@ final class CalendarWidgetRenderer {
                 days,
                 year,
                 month,
-                weekRow,
                 MONTH_ALL_WIDTH,
                 calendarHeight
         );
@@ -354,7 +358,6 @@ final class CalendarWidgetRenderer {
             JSONArray days,
             int year,
             int month,
-            int highlightRow,
             float width,
             float height
     ) {
@@ -370,19 +373,11 @@ final class CalendarWidgetRenderer {
                 today.get(Calendar.YEAR) == year && today.get(Calendar.MONTH) == month;
 
         /*
-         * 아래 띠가 보여 주는 줄을 달력에서도 표시합니다.
-         * 파랗게 칠했더니 흰 달력 위에 색 띠가 얹힌 것처럼 보여서, 얇은 테두리만 남겼습니다.
-         * 줄을 묶어 주는 역할은 그대로 하면서 색 면은 만들지 않습니다.
+         * 아래 띠가 보는 주를 달력에도 표시하려고 줄 전체를 칠했다가 테두리로 바꿨는데,
+         * 둘 다 오늘 칸 테두리와 경쟁해서 "오늘이 어느 날인지" 가 흐려졌습니다.
+         * 주간 표시는 띠 카드 머리글("8/9 ~ 8/15")이 이미 하고 있으므로 여기서는 없앱니다.
+         * 달력에서 테두리가 쳐지는 칸은 오늘 하루뿐이어야 합니다.
          */
-        if (highlightRow >= 0 && highlightRow < ROWS) {
-            float top = MONTH_ALL_HEADER_HEIGHT + highlightRow * rowHeight;
-            RectF row = new RectF(1f, top + 0.5f, width - 1f, top + rowHeight - 0.5f);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.4f);
-            paint.setColor(Color.rgb(196, 202, 216));
-            canvas.drawRoundRect(row, 9f, 9f, paint);
-            paint.setStyle(Paint.Style.FILL);
-        }
 
         for (int day = 1; day <= daysInMonth; day++) {
             int position = firstColumn + day - 1;
@@ -416,17 +411,30 @@ final class CalendarWidgetRenderer {
             int cellSave = canvas.save();
             canvas.clipRect(cell.left + 1f, cell.top + 1f, cell.right - 1f, cell.bottom - 1f);
 
+            boolean isToday = currentMonth && today.get(Calendar.DAY_OF_MONTH) == day;
+
             paint.setTypeface(TYPEFACE_BOLD);
             paint.setTextAlign(Paint.Align.LEFT);
             paint.setTextSize(16f);
-            paint.setColor(
-                    holiday || column == 0
-                            ? COLOR_SUNDAY
-                            : column == 6
-                            ? COLOR_SATURDAY
-                            : COLOR_INK
-            );
-            canvas.drawText(String.valueOf(day), left + 9f, top + 21f, paint);
+            if (isToday) {
+                /* 오늘 날짜는 동그라미를 채워 숫자를 흰색으로 씁니다.
+                   테두리만으로는 색이 깔린 칸 사이에서 눈에 띄지 않았습니다. */
+                paint.setColor(COLOR_BRAND);
+                canvas.drawCircle(left + 14f, top + 15.5f, 11.5f, paint);
+                paint.setColor(Color.WHITE);
+                paint.setTextAlign(Paint.Align.CENTER);
+                canvas.drawText(String.valueOf(day), left + 14f, top + 21f, paint);
+                paint.setTextAlign(Paint.Align.LEFT);
+            } else {
+                paint.setColor(
+                        holiday || column == 0
+                                ? COLOR_SUNDAY
+                                : column == 6
+                                ? COLOR_SATURDAY
+                                : COLOR_INK
+                );
+                canvas.drawText(String.valueOf(day), left + 9f, top + 21f, paint);
+            }
             if (!tag.isEmpty()) {
                 drawTag(canvas, paint, tag, right - 7f, top + 6f, false);
             }
@@ -461,10 +469,10 @@ final class CalendarWidgetRenderer {
                     paint.setColor(COLOR_MEMO);
                     canvas.drawCircle(left + 11f, memoTop + 4.5f, 2.4f, paint);
 
-                    paint.setTypeface(TYPEFACE_MEDIUM);
+                    paint.setTypeface(TYPEFACE_BOLD);
                     paint.setTextAlign(Paint.Align.LEFT);
                     paint.setTextSize(10f);
-                    paint.setColor(COLOR_INK_SOFT);
+                    paint.setColor(COLOR_MEMO_TEXT);
                     String[] lines = wrapMemo(
                             paint,
                             memo,
@@ -484,7 +492,8 @@ final class CalendarWidgetRenderer {
 
             canvas.restoreToCount(cellSave);
 
-            if (currentMonth && today.get(Calendar.DAY_OF_MONTH) == day) {
+            /* 달력에서 테두리가 쳐지는 칸은 오늘뿐입니다. 숫자 동그라미와 함께 오늘을 못 놓치게 합니다. */
+            if (isToday) {
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(2.6f);
                 paint.setColor(COLOR_BRAND);
@@ -1257,9 +1266,9 @@ final class CalendarWidgetRenderer {
                         && columnWidth >= 66f;
                 if (showMemoText) {
                     paint.setTextAlign(Paint.Align.LEFT);
-                    paint.setTypeface(TYPEFACE_MEDIUM);
+                    paint.setTypeface(TYPEFACE_BOLD);
                     paint.setTextSize(compactCell ? 7.4f : 8.6f);
-                    paint.setColor(COLOR_INK_SOFT);
+                    paint.setColor(COLOR_MEMO_TEXT);
                     canvas.drawText(
                             ellipsize(paint, memo, columnWidth - 22f),
                             left + 14f,
