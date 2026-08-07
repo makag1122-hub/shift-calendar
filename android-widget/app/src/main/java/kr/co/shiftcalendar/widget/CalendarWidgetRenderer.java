@@ -370,15 +370,18 @@ final class CalendarWidgetRenderer {
                 today.get(Calendar.YEAR) == year && today.get(Calendar.MONTH) == month;
 
         /*
-         * 아래 띠가 보여 주는 줄을 달력에서도 옅게 칠해 둡니다.
-         * 이게 없으면 띠의 7일이 달력의 어느 줄인지 눈으로 찾아야 합니다.
+         * 아래 띠가 보여 주는 줄을 달력에서도 표시합니다.
+         * 파랗게 칠했더니 흰 달력 위에 색 띠가 얹힌 것처럼 보여서, 얇은 테두리만 남겼습니다.
+         * 줄을 묶어 주는 역할은 그대로 하면서 색 면은 만들지 않습니다.
          */
         if (highlightRow >= 0 && highlightRow < ROWS) {
             float top = MONTH_ALL_HEADER_HEIGHT + highlightRow * rowHeight;
-            RectF row = new RectF(0f, top, width, top + rowHeight);
+            RectF row = new RectF(1f, top + 0.5f, width - 1f, top + rowHeight - 0.5f);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.4f);
+            paint.setColor(Color.rgb(196, 202, 216));
+            canvas.drawRoundRect(row, 9f, 9f, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(blendWithWhite(COLOR_BRAND, 0.93f));
-            canvas.drawRoundRect(row, 8f, 8f, paint);
         }
 
         for (int day = 1; day <= daysInMonth; day++) {
@@ -581,21 +584,10 @@ final class CalendarWidgetRenderer {
         float gridTop = padding + titleHeight;
         float gridBottom = height - padding;
 
-        if (todayColumn >= 0) {
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(blendWithWhite(COLOR_BRAND, 0.90f));
-            canvas.drawRoundRect(
-                    new RectF(
-                            left0 + labelWidth + todayColumn * columnWidth + 1f,
-                            gridTop,
-                            left0 + labelWidth + (todayColumn + 1) * columnWidth - 1f,
-                            gridBottom
-                    ),
-                    8f,
-                    8f,
-                    paint
-            );
-        }
+        /*
+         * 오늘 칸은 아래에서 테두리로 표시합니다.
+         * 예전에는 세로로 파랗게 칠했는데, 카드 안에 색 기둥이 선 것처럼 보였습니다.
+         */
 
         /* 요일과 날짜 — 카드가 위 달력과 다른 주를 보여 줄 수 있으므로 여기에도 적습니다. */
         for (int column = 0; column < 7; column++) {
