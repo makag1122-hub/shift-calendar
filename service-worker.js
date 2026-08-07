@@ -1,6 +1,6 @@
 'use strict';
 
-const ASSET_VERSION = '20260806e';
+const ASSET_VERSION = '20260807a';
 const CACHE_NAME = `shift-calendar-v${ASSET_VERSION}-cache-safe`;
 const APP_SHELL = [
   './',

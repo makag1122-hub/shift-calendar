@@ -33,6 +33,12 @@
   let participantList = [];
   // 방장이 누구인지는 클라우드 문서가 정합니다. 참여자 목록에서 방장을 표시할 때 씁니다.
   let remoteOwnerUid = '';
+  /*
+   * 클라우드가 세는 실제 참여 인원입니다.
+   * 참여자 목록은 이름을 정한 사람만 담기므로, 이름 없이 들어온 사람은
+   * 이 수와 목록 길이의 차이로만 드러납니다. 방장이 모르는 참여자가 없어야 합니다.
+   */
+  let memberCount = 0;
   // 방장이 내보내면 읽기 권한이 사라집니다. 그냥 '오류'로 두면 원인을 알 수 없어 따로 표시합니다.
   let removedFromRoom = false;
 
@@ -158,6 +164,7 @@
             const d = snap.data();
             if(d){
               if(d.ownerUid) remoteOwnerUid = d.ownerUid;
+              if(Array.isArray(d.memberUids)) memberCount = d.memberUids.length;
               if(d.state) applyRemoteState(d.state, d.sharedMemos);
               lastUpdated = Math.max(Number(d.updatedAt)||0, Number(d.memoUpdatedAt)||0);
             }
@@ -173,6 +180,7 @@
             const d = snap.data();
             if(d){
               if(d.ownerUid) remoteOwnerUid = d.ownerUid;
+              if(Array.isArray(d.memberUids)) memberCount = d.memberUids.length;
               if(d.sharedMemos) applyRemoteMemos(d.sharedMemos);
               lastUpdated = Math.max(Number(d.updatedAt)||0, Number(d.memoUpdatedAt)||0);
             }
@@ -475,6 +483,15 @@
         isOwner: item.role === 'owner' || (!!remoteOwnerUid && item.uid === remoteOwnerUid),
       }));
     },
+    /*
+     * 이름을 정하지 않고 들어온 사람 수입니다.
+     * 그 사람들은 참여자 문서가 없어 목록에 안 뜨지만 근무표는 보고 있습니다.
+     * 방장이 "아무도 없다"고 오해하지 않도록 이 수를 따로 알려 줍니다.
+     */
+    unnamedMembers(){
+      return Math.max(0, memberCount - participantList.length);
+    },
+    hasProfile(){ return !!profileName; },
     /* 방장이 이름을 안 정했으면 목록에 안 뜹니다. 그때도 방장 유무는 알려 줍니다. */
     ownerNamed(){
       if(!remoteOwnerUid) return true;
@@ -574,7 +591,7 @@
       if(participantsUnsub){ participantsUnsub(); participantsUnsub = null; }
       clearCfg(); cfg = null; docRef = null; fb = null; lastUpdated = 0;
       participantList = []; participantError = '';
-      remoteOwnerUid = ''; removedFromRoom = false;
+      remoteOwnerUid = ''; removedFromRoom = false; memberCount = 0;
       pushTimer && clearTimeout(pushTimer);
       memoPushTimer && clearTimeout(memoPushTimer);
       pendingMemoUpdates = {};

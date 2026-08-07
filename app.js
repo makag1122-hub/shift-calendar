@@ -1239,9 +1239,16 @@ function renderParticipantNames(){
     ? `<ul class="participant-list">${rows}</ul>`
     : '<p class="participant-empty">이름을 정한 참여자가 여기에 표시됩니다.</p>';
 
+  /* 이름 없이 들어온 사람은 목록에 안 뜹니다. 그래도 방장은 알고 있어야 합니다. */
+  const unnamed = Sync.unnamedMembers ? Sync.unnamedMembers() : 0;
+  const total = people.length + unnamed;
+
   return `<div class="participants-card">
-    <div class="participants-title"><strong>공유방 참여자</strong><span>${people.length}명</span></div>
+    <div class="participants-title"><strong>공유방 참여자</strong><span>${total}명</span></div>
     ${list}
+    ${unnamed > 0
+      ? `<p class="participant-unnamed">이름을 정하지 않은 참여자 <b>${unnamed}명</b>이 근무표를 보고 있습니다. 이름을 정하면 위 목록에 나타납니다.</p>`
+      : ''}
     ${ownerMissing ? '<p class="participant-note">방장이 아직 이름을 정하지 않아 목록에 표시되지 않습니다.</p>' : ''}
     ${canRemove && people.length > 1 ? '<p class="participant-note">✕ 를 누르면 그 사람은 근무표를 더 이상 볼 수 없습니다.</p>' : ''}
     ${status.participantError ? `<p class="kakao-login-error">이름 동기화 오류 · ${escapeHtml(status.participantError)}</p>` : ''}
@@ -1275,9 +1282,11 @@ function renderInviteCode(){
  * 코드는 그런 경로와 무관하게 항상 동작하므로 링크와 함께 열어 둡니다.
  */
 function renderJoinByCode(){
+  const named = !!myDisplayName();
   return `<div class="join-card">
     <strong>초대 코드를 받으셨나요?</strong>
     <p>친구가 알려 준 코드를 넣으면 바로 연결됩니다. 링크가 앱에서 안 열릴 때도 이 방법은 됩니다.</p>
+    ${named ? '' : '<p class="join-need-name">⚠️ <b>먼저 위에서 내 이름을 정해 주세요.</b> 이름이 없으면 방장 화면에 내가 안 보입니다.</p>'}
     <div class="join-row">
       <input id="syncJoinInput" class="join-input" type="text" maxlength="24"
         placeholder="예: abcd-efgh" autocomplete="off" autocapitalize="none" spellcheck="false" />
@@ -1291,6 +1300,19 @@ async function joinByInviteCode(btn){
   const input = $('syncJoinInput');
   const msg = $('syncJoinMsg');
   const code = input ? input.value : '';
+  /*
+   * 이름 없이 들어가면 참여자 문서를 못 만들어(규칙상 이름이 필수)
+   * 방장 목록에 안 뜹니다. 근무표는 보이는데 방장만 모르는 상태가 되므로 먼저 막습니다.
+   */
+  if(!myDisplayName()){
+    if(msg){ msg.className = 'sync-msg err'; msg.textContent = '먼저 위에서 내 이름을 정하고 저장해 주세요. 이름이 있어야 방장에게 내가 보입니다.'; }
+    const nameInput = $('syncNameInput');
+    if(nameInput){
+      nameInput.scrollIntoView({ block:'center', behavior:'smooth' });
+      nameInput.focus();
+    }
+    return;
+  }
   if(!code.trim()){
     if(msg){ msg.className = 'sync-msg err'; msg.textContent = '초대 코드를 입력해 주세요.'; }
     return;

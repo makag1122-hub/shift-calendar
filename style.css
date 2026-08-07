@@ -1052,6 +1052,16 @@ body.readonly-mode .cal-hint{ display:none; }
 .participant-kick:active{ background:#fdeaea; }
 .participant-empty{ margin:0; color:var(--ink-soft); font-size:11px; line-height:1.45; }
 .participant-note{ margin:8px 0 0; color:var(--ink-soft); font-size:10.5px; line-height:1.5; }
+.participant-unnamed{
+  margin:8px 0 0; padding:7px 9px; border-radius:9px;
+  background:#fff7ed; border:1px solid #fed7aa; color:#9a3412;
+  font-size:10.5px; font-weight:700; line-height:1.5;
+}
+.join-need-name{
+  margin:0 0 9px; padding:8px 10px; border-radius:9px;
+  background:#fff7ed; border:1px solid #fed7aa; color:#9a3412;
+  font-size:11px; font-weight:700; line-height:1.5;
+}
 
 /* 초대 코드 — 링크가 앱으로 안 열리는 환경에서 쓰는 확실한 경로 */
 .code-card{
