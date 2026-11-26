@@ -77,12 +77,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   margin: 0 0 14px;
 }
 .team-head{
+  width:100%;
   display:flex; align-items:center; justify-content:space-between;
-  gap: 10px; margin-bottom: 9px;
+  gap: 10px; margin: -4px 0 9px;
+  padding: 4px 0;
+  border:0; background:transparent;
+  font-family:inherit; text-align:left; cursor:pointer;
   font-size: 12.5px; color: var(--ink-soft); font-weight:700;
 }
 .team-head b{ color: var(--ink); font-size: 11.5px; font-weight:800; }
-.team-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
+.team-head-main{ display:flex; align-items:baseline; gap:7px; min-width:0; }
+.team-head-peek{
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  color:var(--brand); font-size:11.5px; font-weight:850; font-style:normal;
+}
+.team-caret{ flex:none; margin-left:-2px; color:var(--ink-soft); font-size:10px; line-height:1; }
+.team-head b{ flex:none; }
+.team-board.collapsed{ padding-bottom: 8px; }
+.team-board.collapsed .team-head{ margin-bottom:0; }
+.team-grid{ display:grid; grid-template-columns: repeat(5,1fr); gap: 7px; }
 .team-item{
   min-width: 0;
   min-height: 62px;
@@ -123,11 +136,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   line-height:1.15;
 }
 
-@media (max-width: 380px){
-  .team-grid{ grid-template-columns: repeat(2,1fr); }
+@media (max-width: 620px){
+  .team-grid{ grid-template-columns: repeat(3,1fr); gap: 6px; }
 }
 
-/* 내 조 / 4개 조 보기 전환 */
+/* 내 조 / 전체 조 보기 전환 */
 .calendar-view-tabs{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -182,7 +195,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .cal-hint{ text-align:center; font-size:11px; color:var(--ink-soft); margin:10px 2px 0; }
 .cal-hint b{ color:var(--brand); }
 
-/* A/B/C/D 4행 가로 비교표 */
+/* 조별 가로 비교표 (행 수 = 조 개수) */
 .all-groups-calendar{
   overflow:hidden;
   background:rgba(251,252,254,.97);
@@ -234,7 +247,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   --days:31;
   display:grid;
   grid-template-columns:52px repeat(var(--days), 51px);
-  grid-template-rows:28px repeat(4, 68px);
+  grid-template-rows:28px repeat(var(--rows, 5), 68px);
   width:max-content;
   min-width:100%;
   padding:0 10px 4px 0;
@@ -273,19 +286,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 }
 .all-date-head{
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:2px;
+  gap:0;
+  min-width:0;
+  padding:0 2px;
   border-bottom:1px solid var(--line);
   color:var(--ink-soft);
   font-size:9.5px;
   font-weight:850;
+  line-height:1.15;
 }
 .all-date-head small{
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
   color:#a2a9b7;
   font-size:7px;
   font-weight:800;
 }
+.all-date-head.hol{ background:color-mix(in srgb, var(--sun) 7%, transparent); }
+.all-date-head.hol small{ color:var(--sun); }
 .all-date-head.sun{ color:var(--sun); }
 .all-date-head.sat{ color:var(--sat); }
 .all-date-head.today{
@@ -411,7 +434,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   border-radius:7px;
   min-height: 0;
   height: var(--cell-h);
-  padding:4px 3px 3px;
+  padding:4px 2px 3px;
   display:grid;
   grid-template-columns:minmax(0,1fr);
   grid-template-rows:16px var(--cell-shift-h) minmax(0,1fr);
@@ -448,8 +471,41 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   display:grid;
   grid-template-columns:auto minmax(0,1fr) auto;
   align-items:center;
-  gap:2px;
+  gap:1px;
   width:100%; min-width:0; height:16px;
+}
+/* 공휴일: 날짜 옆에 이름을 작게 적고, 칸 바탕에도 옅은 빨간 기운을 준다.
+   (칸이 좁아 긴 이름은 줄임표로 잘리고, 전체 이름은 달력 아래 목록·날짜 상세에 나온다) */
+.cell-hol{
+  grid-column:2;
+  justify-self:start;
+  align-self:center;
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:7px;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:-.3px;
+  color:var(--sun);
+  pointer-events:none;
+}
+/* 태그(지근·지휴·특근)가 있는 칸은 자리가 없다 — 이름 대신 빨간 날짜·바탕으로만 알리고,
+   전체 이름은 달력 아래 '이번 달 공휴일' 목록에서 읽는다. */
+.cell.has-tag .cell-hol{ display:none; }
+.cell.is-holiday{
+  border-color:color-mix(in srgb, var(--sun) 26%, var(--line));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sun) 9%, transparent), transparent 46%),
+    var(--tint, transparent);
+}
+.cell.is-holiday.has-memo{
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sun) 9%, transparent), transparent 46%),
+    linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.12) 52%),
+    var(--tint, transparent);
 }
 /* 명절 편성(정규 패턴과 다른 날): 위쪽 보라 라인 */
 .cell.is-special{ box-shadow:inset 0 3px 0 rgba(70,84,197,.52); }
@@ -563,6 +619,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 }
 
 /* 메모 */
+/* 이번 달 공휴일 목록 — 달력 칸에서 잘린 이름을 여기서 또렷하게 읽는다 */
+.holiday-panel{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px 8px;
+  background:color-mix(in srgb, var(--sun) 5%, #fff);
+  border:1px solid color-mix(in srgb, var(--sun) 22%, var(--line));
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-sm);
+  padding:10px 12px;
+  margin:0 0 14px;
+}
+.holiday-panel .hol-title{
+  color:var(--sun);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:-.2px;
+}
+.holiday-panel .hol-item{
+  display:inline-flex;
+  align-items:baseline;
+  gap:4px;
+  background:#fff;
+  border:1px solid color-mix(in srgb, var(--sun) 20%, var(--line));
+  border-radius:999px;
+  padding:3px 9px;
+  color:var(--ink);
+  font-size:11.5px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.holiday-panel .hol-item b{
+  color:var(--sun);
+  font-size:11px;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+}
+
 .memo-panel{
   background:rgba(251,252,254,.96);
   border:1px solid var(--line);

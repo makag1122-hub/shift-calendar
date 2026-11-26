@@ -1,7 +1,8 @@
 'use strict';
 
 /* ============================================================
-   교대캘린더 — 변형 4조 3교대 (D / S / G / O / D2 / G2 / 휴)
+   교대캘린더 — 변형 4조 3교대(A·B·C·D) + 오피스조(O)
+   근무 종류: D / S / G / O / D2 / G2 / 휴 / 연차 / 특휴 / 패밀리데이
    - 근무 종류 자유 커스텀(추가·삭제·수정)
    - 반복 패턴(사이클) 자동 계산 + 날짜별 수동 변경(override)
    - 데이터는 localStorage 저장
@@ -9,10 +10,14 @@
 
 const STORAGE_KEY = 'shiftcal.v2';
 const CALENDAR_VIEW_KEY = 'shiftcal.calendarView';
+const TEAM_BOARD_KEY = 'shiftcal.teamBoardOpen';
 const BASE_DATE = '2026-06-25';
 const BASE_PATTERN_START = '2026-06-09'; // 2026-06-25 = A조 GY 4일차
-const GROUPS = ['A','B','C','D'];
-const GROUP_OFFSETS = { A:0, B:5, C:10, D:15 };
+const SHIFT_GROUPS = ['A','B','C','D'];          // 20일 주기로 도는 교대조
+const OFFICE_GROUP = 'O';                        // 오피스조: 주기 없이 달력(월~금)으로 정해짐
+const GROUPS = [...SHIFT_GROUPS, OFFICE_GROUP];
+const GROUP_OFFSETS = { A:0, B:5, C:10, D:15 };  // 오피스조는 주기를 쓰지 않아 오프셋이 없다
+function emptyGroupMap(){ return Object.fromEntries(GROUPS.map(g => [g, {}])); }
 
 /* ---------- 날짜 유틸 ---------- */
 function pad(n){ return String(n).padStart(2, '0'); }
@@ -64,6 +69,28 @@ const HOLIDAYS = {
 };
 function holidayName(dateStr){ return HOLIDAYS[dateStr] || null; }
 function isHoliday(dateStr){ return !!HOLIDAYS[dateStr]; }
+/* 달력 칸은 좁아서 긴 이름을 줄여 적는다. 전체 이름은 아래 '이번 달 공휴일' 목록과 날짜 상세에 그대로 나온다. */
+const HOLIDAY_SHORT = { '부처님오신날':'석탄일', '크리스마스':'성탄절', '어린이날':'어린이', '지방선거':'선거' };
+function holidayShort(name){
+  if(!name) return '';
+  const base = name.endsWith(' 대체') ? name.slice(0, -3) : name;
+  return HOLIDAY_SHORT[base] || base;
+}
+/* 한 달의 공휴일을 연속한 날끼리 묶어 목록으로 (예: 2/16~18 설날) */
+function holidaysInMonth(year, month0){
+  const ym = `${year}-${pad(month0+1)}`;
+  const dim = new Date(year, month0+1, 0).getDate();
+  const out = [];
+  for(let d=1; d<=dim; d++){
+    const ds = `${ym}-${pad(d)}`;
+    const name = holidayName(ds);
+    if(!name) continue;
+    const last = out[out.length-1];
+    if(last && last.name === name && last.endDay === d-1) last.endDay = d;
+    else out.push({ name, startDay:d, endDay:d });
+  }
+  return out;
+}
 
 /* ---------- 명절(설날·추석) 특별 근무표 ----------
    명절엔 로테이션 전체가 재편성됩니다(6일 연속근무·12시간 D2/G2 커버 발생).
@@ -120,8 +147,8 @@ function patternAnchorFor(dateStr){
 /* ---------- 기본 상태 ----------
    ※ 모든 시간/이름/색/패턴은 설정에서 자유롭게 바꿀 수 있는 "기본값"입니다. */
 const DEFAULT_STATE = {
-  version: 6,
-  activeGroup: 'A',
+  version: 7,
+  activeGroup: OFFICE_GROUP,
   shiftOrder: ['D','S','G','O','D2','G2','OFF','ANN','TH','FAM'],
   shiftTypes: {
     D:   { label:'DAY',  short:'D',  start:'06:00', end:'14:00', color:'#f59e0b', kind:'work' },
@@ -140,12 +167,12 @@ const DEFAULT_STATE = {
     cycle: ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'],
     startDate: BASE_PATTERN_START,   // 이 날짜 = A조 cycle[0] (첫 D)
   },
-  groupOverrides: { A:{}, B:{}, C:{}, D:{} }, // { A: { 'YYYY-MM-DD': shiftKey }, ... } — 수동 변경(빨간 네모 표시)
-  groupBaseline:  { A:{}, B:{}, C:{}, D:{} }, // 확정된 '기본 근무'(표시 없음). 패턴/명절보다 우선, 수동변경보다 아래
+  groupOverrides: emptyGroupMap(), // { A: { 'YYYY-MM-DD': shiftKey }, ... } — 수동 변경(빨간 네모 표시)
+  groupBaseline:  emptyGroupMap(), // 확정된 '기본 근무'(표시 없음). 패턴/명절보다 우선, 수동변경보다 아래
   overrides: {},  // legacy: A조 수동 변경
-  groupMemos: { A:{}, B:{}, C:{}, D:{} },     // 조별 메모 { A: { 'YYYY-MM-DD': '메모' }, ... }
-  groupDesig: { A:{}, B:{}, C:{}, D:{} },     // 조별 수동 지정태그 { A: { 'YYYY-MM-DD': 'JG'|'JH' }, ... }
-  groupDesigCount: { A:{}, B:{}, C:{}, D:{} },// 조별 월별 자동배치 개수 { A: { 'YYYY-MM': { jg, jh } }, ... }
+  groupMemos: emptyGroupMap(),     // 조별 메모 { A: { 'YYYY-MM-DD': '메모' }, ... }
+  groupDesig: emptyGroupMap(),     // 조별 수동 지정태그 { A: { 'YYYY-MM-DD': 'JG'|'JH' }, ... }
+  groupDesigCount: emptyGroupMap(),// 조별 월별 자동배치 개수 { A: { 'YYYY-MM': { jg, jh } }, ... }
 };
 const DEFAULT_CYCLE = ['D','D','D','D','D','OFF','OFF','S','S','S','S','S','OFF','G','G','G','G','G','OFF','OFF'];
 // 태그(근무 위에 덧붙는 태그): 특근/지근/지휴
@@ -184,7 +211,7 @@ function migrate(s){
     if(savedVersion < 4 && out.pattern.startDate === BASE_DATE){
       out.pattern.startDate = BASE_PATTERN_START;
     }
-    out.activeGroup = GROUPS.includes(s.activeGroup) ? s.activeGroup : base.activeGroup;
+    out.activeGroup = (savedVersion >= 7 && GROUPS.includes(s.activeGroup)) ? s.activeGroup : base.activeGroup;
     out.groupOverrides = clone(base.groupOverrides);
     if(s.groupOverrides && typeof s.groupOverrides === 'object'){
       for(const group of GROUPS){
@@ -300,17 +327,18 @@ function patternShiftFor(dateStr){
 }
 function st(key){ return key ? state.shiftTypes[key] : null; }
 function normalizeGroup(group){ return GROUPS.includes(group) ? group : 'A'; }
+function isOfficeGroup(group){ return normalizeGroup(group) === OFFICE_GROUP; }
 function currentGroup(){ return normalizeGroup(state.activeGroup); }
 function groupOffset(group){ return GROUP_OFFSETS[normalizeGroup(group)] || 0; }
 function groupOverrideMap(group = currentGroup()){
   const g = normalizeGroup(group);
-  if(!state.groupOverrides) state.groupOverrides = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupOverrides) state.groupOverrides = emptyGroupMap();
   if(!state.groupOverrides[g]) state.groupOverrides[g] = {};
   return state.groupOverrides[g];
 }
 function memosFor(group = currentGroup()){
   const g = normalizeGroup(group);
-  if(!state.groupMemos) state.groupMemos = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupMemos) state.groupMemos = emptyGroupMap();
   if(!state.groupMemos[g]) state.groupMemos[g] = {};
   return state.groupMemos[g];
 }
@@ -319,7 +347,7 @@ function isOverride(dateStr, group = currentGroup()){
 }
 function groupBaselineMap(group = currentGroup()){
   const g = normalizeGroup(group);
-  if(!state.groupBaseline) state.groupBaseline = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupBaseline) state.groupBaseline = emptyGroupMap();
   if(!state.groupBaseline[g]) state.groupBaseline[g] = {};
   return state.groupBaseline[g];
 }
@@ -345,9 +373,19 @@ function specialShiftFor(dateStr, group){
   return (key && state.shiftTypes[key]) ? key : null;
 }
 function isSpecialSchedule(dateStr, group = currentGroup()){ return !!specialShiftFor(dateStr, group); }
+/* 오피스조(O조) 근무 — 주기 패턴이 아니라 달력으로 정해진다.
+   주말·공휴일은 휴무, 나머지 평일은 오피스 근무.
+   ※ 패밀리데이는 여기서 근무로 바꾸지 않는다. 쓸지 말지는 본인이 정하는 거라
+      달력엔 💛 표시(참고)만 띄우고, 실제로 쉬면 그 날만 손으로 바꾸면 된다.
+   ※ 명절 특별편성(SPECIAL_SCHEDULE)은 교대 로테이션 재편성이라 오피스조와는 무관하다. */
+function officeShiftFor(dateStr){
+  if(isHoliday(dateStr) || isWeekend(dateStr)) return 'OFF';
+  return 'O';
+}
 function groupShiftFor(dateStr, group){
   const bl = groupBaselineMap(group)[dateStr];         // 확정된 기본 근무가 최우선(패턴·명절보다)
   if(bl && state.shiftTypes[bl]) return bl;
+  if(isOfficeGroup(group)) return officeShiftFor(dateStr);
   const sp = specialShiftFor(dateStr, group);
   if(sp) return sp;
   const idx = cycleIndexFor(dateStr, groupOffset(group));
@@ -415,10 +453,26 @@ function canPlace(key, dateStr, group = currentGroup()){
 }
 function isWeekend(dateStr){ const d = parseYmd(dateStr).getDay(); return d === 0 || d === 6; }
 function isWeekday(dateStr){ return !isWeekend(dateStr); }
-/* 패밀리데이 가능일 = 급여일(21일)이 속한 주의 2주 전 주 금요일 (회사 규정). 매월 5~11일 사이 금요일. */
+/* 패밀리데이 가능일 — 조에 따라 규칙이 다르다.
+   · 교대조  : 급여일(21일)이 속한 주의 2주 전 주 금요일 → 매월 5~11일 사이 금요일
+   · 오피스조: 급여일(21일)까지 포함해 가장 가까운 앞 금요일 → 매월 15~21일 사이 금요일 */
 function familyDayDom(year, month0){ const dow21 = new Date(year, month0, 21).getDay(); return 11 - ((dow21 + 6) % 7); }
-function familyDayStr(year, month0){ return `${year}-${pad(month0+1)}-${pad(familyDayDom(year, month0))}`; }
-function isFamilyDayCandidate(dateStr){ const [y,m] = dateStr.split('-').map(Number); return dateStr === familyDayStr(y, m-1); }
+function officeFamilyDayDom(year, month0){ const dow21 = new Date(year, month0, 21).getDay(); return 21 - ((dow21 + 2) % 7); }
+function familyDayStr(year, month0, group = currentGroup()){
+  const dom = isOfficeGroup(group) ? officeFamilyDayDom(year, month0) : familyDayDom(year, month0);
+  return `${year}-${pad(month0+1)}-${pad(dom)}`;
+}
+function familyDayHint(group = currentGroup()){
+  return isOfficeGroup(group) ? '패밀리데이 (급여일 직전 금요일)' : '패밀리데이 가능일 (급여일 2주 전 금)';
+}
+/* 💛 는 '이 날이 패밀리데이구나' 하는 참고 표시일 뿐, 근무를 대신 바꿔주지는 않는다. */
+function familyDayNote(group = currentGroup()){
+  return `${familyDayHint(group)} · 쓰면 이 날 근무를 패밀리데이로 바꿔주세요`;
+}
+function isFamilyDayCandidate(dateStr, group = currentGroup()){
+  const [y,m] = dateStr.split('-').map(Number);
+  return dateStr === familyDayStr(y, m-1, group);
+}
 
 /* ---------- 태그(특근/지근/지휴): 근무 위에 덧붙는 자동 태그 ----------
    지근 = 휴일(주말·공휴일) 근무 / 지휴 = 평일 휴무 (지근·지휴는 항상 1:1 — 적은 쪽 개수에 맞춰 가장 앞부터)
@@ -429,7 +483,7 @@ function isFamilyDayCandidate(dateStr){ const [y,m] = dateStr.split('-').map(Num
    수동(groupDesig: 'TG'|'JG'|'JH'|'NONE')이 자동보다 우선 (단, 현재 근무에 적합할 때만) */
 function desigMapFor(group = currentGroup()){
   const g = normalizeGroup(group);
-  if(!state.groupDesig) state.groupDesig = { A:{}, B:{}, C:{}, D:{} };
+  if(!state.groupDesig) state.groupDesig = emptyGroupMap();
   if(!state.groupDesig[g]) state.groupDesig[g] = {};
   return state.groupDesig[g];
 }
@@ -464,6 +518,7 @@ function computeAutoTags(group, year, month){
 }
 // 자동 + 수동(우선) 병합 후 지근·지휴를 다시 1:1로 맞추고 종류별 번호 부여 → { date: {tag, n} }
 function tagsForMonth(group, year, month){
+  if(isOfficeGroup(group)) return {};   // 오피스조는 평일 근무라 지근·지휴·특근 정산 대상이 아니다
   const ym = `${year}-${pad(month+1)}`;
   const dim = new Date(year, month+1, 0).getDate();
   const gd = desigMapFor(group);
@@ -554,12 +609,19 @@ function renderTeamBoard(){
       ${group===selected ? `<span class="team-time">${escapeHtml(timeText(t))}</span>` : ''}
     </button>`;
   }).join('');
+  const openNow = teamBoardOpen;
+  const mine = st(shiftFor(today, selected));
+  el.classList.toggle('collapsed', !openNow);
   el.innerHTML = `
-    <div class="team-head">
-      <span>A/B/C/D 오늘 배치</span>
+    <button class="team-head" id="teamToggle" type="button" aria-expanded="${openNow}" aria-controls="teamGrid">
+      <span class="team-head-main">
+        <span>${openNow ? `${GROUPS.join('/')} 오늘 배치` : '오늘 배치'}</span>
+        ${openNow ? '' : `<em class="team-head-peek">${selected}조 · ${mine ? escapeHtml(mine.label) : '미설정'}</em>`}
+      </span>
       <b>오늘 · ${todayLabel}</b>
-    </div>
-    <div class="team-grid">${items}</div>`;
+      <span class="team-caret" aria-hidden="true">${openNow ? '▴' : '▾'}</span>
+    </button>
+    <div class="team-grid" id="teamGrid"${openNow ? '' : ' hidden'}>${items}</div>`;
 }
 
 function renderAllGroupsCalendar(){
@@ -576,9 +638,11 @@ function renderAllGroupsCalendar(){
     const day = index + 1;
     const dateStr = `${monthKey}-${pad(day)}`;
     const dow = new Date(view.year, view.month, day).getDay();
-    const dayClass = isHoliday(dateStr) || dow === 0 ? ' sun' : (dow === 6 ? ' sat' : '');
-    return `<div class="all-date-head${dayClass}${dateStr===today?' today':''}" data-date="${dateStr}">
-      <span>${day}</span><small>${WEEK[dow]}</small>
+    const hol = holidayName(dateStr);
+    const dayClass = (hol || dow === 0) ? ' sun' : (dow === 6 ? ' sat' : '');
+    const headTitle = hol ? ` title="${escapeHtml(hol)}"` : '';
+    return `<div class="all-date-head${dayClass}${hol?' hol':''}${dateStr===today?' today':''}" data-date="${dateStr}"${headTitle}>
+      <span>${day}</span><small>${hol ? escapeHtml(holidayShort(hol)) : WEEK[dow]}</small>
     </div>`;
   }).join('');
 
@@ -603,6 +667,7 @@ function renderAllGroupsCalendar(){
   }).join('');
 
   grid.style.setProperty('--days', daysInMonth);
+  grid.style.setProperty('--rows', GROUPS.length);
   grid.innerHTML = `<div class="all-groups-corner">조</div>${dateHeaders}${rows}`;
 
   requestAnimationFrame(()=>{
@@ -623,9 +688,10 @@ function renderCalendar(){
   $('allGroupsCalendar').hidden = !showAllGroups;
   $('memoPanel').hidden = showAllGroups;
   $('summary').hidden = showAllGroups;
+  renderHolidayPanel();   // 두 보기 모두에서 쓰므로 갈라지기 전에 그린다
 
   if(showAllGroups){
-    $('monthTitle').textContent = `${view.year}년 ${view.month+1}월 · 4개 조`;
+    $('monthTitle').textContent = `${view.year}년 ${view.month+1}월 · 전체 ${GROUPS.length}개 조`;
     renderAllGroupsCalendar();
     return;
   }
@@ -637,8 +703,9 @@ function renderCalendar(){
   const todayS = todayStr();
   const rangeSet = sheetRange ? new Set(rangeDays(sheetRange.start, sheetRange.end)) : null;
   const memos = memosFor(group);
+  const famHint = familyDayNote(group);
   const tagMap = tagsForMonth(group, view.year, view.month);
-  const famDayStr = familyDayStr(view.year, view.month);
+  const famDayStr = familyDayStr(view.year, view.month, group);
   let html = '';
   for(let i=0; i<startDow; i++) html += `<div class="cell empty"></div>`;
   for(let d=1; d<=daysInMonth; d++){
@@ -655,18 +722,21 @@ function renderCalendar(){
       ? `<span class="badge" style="--shift:${t.color}">${t.short || t.label}</span>`
       : `<span class="badge none">-</span>`;
     const hol = holidayName(dateStr);
-    const dnumCls = hol ? 'sun' : (dow===0 ? 'sun' : (dow===6 ? 'sat' : ''));
+    const dnumCls = (hol || dow===0) ? 'sun' : (dow===6 ? 'sat' : '');
+    const holHtml = hol
+      ? `<span class="cell-hol" title="${escapeHtml(hol)}">${escapeHtml(holidayShort(hol))}</span>`
+      : '';
     const memo = memos[dateStr];
     const hasMemo = !!memo;
     const special = isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group) && !isBaseline(dateStr, group);
     const longRun = workRunTotalFor(dateStr, group) >= 6;
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const isFam = dateStr === famDayStr;
-    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
-      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${tagHtml}</span>
+    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${hol?' is-holiday':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
+      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}</span>
       ${badge}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
-      ${isFam ? '<span class="fam-mark" title="패밀리데이 가능일 (급여일 2주 전 금)">💛</span>' : ''}
+      ${isFam ? `<span class="fam-mark" title="${escapeHtml(famHint)}">💛</span>` : ''}
       ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : '<span class="cell-memo-slot" aria-hidden="true"></span>'}
     </button>`;
   }
@@ -674,6 +744,20 @@ function renderCalendar(){
   $('summary').hidden = false;
   renderMemoPanel();
   renderSummary();
+}
+
+/* 달력 칸은 좁아서 이름이 잘릴 수 있으니, 그 달 공휴일을 아래에 또렷하게 적어준다. */
+function renderHolidayPanel(){
+  const el = $('holidayPanel');
+  if(!el) return;
+  const items = holidaysInMonth(view.year, view.month);
+  if(!items.length){ el.hidden = true; el.innerHTML = ''; return; }
+  const month = view.month + 1;
+  el.hidden = false;
+  el.innerHTML = `<span class="hol-title">🔴 이번 달 공휴일</span>` + items.map(h=>{
+    const range = h.startDay === h.endDay ? `${month}/${h.startDay}` : `${month}/${h.startDay}~${h.endDay}`;
+    return `<span class="hol-item"><b>${range}</b>${escapeHtml(h.name)}</span>`;
+  }).join('');
 }
 
 function renderMemoPanel(){
@@ -754,18 +838,32 @@ function renderSummary(){
     const ti = tagMap[ds];
     if(ti){ if(ti.tag === 'TG') teuk++; else if(ti.tag === 'JG') jg++; else if(ti.tag === 'JH') jh++; }
   }
-  $('summary').innerHTML =
-    `<span class="sm sm-group">${group}조</span>` +
-    `<span class="sm sm-work">근무 <b>${work}</b></span>` +
-    `<span class="sm sm-off">휴무 <b>${off}</b></span>` +
-    `<span class="sm sm-teuk">특근 <b>${teuk}</b></span>` +
-    `<span class="sm sm-jg">지근 <b>${jg}</b></span>` +
-    `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`;
+  const parts = [
+    `<span class="sm sm-group">${group}조</span>`,
+    `<span class="sm sm-work">근무 <b>${work}</b></span>`,
+    `<span class="sm sm-off">휴무 <b>${off}</b></span>`,
+  ];
+  if(!isOfficeGroup(group)){   // 오피스조는 지근·지휴·특근이 생기지 않는다
+    parts.push(
+      `<span class="sm sm-teuk">특근 <b>${teuk}</b></span>`,
+      `<span class="sm sm-jg">지근 <b>${jg}</b></span>`,
+      `<span class="sm sm-jh">지휴 <b>${jh}</b></span>`);
+  }
+  $('summary').innerHTML = parts.join('');
 }
 
 /* ---------- Android 홈 화면 위젯 연결 ----------
    네이티브 앱의 WebView가 제공하는 AndroidWidget 브리지에 달력 스냅샷을 전달합니다.
    브라우저/PWA에서는 브리지가 없으므로 아무 작업도 하지 않습니다. */
+let teamBoardOpen = (()=>{
+  try{ return localStorage.getItem(TEAM_BOARD_KEY) !== 'closed'; }catch(e){ return true; }
+})();
+function toggleTeamBoard(){
+  teamBoardOpen = !teamBoardOpen;
+  try{ localStorage.setItem(TEAM_BOARD_KEY, teamBoardOpen ? 'open' : 'closed'); }catch(e){}
+  renderTeamBoard();
+}
+
 let androidWidgetTimer = null;
 function widgetMemo(value){
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 24);
@@ -866,6 +964,19 @@ function startRange(dateStr){
   renderCalendar();
 }
 function hideRangeBanner(){ rangeAnchor = null; $('rangeBanner').hidden = true; }
+/* 기간 되돌리기: 수동 변경과 메모를 함께 지운다.
+   메모는 공유방에도 '지웠다'(빈 값)고 알려야 한다 — 안 그러면 클라우드의 sharedMemos에 값이 남아
+   바로 다음 동기화 때 지운 메모가 그대로 되살아난다. 하루짜리 삭제는 saveMemoValue가 이미 이렇게 한다.
+   원래 메모가 없던 날까지 빈 값을 올리면 클라우드에 쓸데없는 필드만 쌓이므로 건너뛴다. */
+function clearRange(group, days){
+  const ov = groupOverrideMap(group), mm = memosFor(group);
+  days.forEach(ds=>{
+    delete ov[ds];
+    if(mm[ds] === undefined) return;
+    delete mm[ds];
+    if(window.Sync && Sync.saveMemo) Sync.saveMemo(group, ds, '');
+  });
+}
 
 function openRangeSheet(a, b){
   selectedDate = null;
@@ -873,12 +984,20 @@ function openRangeSheet(a, b){
   const group = currentGroup();
   const days = rangeDays(a, b);
   const s = parseYmd(days[0]), e = parseYmd(days[days.length-1]);
+  /* 하루짜리 날짜 시트와 똑같이 보기 전용을 따른다.
+     예전엔 여기에 이 처리가 없어서, 공유받은 사람도 기간을 잡으면 근무 목록과
+     '지우기' 버튼이 그대로 열려 자기 화면의 근무표를 지울 수 있었다. */
+  const ro = !canEdit();
+  const memoWritable = canEditMemo();
+  $('daySheet').classList.toggle('sheet-ro', ro);
   $('sheetDate').textContent = `${s.getMonth()+1}월 ${s.getDate()}일 ~ ${e.getMonth()+1}월 ${e.getDate()}일 · ${days.length}일 · ${group}조`;
   $('sheetHoliday').hidden = true;
-  document.querySelector('.sheet-hint').innerHTML = `선택한 <b>${days.length}일</b>에 한꺼번에 적용돼요. (지근/지휴는 가능한 날에만)`;
+  document.querySelector('.sheet-hint').innerHTML = ro
+    ? `👀 공유 화면이라 근무표는 바꿀 수 없어요. <b>메모는 ${days.length}일에 한꺼번에</b> 남길 수 있어요.`
+    : `선택한 <b>${days.length}일</b>에 한꺼번에 적용돼요. (지근/지휴는 가능한 날에만)`;
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
-    const anyValid = days.some(ds => canPlace(key, ds, group));
+    const anyValid = !ro && days.some(ds => canPlace(key, ds, group));
     return `<button class="opt ${anyValid?'':'opt-disabled'}" data-code="${key}" ${anyValid?'':'disabled'} style="--c:${t.color}">
       <span class="opt-badge" style="background:${t.color}">${t.short || t.label}</span>
       <span class="opt-textwrap"><span class="opt-label">${t.label}</span>
@@ -887,9 +1006,14 @@ function openRangeSheet(a, b){
   }).join('');
   $('sheetDesig').hidden = true;
   $('sheetMemo').value = '';
+  $('sheetMemo').readOnly = !memoWritable;
+  $('sheetMemo').placeholder = ro ? '함께 볼 메모를 남겨보세요' : '예: 교육, 비번, 연차…';
+  $('memoPresets').hidden = !memoWritable;
+  $('memoEditor').style.display = memoWritable ? '' : 'none';
+  $('memoEditor').classList.toggle('memo-shared', ro && memoWritable);
   updateMemoCount('');
   $('btnRevert').textContent = '↺ 이 기간 수동변경·메모 지우기';
-  $('btnRevert').hidden = false;
+  $('btnRevert').hidden = ro;
   $('dayBackdrop').hidden = false;
   $('daySheet').hidden = false;
 }
@@ -910,16 +1034,20 @@ function openDaySheet(dateStr){
   const runTotal = workRunTotalFor(dateStr, group);
   if(runTotal >= 6) infoParts.push(`<span class="sh-run">🔺 ${runTotal}일 연속근무 (오늘 ${workRunDayFor(dateStr, group)}일차)</span>`);
   if(ti) infoParts.push(`<b>${tagLabel(ti)}</b>`);
-  if(isFamilyDayCandidate(dateStr)) infoParts.push('<span class="sh-fam">💛 패밀리데이 가능일</span>');
+  if(isFamilyDayCandidate(dateStr, group)) infoParts.push(`<span class="sh-fam">💛 ${familyDayNote(group)}</span>`);
   if(infoParts.length){ sh.hidden = false; sh.innerHTML = infoParts.join(' '); }
   else { sh.hidden = true; sh.innerHTML = ''; }
   const ro = !canEdit();
   const memoWritable = canEditMemo();
   const current = shiftFor(dateStr, group);
   $('daySheet').classList.toggle('sheet-ro', ro);
+  /* 오피스조엔 '패턴'이 없다. 조사가 붙는 자리라 문장별로 다른 말을 쓴다. */
+  const office = isOfficeGroup(group);
+  const baseWord   = office ? '오피스조 기본값' : '패턴';      // "~과 다르게 바꾸면"
+  const revertWord = office ? '오피스조 기본값' : '패턴 값';   // "~으로 되돌리기"
   document.querySelector('.sheet-hint').innerHTML = ro
     ? '👀 공유 화면입니다. 근무표는 보기 전용이고 <b>메모는 함께 작성</b>할 수 있어요.'
-    : '이 날의 근무를 선택하세요. (패턴과 다르게 바꾸면 <b>수동 변경</b>으로 표시)';
+    : `이 날의 근무를 선택하세요. (${baseWord}과 다르게 바꾸면 <b>수동 변경</b>으로 표시)`;
   $('sheetOptions').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
     const allowed = !ro && canPlace(key, dateStr, group);
@@ -931,17 +1059,21 @@ function openDaySheet(dateStr){
       <span class="opt-time">${note}</span></span>
     </button>`;
   }).join('');
-  if(ro){ $('sheetDesig').hidden = true; }
+  if(ro || isOfficeGroup(group)){ $('sheetDesig').hidden = true; }
   else { renderSheetDesig(dateStr, group); }
   const memoText = memosFor(group)[dateStr] || '';
-  $('sheetMemo').value = memoText;
+  /* 값이 같은데도 다시 넣으면 커서가 글 끝으로 튄다 — 달라졌을 때만 바꾼다. */
+  const memoBox = $('sheetMemo');
+  if(memoBox.value !== memoText) memoBox.value = memoText;
   $('sheetMemo').readOnly = !memoWritable;
   $('sheetMemo').placeholder = ro ? '함께 볼 메모를 남겨보세요' : '예: 교육, 비번, 연차…';
   $('memoPresets').hidden = !memoWritable;
   $('memoEditor').style.display = (!memoWritable && !memoText) ? 'none' : '';
   $('memoEditor').classList.toggle('memo-shared', ro && memoWritable);
   updateMemoCount(memoText);
-  $('btnRevert').textContent = isBaseline(dateStr, group) ? '↺ 확정된 기본값으로 되돌리기' : '↺ 패턴 값으로 되돌리기';
+  $('btnRevert').textContent = isBaseline(dateStr, group)
+    ? '↺ 확정된 기본값으로 되돌리기'
+    : `↺ ${revertWord}으로 되돌리기`;
   $('btnRevert').hidden = ro || !isOverride(dateStr, group);
   $('dayBackdrop').hidden = false;
   $('daySheet').hidden = false;
@@ -1703,6 +1835,7 @@ function selectCalendarView(nextView){
 /* ---------- 이벤트 연결 ---------- */
 function wire(){
   $('teamBoard').addEventListener('click', (e)=>{
+    if(e.target.closest('#teamToggle')){ toggleTeamBoard(); return; }
     const card = e.target.closest('[data-group]');
     if(card) selectGroup(card.dataset.group);
   });
@@ -1767,10 +1900,10 @@ function wire(){
   $('dayBackdrop').onclick = closeDaySheet;
   $('btnCloseSheet').onclick = closeDaySheet;
   $('btnRevert').onclick = () => {
+    if(!canEdit()) return;   // 보기 전용은 근무표를 지울 수 없다
     const group = currentGroup();
     if(sheetRange){
-      const ov = groupOverrideMap(group), mm = memosFor(group);
-      rangeDays(sheetRange.start, sheetRange.end).forEach(ds=>{ delete ov[ds]; delete mm[ds]; });
+      clearRange(group, rangeDays(sheetRange.start, sheetRange.end));
       saveState(); renderCalendar(); renderTeamBoard();
       openRangeSheet(sheetRange.start, sheetRange.end);
       return;

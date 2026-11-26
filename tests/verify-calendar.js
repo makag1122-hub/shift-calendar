@@ -25,7 +25,8 @@ vm.runInNewContext(
       HOLIDAYS, holidayName, isHoliday, isWeekend, isWeekday,
       shiftFor, isWorkerOff, isLeaveDay,
       tgEligible, jgEligible, jhEligible, tagsForMonth,
-      state, groupOverrideMap, desigMapFor
+      state, groupOverrideMap, desigMapFor, memosFor, clearRange,
+      GROUPS, OFFICE_GROUP, familyDayStr, isFamilyDayCandidate, familyDayDom, officeFamilyDayDom
     };
   `,
   sandbox
@@ -169,8 +170,79 @@ assert(specialLeaveWithManualJg['2026-08-16']?.tag === 'TG', '초과 자동 지�
 delete api.groupOverrideMap('A')['2026-08-07'];
 delete api.desigMapFor('A')['2026-08-17'];
 
+/* ---------- 오피스조(O조) ----------
+   주기 패턴이 아니라 달력으로 정해진다: 월~금 오피스 근무, 주말·공휴일 휴무.
+   패밀리데이는 근무를 바꾸지 않고 💛 참고 표시만 한다(2026-11-26 사용자 요청). */
+assert(api.GROUPS.includes('O') && api.OFFICE_GROUP === 'O', '오피스조(O)가 조 목록에 없습니다.');
+
+let officeChecked = 0, officeWork = 0, officeFamilyDays = 0;
+for(let y = 2026; y <= 2027; y++){
+  for(let m = 0; m < 12; m++){
+    const dim = new Date(y, m + 1, 0).getDate();
+    for(let d = 1; d <= dim; d++){
+      const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const key = api.shiftFor(ds, 'O');
+      const restDay = api.isWeekend(ds) || api.isHoliday(ds);
+      if(restDay) assert(key === 'OFF', `${ds} 오피스조는 쉬는 날이어야 합니다(주말·공휴일).`);
+      else { assert(key === 'O', `${ds} 오피스조가 오피스 근무가 아닙니다: ${key}`); officeWork++; }
+      officeChecked++;
+    }
+    // 태그(지근·지휴·특근)는 오피스조에 붙지 않는다
+    const officeTags = api.tagsForMonth('O', y, m);
+    assert(Object.keys(officeTags).length === 0, `${y}-${m+1} 오피스조에 정산 태그가 붙었습니다.`);
+
+    // 패밀리데이: 급여일(21일)까지 포함한 직전 금요일 = 15~21일 사이 금요일
+    const famDs = api.familyDayStr(y, m, 'O');
+    const famDay = Number(famDs.slice(8));
+    const famDow = new Date(y, m, famDay).getDay();
+    assert(famDow === 5, `${famDs} 오피스조 패밀리데이가 금요일이 아닙니다.`);
+    assert(famDay >= 15 && famDay <= 21, `${famDs} 오피스조 패밀리데이가 15~21일 범위를 벗어났습니다.`);
+    assert(api.isFamilyDayCandidate(famDs, 'O'), `${famDs}가 오피스조 패밀리데이로 인식되지 않습니다.`);
+    // 교대조는 같은 달에 5~11일 금요일로 따로 계산된다
+    const shiftFamDay = api.familyDayDom(y, m);
+    assert(shiftFamDay >= 5 && shiftFamDay <= 11, `${y}-${m+1} 교대조 패밀리데이가 5~11일 범위를 벗어났습니다.`);
+    assert(new Date(y, m, shiftFamDay).getDay() === 5, `${y}-${m+1} 교대조 패밀리데이가 금요일이 아닙니다.`);
+    // 참고 표시일 뿐이라 근무는 그대로(평일이면 오피스 근무, 공휴일이면 휴무)
+    const famShift = api.shiftFor(famDs, 'O');
+    assert(famShift !== 'FAM', `${famDs} 패밀리데이가 근무표에 자동으로 들어갔습니다(참고 표시만 해야 합니다).`);
+    if(famShift === 'O') officeFamilyDays++;
+  }
+}
+
+/* ---------- 기간 되돌리기 ----------
+   달력에서 여러 날을 잡아 '수동변경·메모 지우기'를 누르면 메모도 함께 지워집니다.
+   공유방을 쓰는 중이라면 클라우드에도 지웠다고 알려야 합니다. 안 그러면 구름에 값이 남아
+   다음 동기화 때 지운 메모가 그대로 되살아납니다. */
+const sharedMemoWrites = [];
+/* 브라우저에선 window.Sync와 전역 Sync가 같은 것이라 둘 다 꽂아 줍니다. */
+const fakeSync = { saveMemo: (group, date, value) => sharedMemoWrites.push([group, date, value]) };
+sandbox.window.Sync = fakeSync;
+sandbox.Sync = fakeSync;
+
+api.memosFor('A')['2026-08-10'] = '교육';
+api.memosFor('A')['2026-08-11'] = '비번';
+api.groupOverrideMap('A')['2026-08-10'] = 'ANN';
+api.clearRange('A', ['2026-08-10', '2026-08-11', '2026-08-12']);
+
+assert(!api.memosFor('A')['2026-08-10'], '기간 되돌리기로 메모가 지워지지 않았습니다.');
+assert(!api.groupOverrideMap('A')['2026-08-10'], '기간 되돌리기로 수동 변경이 지워지지 않았습니다.');
+assert(
+  sharedMemoWrites.some(w => w[1] === '2026-08-10' && w[2] === ''),
+  '지운 메모를 공유방에 알리지 않아, 다음 동기화 때 되살아납니다.'
+);
+assert(
+  sharedMemoWrites.some(w => w[1] === '2026-08-11' && w[2] === ''),
+  '지운 메모 중 일부만 공유방에 전달됐습니다.'
+);
+assert(
+  !sharedMemoWrites.some(w => w[1] === '2026-08-12'),
+  '원래 메모가 없던 날까지 공유방에 빈 값을 써서 보내고 있습니다.'
+);
+delete sandbox.window.Sync; delete sandbox.Sync;
+
 console.log('교대캘린더 전수 검사 통과');
 console.log(`공휴일: 2026년 22일, 2027년 24일`);
 console.log(`검사 범위: ${totals.checkedDates}일 × 4개 조 = ${totals.checkedGroupDates}개 조별 날짜`);
+console.log(`오피스조: ${officeChecked}일 검사 · 근무 ${officeWork}일 · 패밀리데이 표시 ${officeFamilyDays}개월`);
 console.log(`공휴일 조별 검사: ${totals.holidayGroupDates}건`);
 console.log(`자동 태그: 지근 ${totals.JG}, 지휴 ${totals.JH}, 특근 ${totals.TG}`);

@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192-v2.png" />
   <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
-  <link rel="stylesheet" href="style.css?v=20260807a" />
+  <link rel="stylesheet" href="style.css?v=20261126a" />
 </head>
 <body>
   <div class="app">
@@ -23,7 +23,7 @@
         <img class="brand-logo" src="icons/icon-192-v2.png" alt="" />
         <div class="brand-text">
           <h1>교대캘린더</h1>
-          <p class="brand-sub">4조 3교대 · 근무표와 메모</p>
+          <p class="brand-sub">4조 3교대 · 오피스조 · 근무표와 메모</p>
         </div>
       </div>
       <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
@@ -41,7 +41,7 @@
     <!-- 달력 보기 방식 -->
     <nav class="calendar-view-tabs" id="calendarViewTabs" aria-label="달력 보기 방식">
       <button type="button" data-calendar-view="single">내 조 달력</button>
-      <button type="button" data-calendar-view="all">4개 조 한눈에</button>
+      <button type="button" data-calendar-view="all">전체 조 한눈에</button>
     </nav>
 
     <!-- 월 이동 -->
@@ -64,12 +64,12 @@
       <p class="cal-hint">💡 날짜를 <b>길게 누르면</b> 여러 날을 한꺼번에 선택할 수 있어요</p>
     </main>
 
-    <!-- A/B/C/D 조별 가로 비교표 -->
+    <!-- 조별 가로 비교표 -->
     <section class="all-groups-calendar" id="allGroupsCalendar" hidden>
       <div class="all-groups-head">
         <div>
           <span>월간 근무 흐름</span>
-          <h2>A/B/C/D조 비교</h2>
+          <h2>A·B·C·D·O조 비교</h2>
         </div>
         <p>좌우로 밀어서 날짜를 확인하세요</p>
       </div>
@@ -78,6 +78,9 @@
       </div>
       <p class="all-groups-hint">근무 칸을 누르면 해당 조의 일정과 메모를 수정할 수 있어요.</p>
     </section>
+
+    <!-- 이번 달 공휴일 -->
+    <section class="holiday-panel" id="holidayPanel" hidden></section>
 
     <!-- 이번 달 메모 -->
     <section class="memo-panel" id="memoPanel" hidden></section>
@@ -90,7 +93,7 @@
 
     <footer class="app-footer">
       <button class="btn-soft" id="btnToday">오늘로 이동</button>
-      <div class="app-version">ver 2026.08.03</div>
+      <div class="app-version">ver 2026.11.26</div>
     </footer>
   </div>
 
@@ -179,14 +182,14 @@
         <a class="legal-link" href="privacy.html">개인정보 처리방침</a>
       </section>
 
-      <p class="set-foot">교대캘린더 · ver 2026.08.03</p>
+      <p class="set-foot">교대캘린더 · ver 2026.11.26</p>
     </div>
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20260807a"></script>
-  <script src="sync.js?v=20260807a"></script>
-  <script src="app.js?v=20260807a"></script>
+  <script src="sync-config.js?v=20261126a"></script>
+  <script src="sync.js?v=20261126a"></script>
+  <script src="app.js?v=20261126a"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -196,7 +199,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20260807a', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20261126a', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });

@@ -20,7 +20,8 @@ function wait(ms){
 
 function makeSandbox(role, remoteData, options){
   const opts = options || {};
-  const calls = { setDoc: [], updateDoc: [], deleteDoc: [], getDoc: [], renders: 0 };
+  let failUpdates = opts.failUpdates || 0;
+  const calls = { setDoc: [], updateDoc: [], deleteDoc: [], getDoc: [], renders: 0, snapshots: [], sheetOpens: 0 };
   const cfg = {
     config: { apiKey: 'test-key', projectId: 'test-project' },
     code: opts.code || 'shared-calendar',
@@ -66,7 +67,7 @@ function makeSandbox(role, remoteData, options){
       origin: 'https://example.test',
     },
     history: { replaceState: () => {} },
-    document: { getElementById: () => null },
+    document: opts.dom || { getElementById: () => null },
     window: {},
     state: {
       activeGroup: 'A',
@@ -89,11 +90,17 @@ function makeSandbox(role, remoteData, options){
       },
       collection: (_db, ...parts) => parts.join('/'),
       setDoc: async (...args) => { calls.setDoc.push(args); },
-      updateDoc: async (...args) => { calls.updateDoc.push(args); },
+      updateDoc: async (...args) => {
+        calls.updateDoc.push(args);
+        /* 신호가 끊긴 상황을 흉내 냅니다: 처음 몇 번은 실패시킵니다. */
+        if(failUpdates > 0){ failUpdates--; throw new Error(opts.failCode || 'Failed to fetch'); }
+      },
       deleteDoc: async (...args) => { calls.deleteDoc.push(args); },
       getDocs: async () => ({ docs: [] }),
       arrayUnion: value => ({ arrayUnion: value }),
-      onSnapshot: (_ref, onValue) => {
+      onSnapshot: (ref, onValue) => {
+        /* 참여자 목록 구독은 모양이 달라서 빼고, 달력 문서 구독만 다시 울릴 수 있게 모아 둔다. */
+        if(!String(ref).includes('/participants')) calls.snapshots.push(onValue);
         if(remoteData) onValue({ data: () => remoteData });
         return () => {};
       },
@@ -293,6 +300,106 @@ async function verifyRealViewerStaysViewer(){
   );
 }
 
+/* ---------- 메모를 쓰는 중에 입력칸을 덮어쓰지 않는지 ----------
+   메모는 한 글자 칠 때마다 저장되고, 저장본은 앞뒤 공백이 지워진 값입니다.
+   그 글자가 클라우드를 한 바퀴 돌아 스냅샷으로 되돌아올 때 날짜 시트를 다시 그리면
+   입력칸이 저장본으로 덮어써져, 방금 친 띄어쓰기·줄바꿈이 사라지고 커서가 끝으로 튑니다. */
+async function verifyTypingMemoIsNotOverwritten(){
+  const remoteData = {
+    state: {
+      activeGroup: 'A',
+      groupMemos: { A: {}, B: {}, C: {}, D: {} },
+    },
+    sharedMemos: { A: { '2026-08-17': '저녁 7시' } },
+    updatedAt: 100,
+    memoUpdatedAt: 200,
+  };
+  const memoBox = { value: '' };
+  const daySheet = { hidden: false };
+  const dom = {
+    activeElement: null,
+    getElementById: id => (id === 'sheetMemo' ? memoBox : (id === 'daySheet' ? daySheet : null)),
+  };
+  const { sandbox, calls } = makeSandbox('viewer', remoteData, { dom });
+  sandbox.selectedDate = '2026-08-17';
+  sandbox.openDaySheet = () => {
+    calls.sheetOpens++;
+    memoBox.value = (sandbox.state.groupMemos.A['2026-08-17'] || '');  // 실제 동작: 저장본으로 되돌림
+  };
+  vm.runInNewContext(source, sandbox);
+  sandbox.Sync.init();
+  await wait(20);
+
+  // 사용자가 "저녁 7시 " 까지 쳤다(끝에 띄어쓰기). 저장은 공백을 지운 "저녁 7시"로 나간다.
+  dom.activeElement = memoBox;
+  memoBox.value = '저녁 7시 ';
+  const before = calls.sheetOpens;
+  calls.snapshots.forEach(fire => fire({ data: () => remoteData }));
+
+  assert(
+    memoBox.value === '저녁 7시 ',
+    '메모를 쓰는 중에 입력칸이 저장본으로 덮어써져 방금 친 띄어쓰기가 사라졌습니다.'
+  );
+  assert(
+    calls.sheetOpens === before,
+    '메모 입력칸에 커서가 있는데도 날짜 시트를 다시 그렸습니다(커서가 끝으로 튑니다).'
+  );
+
+  // 입력칸에서 손을 뗀 뒤에는 상대가 바꾼 메모가 정상적으로 반영돼야 한다.
+  dom.activeElement = null;
+  calls.snapshots.forEach(fire => fire({ data: () => remoteData }));
+  assert(
+    calls.sheetOpens > before,
+    '메모 입력이 끝난 뒤에도 공유된 변경이 날짜 시트에 반영되지 않습니다.'
+  );
+}
+
+/* ---------- 메모 업로드가 실패했을 때 ----------
+   지하철에서 신호가 끊긴 사이 쓴 메모가, 신호가 돌아와도 영영 안 올라가면 안 됩니다.
+   본인 화면에는 저장돼 있으니 멀쩡해 보이는 게 함정입니다. */
+async function verifyMemoUploadRetries(){
+  const { sandbox, calls } = makeSandbox('owner', null, { failUpdates: 1 });
+  vm.runInNewContext(source, sandbox);
+  sandbox.Sync.init();
+  await wait(20);
+
+  sandbox.Sync.saveMemo('A', '2026-08-17', '퇴근 후 약속');
+  await wait(520);
+  assert(calls.updateDoc.length === 1, '메모 업로드가 한 번은 시도돼야 합니다.');
+  assert(sandbox.Sync.getStatus().status === 'error', '업로드 실패가 사용자에게 알려지지 않았습니다.');
+
+  await wait(2600);   // 사용자가 더 타이핑하지 않아도 스스로 다시 시도해야 합니다
+  assert(
+    calls.updateDoc.length === 2,
+    '메모 업로드가 실패한 뒤 스스로 다시 시도하지 않습니다 — 메모가 영영 안 올라갑니다.'
+  );
+  assert(
+    calls.updateDoc[1][1]['sharedMemos.A.2026-08-17'] === '퇴근 후 약속',
+    '다시 시도할 때 원래 메모 내용이 실려 있지 않습니다.'
+  );
+  assert(sandbox.Sync.getStatus().status === 'live', '다시 올린 뒤에도 오류 상태로 남아 있습니다.');
+
+  await wait(2600);   // 성공했으면 더 두드리지 않아야 합니다
+  assert(calls.updateDoc.length === 2, '올리기에 성공한 뒤에도 계속 재시도하고 있습니다.');
+}
+
+/* 공유방에서 쫓겨났거나 규칙이 막은 경우(permission-denied)는 다시 시도해도 소용없습니다. */
+async function verifyMemoUploadGivesUpOnPermissionDenied(){
+  const { sandbox, calls } = makeSandbox('owner', null, { failUpdates: 99, failCode: 'permission-denied' });
+  vm.runInNewContext(source, sandbox);
+  sandbox.Sync.init();
+  await wait(20);
+
+  sandbox.Sync.saveMemo('A', '2026-08-17', '퇴근 후 약속');
+  await wait(520);
+  assert(calls.updateDoc.length === 1, '메모 업로드가 한 번은 시도돼야 합니다.');
+  await wait(2600);
+  assert(
+    calls.updateDoc.length === 1,
+    '권한이 막힌 상황인데도 계속 다시 시도하고 있습니다.'
+  );
+}
+
 Promise.all([
   verifyOwner(),
   verifyViewer(),
@@ -301,6 +408,9 @@ Promise.all([
   verifyOwnerKeepsRoleOnOwnLink(),
   verifyDemotedOwnerRestored(),
   verifyRealViewerStaysViewer(),
+  verifyTypingMemoIsNotOverwritten(),
+  verifyMemoUploadRetries(),
+  verifyMemoUploadGivesUpOnPermissionDenied(),
 ])
   .then(() => console.log('공동 메모 동기화 검사 통과'))
   .catch(error => {

@@ -338,7 +338,7 @@
   function mergeRemoteMemos(target, remoteMemos){
     if(!remoteMemos || typeof remoteMemos !== 'object') return target;
     if(!target.groupMemos || typeof target.groupMemos !== 'object') target.groupMemos = {};
-    for(const group of ['A','B','C','D']){
+    for(const group of (typeof GROUPS !== 'undefined' ? GROUPS : ['A','B','C','D','O'])){
       if(!target.groupMemos[group] || typeof target.groupMemos[group] !== 'object') target.groupMemos[group] = {};
       const incoming = remoteMemos[group];
       if(!incoming || typeof incoming !== 'object') continue;
@@ -351,11 +351,24 @@
     return target;
   }
 
+  /* 메모 입력칸에 커서가 있으면 '지금 쓰는 중'입니다. */
+  function typingMemo(){
+    const box = document.getElementById('sheetMemo');
+    return !!(box && document.activeElement === box);
+  }
+
   function persistRemoteState(next){
     state = next;
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
     if(typeof renderAll === 'function') renderAll();
-    if(typeof selectedDate !== 'undefined' && selectedDate && document.getElementById('daySheet') && !document.getElementById('daySheet').hidden){
+    /* 쓰는 중에는 날짜 시트를 다시 그리지 않습니다.
+       메모는 한 글자마다 저장되고 저장본은 앞뒤 공백이 지워진 값이라,
+       그 글자가 클라우드를 돌아 스냅샷으로 되돌아올 때 시트를 다시 그리면
+       입력칸이 저장본으로 덮어써져 방금 친 띄어쓰기·줄바꿈이 사라지고 커서가 끝으로 튑니다.
+       손을 떼면 다음 스냅샷에서 상대의 변경이 정상적으로 반영됩니다. */
+    if(typingMemo()) return;
+    const sheet = document.getElementById('daySheet');
+    if(typeof selectedDate !== 'undefined' && selectedDate && sheet && !sheet.hidden){
       if(typeof openDaySheet === 'function') openDaySheet(selectedDate);
     }
   }
@@ -398,6 +411,19 @@
     lastUpdated = now;
   }
 
+  /* 메모 업로드가 실패하면(지하철, 터널, 잠깐 끊긴 와이파이) 스스로 다시 시도합니다.
+     예전엔 실패한 내용을 들고만 있고 타이머를 다시 걸지 않아, 사용자가 메모를 더 치지 않으면
+     신호가 돌아와도 영영 안 올라갔습니다. 본인 기기엔 저장돼 있어 멀쩡해 보이는 게 함정이었습니다.
+     권한 거부는 다시 시도해도 소용없으므로(쫓겨났거나 규칙이 막은 경우) 멈춥니다. */
+  const MEMO_RETRY_FIRST = 1500, MEMO_RETRY_MAX = 60000;
+  let memoRetryDelay = 0;
+  function scheduleMemoRetry(){
+    if(!Object.keys(pendingMemoUpdates).length) return;
+    memoRetryDelay = memoRetryDelay ? Math.min(memoRetryDelay * 2, MEMO_RETRY_MAX) : MEMO_RETRY_FIRST;
+    clearTimeout(memoPushTimer);
+    memoPushTimer = setTimeout(flushMemoUpdates, memoRetryDelay);
+  }
+
   async function flushMemoUpdates(){
     if(!docRef || !cfg || !fb || !Object.keys(pendingMemoUpdates).length) return;
     const updates = pendingMemoUpdates;
@@ -407,17 +433,22 @@
     try{
       await fb.updateDoc(docRef, updates);
       lastUpdated = now;
+      memoRetryDelay = 0;
       setStatus(cfg.role === 'viewer' ? 'readonly' : 'live');
     }catch(e){
       pendingMemoUpdates = { ...updates, ...pendingMemoUpdates };
       delete pendingMemoUpdates.memoUpdatedAt;
       setStatus('error', friendly(e));
+      const m = (e && (e.code || e.message)) ? String(e.code || e.message) : '';
+      if(!/permission-denied/i.test(m)) scheduleMemoRetry();
     }
   }
 
   function queueMemo(group, date, value){
-    if(!docRef || !cfg || !fb || !['A','B','C','D'].includes(group) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    const known = (typeof GROUPS !== 'undefined' ? GROUPS : ['A','B','C','D','O']);
+    if(!docRef || !cfg || !fb || !known.includes(group) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
     pendingMemoUpdates[`sharedMemos.${group}.${date}`] = String(value || '').trim();
+    memoRetryDelay = 0;   // 사용자가 다시 쓰고 있으니 재시도 간격을 처음으로
     clearTimeout(memoPushTimer);
     memoPushTimer = setTimeout(flushMemoUpdates, 450);
   }

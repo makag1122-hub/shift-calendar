@@ -34,7 +34,8 @@ vm.runInNewContext(
 sandbox.widgetApi.state.groupMemos.A['2026-08-17'] = '인수인계 확인';
 const payload = sandbox.widgetApi.buildAndroidWidgetPayload(new Date(2026, 6, 29));
 assert(payload.schema === 2, 'Android 위젯 메모 데이터 스키마가 올바르지 않습니다.');
-assert(payload.activeGroup === 'A', '기본 Android 위젯 조가 A조가 아닙니다.');
+assert(payload.activeGroup === 'O', '기본 조가 오피스조(O)가 아닙니다.');
+assert(payload.months['2026-08'].O.length === 31, '2026년 8월 O조 데이터가 위젯 스냅샷에 없습니다.');
 assert(payload.firstYear <= 2026 && payload.lastYear >= 2027, '2026·2027년 위젯 데이터가 모두 포함되지 않습니다.');
 assert(payload.months['2026-08'].A.length === 31, '2026년 8월 A조 데이터가 31일이 아닙니다.');
 assert(payload.months['2027-02'].D.length === 28, '2027년 2월 D조 데이터가 28일이 아닙니다.');
