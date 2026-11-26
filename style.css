@@ -31,11 +31,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 }
 
 .app{
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
   min-height: 100dvh;
   background: rgba(238,241,246,.72);
-  padding: 0 14px env(safe-area-inset-bottom);
+  padding: 0 12px env(safe-area-inset-bottom);
   display: flex;
   flex-direction: column;
 }
@@ -43,12 +43,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 /* 헤더 */
 .app-header{
   position: sticky; top:0; z-index: 5;
-  display:flex; align-items:center; justify-content:space-between;
-  padding: calc(14px + env(safe-area-inset-top)) 2px 10px;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding: calc(12px + env(safe-area-inset-top)) 2px 8px;
   background: linear-gradient(rgba(238,241,246,.96) 72%, rgba(238,241,246,0));
   backdrop-filter:blur(12px);
 }
-.brand{ display:flex; align-items:center; gap:10px; }
+.brand{ display:flex; align-items:center; gap:10px; min-width:0; }
 .brand-logo{
   display:block;
   width:32px;
@@ -74,7 +74,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   padding: 12px;
-  margin: 0 0 14px;
+  margin: 10px 0 0;
 }
 .team-head{
   width:100%;
@@ -183,26 +183,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   .team-day{ font-size:9px; }
 }
 
-/* 내 조 / 전체 조 보기 전환 */
+/* 내 조 / 전체 조 보기 전환 — 머리글 오른쪽에 붙은 작은 토글.
+   예전처럼 한 줄을 통째로 쓰면 달력이 그만큼 아래로 밀린다. */
 .calendar-view-tabs{
+  flex:none;
   display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:4px;
-  padding:4px;
-  margin:0 0 14px;
+  grid-template-columns:auto auto;
+  gap:2px;
+  padding:3px;
+  margin:0;
   border:1px solid rgba(211,217,228,.82);
-  border-radius:12px;
+  border-radius:11px;
   background:rgba(226,230,238,.72);
   box-shadow:inset 0 1px 2px rgba(24,35,63,.05);
 }
 .calendar-view-tabs button{
-  min-height:38px;
+  min-height:30px;
+  padding:0 9px;
   border:0;
-  border-radius:9px;
+  border-radius:8px;
   background:transparent;
   color:var(--ink-soft);
-  font:800 12.5px/1 inherit;
-  letter-spacing:-.15px;
+  font:800 11.5px/1 inherit;
+  letter-spacing:-.2px;
+  white-space:nowrap;
   cursor:pointer;
   transition:background .2s ease, color .2s ease, box-shadow .2s ease, transform .12s ease;
 }
@@ -220,7 +224,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 /* 월 이동 */
 .month-nav{
   display:flex; align-items:center; justify-content:space-between;
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 .month-title{
   border:none; background:transparent; font-size: 18px; font-weight: 800;
@@ -235,7 +239,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   box-shadow: var(--shadow);
 }
 .range-banner button{ border:none; background:rgba(255,255,255,.25); color:#fff; border-radius:8px; padding:5px 12px; font-size:12px; font-weight:700; cursor:pointer; }
-.cal-hint{ text-align:center; font-size:11px; color:var(--ink-soft); margin:10px 2px 0; }
+.cal-hint{ text-align:center; font-size:10.5px; color:var(--ink-soft); margin:6px 2px 0; }
 .cal-hint b{ color:var(--brand); }
 
 /* 조별 가로 비교표 (행 수 = 조 개수) */
@@ -454,7 +458,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   border:1px solid rgba(223,228,236,.8);
   border-radius:var(--radius);
   box-shadow:var(--shadow);
-  padding:10px 8px 12px;
+  padding:8px 6px 8px;
 }
 .weekdays{ display:grid; grid-template-columns: repeat(7,1fr); margin-bottom: 4px; }
 .wd{ text-align:center; font-size: 12px; color: var(--ink-soft); padding: 4px 0; font-weight:600; }
@@ -462,8 +466,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .wd.sat{ color: var(--sat); }
 
 .grid{
-  --cell-h: 82px;
-  --cell-shift-h: 17px;
+  /* 한 칸 높이를 화면 높이에서 끌어온다.
+     184px = 달력 위아래가 늘 차지하는 자리(머리글·월 이동·요일줄·안내문·카드 여백),
+     --rows = 그 달이 실제로 쓰는 줄 수(달마다 5 또는 6, app.js가 넣어 준다).
+     줄 사이 간격까지 빼고 나눠, 첫 화면이 달력으로 꽉 차되 넘치지는 않게 한다.
+     화면이 작은 폰에서는 아래 한계값까지만 줄어들어 글씨가 읽히는 선을 지킨다. */
+  --rows: 6;
+  --cell-h: clamp(56px, calc((100dvh - 184px - (var(--rows) - 1) * 3px) / var(--rows)), 98px);
+  --cell-shift-h: clamp(16px, calc(var(--cell-h) * .2), 23px);
   --cell-row-gap: 4px;
   display:grid;
   grid-template-columns: repeat(7,1fr);
@@ -587,7 +597,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   background:#e15454;
   box-shadow:0 0 0 1px rgba(255,255,255,.8);
 }
-.fam-mark{ position:absolute; bottom:1px; left:2px; font-size:8px; line-height:1; pointer-events:none; z-index:2; }
+.fam-mark{
+  grid-column:3;
+  justify-self:end;
+  align-self:center;
+  flex:none;
+  padding:0 3px;
+  border-radius:4px;
+  background:color-mix(in srgb, #db2777 12%, #fff);
+  color:#db2777;
+  font-size:7.5px;
+  font-weight:900;
+  line-height:12px;
+  letter-spacing:-.3px;
+  white-space:nowrap;
+  pointer-events:none;
+}
+/* 정산 태그가 있는 날은 그쪽이 먼저다 — 한 자리를 둘이 쓸 수 없다. */
+.cell.has-tag .fam-mark{ display:none; }
 .memo-pin{
   display:none;
 }
@@ -649,12 +676,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .cell.range-anchor{ outline: 2px solid var(--brand); outline-offset:-2px; }
 .cell.range-sel{ outline: 2px dashed var(--brand); outline-offset:-2px; background: rgba(79,70,229,.14); }
 
+@media (max-width: 430px){
+  .app{ padding-left:9px; padding-right:9px; }
+  .calendar{ padding-inline:5px; }
+  /* 토글이 머리글에 들어왔으니 설명줄은 접는다. 제목만으로 충분하다. */
+  .brand-sub{ display:none; }
+  .brand-logo{ width:28px; height:28px; }
+  .brand-text h1{ font-size:17px; }
+  .calendar-view-tabs button{ padding:0 7px; font-size:11px; }
+  .icon-btn{ width:34px; height:34px; font-size:16px; }
+}
 @media (max-width: 380px){
-  .app{ padding-left:10px; padding-right:10px; }
   .team-board{ padding:10px; }
   .team-grid{ gap:5px; }
   .team-item{ min-height:58px; padding:7px 6px; }
-  .grid{ --cell-h:80px; --cell-shift-h:16px; --cell-row-gap:3px; gap:2px; }
+  .grid{
+    --cell-h: clamp(52px, calc((100dvh - 172px - (var(--rows) - 1) * 2px) / var(--rows)), 92px);
+    --cell-row-gap:3px; gap:2px;
+  }
   .cell{ border-radius:6px; padding-inline:2px; }
   .badge{ font-size:8.5px; }
   .cell-tag{ font-size:7px; }
@@ -672,8 +711,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   border:1px solid color-mix(in srgb, var(--sun) 22%, var(--line));
   border-radius:var(--radius);
   box-shadow:var(--shadow-sm);
-  padding:10px 12px;
-  margin:0 0 14px;
+  padding:9px 12px;
+  margin:10px 0 0;
 }
 .holiday-panel .hol-title{
   color:var(--sun);

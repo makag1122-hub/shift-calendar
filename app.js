@@ -376,7 +376,7 @@ function isSpecialSchedule(dateStr, group = currentGroup()){ return !!specialShi
 /* 오피스조(O조) 근무 — 주기 패턴이 아니라 달력으로 정해진다.
    주말·공휴일은 휴무, 나머지 평일은 오피스 근무.
    ※ 패밀리데이는 여기서 근무로 바꾸지 않는다. 쓸지 말지는 본인이 정하는 거라
-      달력엔 💛 표시(참고)만 띄우고, 실제로 쉬면 그 날만 손으로 바꾸면 된다.
+      달력엔 '패데' 꼬리표(참고)만 띄우고, 실제로 쉬면 그 날만 손으로 바꾸면 된다.
    ※ 명절 특별편성(SPECIAL_SCHEDULE)은 교대 로테이션 재편성이라 오피스조와는 무관하다. */
 function officeShiftFor(dateStr){
   if(isHoliday(dateStr) || isWeekend(dateStr)) return 'OFF';
@@ -471,7 +471,7 @@ function familyDayStr(year, month0, group = currentGroup()){
 function familyDayHint(group = currentGroup()){
   return isOfficeGroup(group) ? '패밀리데이 (급여일 직전 금요일)' : '패밀리데이 가능일 (급여일 2주 전 금)';
 }
-/* 💛 는 '이 날이 패밀리데이구나' 하는 참고 표시일 뿐, 근무를 대신 바꿔주지는 않는다. */
+/* '패데' 꼬리표는 '이 날이 패밀리데이구나' 하는 참고 표시일 뿐, 근무를 대신 바꿔주지는 않는다. */
 function familyDayNote(group = currentGroup()){
   return `${familyDayHint(group)} · 쓰면 이 날 근무를 패밀리데이로 바꿔주세요`;
 }
@@ -742,14 +742,17 @@ function renderCalendar(){
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const isFam = dateStr === famDayStr;
     html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${hol?' is-holiday':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
-      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}</span>
+      <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}${isFam ? `<span class="fam-mark" title="${escapeHtml(famHint)}">패데</span>` : ''}</span>
       ${badge}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
-      ${isFam ? `<span class="fam-mark" title="${escapeHtml(famHint)}">💛</span>` : ''}
       ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : '<span class="cell-memo-slot" aria-hidden="true"></span>'}
     </button>`;
   }
-  $('grid').innerHTML = html;
+  const gridEl = $('grid');
+  /* 5줄짜리 달은 6줄짜리와 같은 높이로 그리면 아래가 휑하게 남는다.
+     그 달이 실제로 쓰는 줄 수를 넘겨, 남는 높이를 칸이 나눠 갖게 한다. */
+  gridEl.style.setProperty('--rows', Math.ceil((startDow + daysInMonth) / 7));
+  gridEl.innerHTML = html;
   $('summary').hidden = false;
   renderMemoPanel();
   renderSummary();
@@ -1050,7 +1053,7 @@ function openDaySheet(dateStr){
   const runTotal = workRunTotalFor(dateStr, group);
   if(runTotal >= 6) infoParts.push(`<span class="sh-run">🔺 ${runTotal}일 연속근무 (오늘 ${workRunDayFor(dateStr, group)}일차)</span>`);
   if(ti) infoParts.push(`<b>${tagLabel(ti)}</b>`);
-  if(isFamilyDayCandidate(dateStr, group)) infoParts.push(`<span class="sh-fam">💛 ${familyDayNote(group)}</span>`);
+  if(isFamilyDayCandidate(dateStr, group)) infoParts.push(`<span class="sh-fam">${familyDayNote(group)}</span>`);
   if(infoParts.length){ sh.hidden = false; sh.innerHTML = infoParts.join(' '); }
   else { sh.hidden = true; sh.innerHTML = ''; }
   const ro = !canEdit();

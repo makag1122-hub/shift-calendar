@@ -37,8 +37,45 @@ assert(
   '달력 카드의 정산 태그가 지근·지휴·특근 공통 라벨이 아닙니다.'
 );
 assert(
-  app.includes('<span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}</span>'),
-  '날짜 · 공휴일명 · 정산 태그 한 줄 구조가 변경됐습니다.'
+  app.includes('<span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}${isFam'),
+  '날짜 · 공휴일명 · 정산 태그 · 패밀리데이 한 줄 구조가 변경됐습니다.'
+);
+/* 패밀리데이는 하트 그림 대신 글자로 적는다(사용자 요청 2026-11-26). */
+assert(
+  app.includes('class="fam-mark" title="${escapeHtml(famHint)}">패데<') && !app.includes('💛'),
+  '패밀리데이 표시가 작은 글자 꼬리표가 아닙니다.'
+);
+assert(
+  css.includes('.cell.has-tag .fam-mark{ display:none; }'),
+  '정산 태그와 패밀리데이 표시가 같은 자리를 다투고 있습니다.'
+);
+/* 보기 전환은 머리글 안의 작은 토글이어야 한다 — 한 줄을 통째로 쓰면 달력이 밀린다. */
+assert(
+  /<header class="app-header">[\s\S]*?id="calendarViewTabs"[\s\S]*?<\/header>/.test(index),
+  '보기 전환 버튼이 머리글 안에 있지 않습니다.'
+);
+assert(
+  css.includes('.calendar-view-tabs{') && /\.calendar-view-tabs\{[^}]*margin:0;/.test(css),
+  '보기 전환 토글이 아직 아래쪽 여백을 차지하고 있습니다.'
+);
+/* 달력 한 칸 높이는 화면 높이를 따라간다(작은 폰은 한계값까지만). */
+assert(
+  css.includes('--cell-h: clamp(') && css.includes('100dvh') && css.includes('var(--rows)'),
+  '달력 칸 높이가 화면 높이와 그 달의 줄 수를 따라가지 않습니다.'
+);
+assert(
+  app.includes("gridEl.style.setProperty('--rows', Math.ceil((startDow + daysInMonth) / 7));"),
+  '그 달이 쓰는 줄 수를 달력에 알려주지 않아 5줄 달에서 아래가 남습니다.'
+);
+/* 근무 칩이 메모 자리까지 늘어나면 안 된다(사용자 요청 2026-11-26). */
+assert(
+  !css.includes('.cell:not(.has-memo) .badge{'),
+  '근무 칩이 메모 영역까지 침범하고 있습니다.'
+);
+/* '오늘 배치'는 메모 아래 — 달력이 화면을 먼저 차지해야 한다. */
+assert(
+  index.indexOf('id="memoPanel"') < index.indexOf('id="teamBoard"'),
+  '오늘 배치가 아직 달력 위에 있습니다.'
 );
 assert(
   app.includes('<span class="sh-hol">🔴 ${escapeHtml(hol)}</span>'),

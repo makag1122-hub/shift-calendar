@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192-v2.png" />
   <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
-  <link rel="stylesheet" href="style.css?v=20261126b" />
+  <link rel="stylesheet" href="style.css?v=20261126c" />
 </head>
 <body>
   <div class="app">
@@ -26,6 +26,10 @@
           <p class="brand-sub">4조 3교대 · 오피스조 · 근무표와 메모</p>
         </div>
       </div>
+      <nav class="calendar-view-tabs" id="calendarViewTabs" aria-label="달력 보기 방식">
+        <button type="button" data-calendar-view="single">내 조</button>
+        <button type="button" data-calendar-view="all">전체</button>
+      </nav>
       <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
     </header>
 
@@ -34,15 +38,6 @@
 
     <!-- 초대 링크를 브라우저로 연 친구에게만 보이는 앱 설치 안내 -->
     <div class="install-banner" id="installBanner" hidden></div>
-
-    <!-- 오늘 조별 배치 -->
-    <section class="team-board" id="teamBoard"></section>
-
-    <!-- 달력 보기 방식 -->
-    <nav class="calendar-view-tabs" id="calendarViewTabs" aria-label="달력 보기 방식">
-      <button type="button" data-calendar-view="single">내 조 달력</button>
-      <button type="button" data-calendar-view="all">전체 조 한눈에</button>
-    </nav>
 
     <!-- 월 이동 -->
     <section class="month-nav">
@@ -84,6 +79,9 @@
 
     <!-- 이번 달 메모 -->
     <section class="memo-panel" id="memoPanel" hidden></section>
+
+    <!-- 오늘 조별 배치 (달력이 화면을 먼저 차지하도록 메모 아래에 둔다) -->
+    <section class="team-board" id="teamBoard"></section>
 
     <!-- 월 요약 -->
     <section class="summary" id="summary"></section>
@@ -187,9 +185,9 @@
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20261126b"></script>
-  <script src="sync.js?v=20261126b"></script>
-  <script src="app.js?v=20261126b"></script>
+  <script src="sync-config.js?v=20261126c"></script>
+  <script src="sync.js?v=20261126c"></script>
+  <script src="app.js?v=20261126c"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -199,7 +197,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20261126b', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20261126c', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });
