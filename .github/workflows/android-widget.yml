@@ -46,6 +46,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # 이 액션은 기본으로 'tools' 꾸러미를 받으려 하는데, 구글이 저장소에서
+          # 없애버려 "Failed to find package 'tools'"로 빌드가 멈춥니다.
+          # 어차피 바로 아래에서 필요한 것만 직접 설치하므로 비워 둡니다.
+          packages: ""
 
       - name: Install Android platform
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
