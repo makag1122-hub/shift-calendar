@@ -25,7 +25,6 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
     private static final String ACTION_GROUP =
             "kr.co.shiftcalendar.widget.action.GROUP";
     private static final String EXTRA_WIDGET_ID = "widget_id";
-    private static final String[] GROUPS = {"A", "B", "C", "D"};
 
     @Override
     public void onUpdate(
@@ -83,15 +82,8 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
                     groupKey,
                     CalendarWidgetRenderer.activeGroup(context)
             );
-            int index = 0;
-            for (int i = 0; i < GROUPS.length; i++) {
-                if (GROUPS[i].equals(current)) {
-                    index = i;
-                    break;
-                }
-            }
             preferences.edit()
-                    .putString(groupKey, GROUPS[(index + 1) % GROUPS.length])
+                    .putString(groupKey, CalendarWidgetRenderer.nextGroup(current))
                     .apply();
         }
 

@@ -48,7 +48,7 @@
             android:background="@drawable/widget_group_chip"
             android:gravity="center"
             android:maxLines="1"
-            android:text="4개 조"
+            android:text="전체 조"
             android:textColor="#FFFFFF"
             android:textSize="9.5sp"
             android:textStyle="bold" />

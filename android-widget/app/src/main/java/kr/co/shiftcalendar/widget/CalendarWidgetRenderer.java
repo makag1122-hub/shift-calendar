@@ -23,9 +23,14 @@ final class CalendarWidgetRenderer {
     private static final int DEFAULT_HEIGHT = 440;
     private static final int MIN_HEIGHT = 350;
     private static final int MAX_HEIGHT = 520;
-    private static final int DEFAULT_WEEK_HEIGHT = 200;
+    /*
+     * 주간 비교 위젯의 내용 높이입니다. O조가 들어와 줄이 다섯 개가 되었으므로
+     * 상한을 240 → 290으로 올려, 위젯을 높게 늘렸을 때 남는 높이를 줄에 쓰게 합니다.
+     * 하한(180)은 그대로입니다. 올리면 낮은 위젯에서 좌우가 letterbox로 남습니다.
+     */
+    private static final int DEFAULT_WEEK_HEIGHT = 230;
     private static final int MIN_WEEK_HEIGHT = 180;
-    private static final int MAX_WEEK_HEIGHT = 240;
+    private static final int MAX_WEEK_HEIGHT = 290;
     private static final float RENDER_SCALE = 2.5f;
     private static final int WEEK_HEIGHT = 32;
     private static final int ROWS = 6;
@@ -44,7 +49,7 @@ final class CalendarWidgetRenderer {
     private static final int MONTH_ALL_MAX_HEIGHT = 950;
     private static final float MONTH_ALL_HEADER_HEIGHT = 30f;
     /*
-     * 아래쪽 4개 조 띠는 한 주(7일)만 보여 줍니다.
+     * 아래쪽 전체 조 띠는 한 주(7일)만 보여 줍니다.
      * 한 달 31일을 한 줄에 밀어 넣으면 칸이 20px 남짓이라 근무 글자를 읽을 수 없었습니다.
      * 7일만 그리면 같은 자리에서 칸이 4배 넓어져 근무 이름이 그대로 들어갑니다.
      */
@@ -52,7 +57,13 @@ final class CalendarWidgetRenderer {
     private static final float MONTH_ALL_BAND_MAX = 220f;
     private static final float MONTH_ALL_BAND_RATIO = 0.25f;
     private static final String[] WEEKDAYS = {"일", "월", "화", "수", "목", "금", "토"};
-    private static final String[] GROUPS = {"A", "B", "C", "D"};
+    /*
+     * 비교 위젯이 그리는 조 목록입니다. A~D는 20일 주기 교대조, O는 달력으로 정해지는
+     * 오피스조(월~금 오피스 · 주말·공휴일 휴무)입니다. 웹앱의 GROUPS와 같은 순서입니다.
+     */
+    private static final String[] GROUPS = {"A", "B", "C", "D", "O"};
+    /** 앱의 기본 선택 조와 같은 오피스조입니다. 저장된 조와 스냅샷이 모두 없을 때만 씁니다. */
+    static final String DEFAULT_GROUP = "O";
     private static final int COLOR_BRAND = Color.rgb(79, 70, 229);
     private static final int COLOR_INK = Color.rgb(31, 37, 51);
     private static final int COLOR_INK_SOFT = Color.rgb(100, 116, 139);
@@ -79,7 +90,7 @@ final class CalendarWidgetRenderer {
     static final class Result {
         final Bitmap bitmap;
         final String footer;
-        /** 4개 조 띠가 지금 보여 주는 주간 범위입니다. 위젯의 주간 이동 줄에 그대로 씁니다. */
+        /** 전체 조 띠가 지금 보여 주는 주간 범위입니다. 위젯의 주간 이동 줄에 그대로 씁니다. */
         final String weekLabel;
 
         Result(Bitmap bitmap, String footer) {
@@ -95,8 +106,33 @@ final class CalendarWidgetRenderer {
 
     static String activeGroup(Context context) {
         JSONObject root = payload(context);
-        String group = root == null ? "A" : root.optString("activeGroup", "A");
-        return group.matches("[ABCD]") ? group : "A";
+        String group = root == null
+                ? DEFAULT_GROUP
+                : root.optString("activeGroup", DEFAULT_GROUP);
+        return isKnownGroup(group) ? group : DEFAULT_GROUP;
+    }
+
+    /** 조 목록을 GROUPS 한 군데에서만 관리하려고 정규식 대신 목록을 직접 봅니다. */
+    private static boolean isKnownGroup(String group) {
+        for (String candidate : GROUPS) {
+            if (candidate.equals(group)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 조 전환 버튼이 쓰는 다음 조입니다.
+     * 위젯마다 목록을 따로 두면 조가 늘어날 때 한쪽만 고쳐질 수 있어 여기로 모았습니다.
+     */
+    static String nextGroup(String current) {
+        for (int i = 0; i < GROUPS.length; i++) {
+            if (GROUPS[i].equals(current)) {
+                return GROUPS[(i + 1) % GROUPS.length];
+            }
+        }
+        return GROUPS[0];
     }
 
     static Result render(
@@ -152,7 +188,7 @@ final class CalendarWidgetRenderer {
             );
             return new Result(
                     bitmap,
-                    String.format(Locale.KOREA, "4개 조 한눈에 · 이번 달 메모 %d개", memoCount)
+                    String.format(Locale.KOREA, "전체 조 한눈에 · 이번 달 메모 %d개", memoCount)
             );
         }
         drawWeekdays(canvas, paint, WIDTH);
@@ -240,7 +276,7 @@ final class CalendarWidgetRenderer {
 
     /**
      * 6행 7열 큰 달력 위젯입니다.
-     * 위쪽은 메모가 그대로 보이는 내 조 달력, 아래쪽은 네 개 조를 나란히 보여 주는 띠입니다.
+     * 위쪽은 메모가 그대로 보이는 내 조 달력, 아래쪽은 전체 조를 나란히 보여 주는 띠입니다.
      * 띠는 weekIndex 줄(한 주)만 그리고, 위 달력에서 그 줄을 함께 표시해 둘을 이어 줍니다.
      */
     static Result renderMonthAllGroups(
@@ -295,7 +331,7 @@ final class CalendarWidgetRenderer {
         }
         JSONObject shifts = root.optJSONObject("shifts");
 
-        /* 위쪽은 메모까지 보이는 내 조 달력, 아래쪽은 그중 한 주의 네 개 조 비교입니다. */
+        /* 위쪽은 메모까지 보이는 내 조 달력, 아래쪽은 그중 한 주의 전체 조 비교입니다. */
         float bandHeight = Math.min(
                 MONTH_ALL_BAND_MAX,
                 Math.max(MONTH_ALL_BAND_MIN, height * MONTH_ALL_BAND_RATIO)
@@ -529,7 +565,7 @@ final class CalendarWidgetRenderer {
     }
 
     /**
-     * 달력 아래에 붙는 4개 조 비교 카드입니다.
+     * 달력 아래에 붙는 전체 조(A·B·C·D·O) 비교 카드입니다.
      * 한 달 31일을 한 줄에 밀어 넣지 않고 한 주(7일)만 그리므로
      * 칸이 네 배 넓어지고, 이니셜 한 글자 대신 근무 이름이 그대로 들어갑니다.
      * 보고 있는 주는 카드 머리글과 위 달력의 옅은 칠로 함께 알려 줍니다.
@@ -559,8 +595,12 @@ final class CalendarWidgetRenderer {
         /* 위젯을 작게 줄이면 여백과 머리글이 칸을 다 먹습니다. 높이에 맞춰 같이 줄입니다. */
         final float padding = Math.max(5f, Math.min(8f, height * 0.045f));
         final float labelWidth = 30f;
-        final float titleHeight = Math.max(13f, Math.min(17f, height * 0.10f));
-        final float daysHeight = Math.max(12.5f, Math.min(16f, height * 0.09f));
+        /*
+         * O조가 들어와 조 줄이 네 개에서 다섯 개로 늘었습니다. 카드 높이는 그대로 두고
+         * (달력이 줄면 메모가 사라집니다) 머리글·요일줄 상한을 조금 낮춰 그만큼을 줄로 돌립니다.
+         */
+        final float titleHeight = Math.max(13f, Math.min(15f, height * 0.10f));
+        final float daysHeight = Math.max(12.5f, Math.min(14.5f, height * 0.09f));
         final float left0 = padding;
         final float right0 = width - padding;
         final float columnWidth = (right0 - left0 - labelWidth) / 7f;
@@ -588,7 +628,7 @@ final class CalendarWidgetRenderer {
         paint.setTextAlign(Paint.Align.RIGHT);
         paint.setTextSize(10f);
         paint.setColor(COLOR_INK_SOFT);
-        canvas.drawText("4개 조 비교", right0, padding + 12f, paint);
+        canvas.drawText("전체 조 비교", right0, padding + 12f, paint);
 
         float gridTop = padding + titleHeight;
         float gridBottom = height - padding;
@@ -677,7 +717,11 @@ final class CalendarWidgetRenderer {
                         : shift.optString("short", shift.optString("label", shiftKey));
                 paint.setTypeface(TYPEFACE_BOLD);
                 paint.setTextAlign(Paint.Align.CENTER);
-                paint.setTextSize(Math.min(14.5f, Math.max(9f, rowHeight * 0.44f)));
+                /*
+                 * 줄이 다섯 개로 얇아져도 근무 이름 크기를 지키려고 비율을 0.44 → 0.5로 올렸습니다.
+                 * 상한(14.5)은 그대로라 큰 위젯에서의 모습은 달라지지 않습니다.
+                 */
+                paint.setTextSize(Math.min(14.5f, Math.max(8.5f, rowHeight * 0.5f)));
                 paint.setColor(selected ? Color.WHITE : blendWithBlack(shiftColor, 0.42f));
                 canvas.drawText(
                         ellipsize(paint, trimLabel(label), cell.width() - 6f),
@@ -715,7 +759,8 @@ final class CalendarWidgetRenderer {
         final float labelWidth = 48f;
         final float headerHeight = 38f;
         final float columnWidth = (WIDTH - labelWidth) / 7f;
-        final float rowHeight = (height - headerHeight) / 4f;
+        /* 조 수를 박아 두면 O조 줄이 비트맵 밖에 그려집니다. 아래 반복문과 같은 값을 씁니다. */
+        final float rowHeight = (height - headerHeight) / GROUPS.length;
         Calendar today = Calendar.getInstance();
 
         paint.setStyle(Paint.Style.FILL);
@@ -785,7 +830,7 @@ final class CalendarWidgetRenderer {
             );
             paint.setTypeface(TYPEFACE_BOLD);
             paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(12f);
+            paint.setTextSize(Math.min(12f, Math.max(9f, rowHeight * 0.36f)));
             paint.setColor(selected ? Color.WHITE : COLOR_INK);
             canvas.drawText(
                     group + "조",
@@ -819,7 +864,7 @@ final class CalendarWidgetRenderer {
                 String label = shift == null
                         ? "-"
                         : shift.optString("short", shift.optString("label", shiftKey));
-                float badgeHeight = Math.min(25f, rowHeight - 13f);
+                float badgeHeight = Math.min(25f, Math.max(12f, rowHeight - 11f));
                 float badgeTop = top + (rowHeight - badgeHeight) / 2f;
                 RectF badge = new RectF(
                         left + 7f,
@@ -831,7 +876,8 @@ final class CalendarWidgetRenderer {
                 canvas.drawRoundRect(badge, 6f, 6f, paint);
                 paint.setTypeface(TYPEFACE_BOLD);
                 paint.setTextAlign(Paint.Align.CENTER);
-                paint.setTextSize(11.5f);
+                /* 배지가 얇아지면 글자도 같이 줄여야 위아래가 잘리지 않습니다. */
+                paint.setTextSize(Math.min(11.5f, Math.max(8.5f, badgeHeight * 0.62f)));
                 paint.setColor(Color.WHITE);
                 canvas.drawText(
                         ellipsize(paint, trimLabel(label), columnWidth - 18f),

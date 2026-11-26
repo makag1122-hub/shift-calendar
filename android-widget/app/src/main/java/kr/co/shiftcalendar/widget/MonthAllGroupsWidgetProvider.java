@@ -13,9 +13,9 @@ import java.util.Calendar;
 import java.util.Locale;
 
 /**
- * 6행 7열 월간 달력에 A/B/C/D 네 개 조를 함께 담는 큰 위젯입니다.
- * 월간 달력 위젯과 4개 조 비교 위젯을 하나로 합친 형태입니다.
- * 아래쪽 4개 조 띠는 한 주씩만 보여 주고 ‹ › 로 주를 넘깁니다.
+ * 6행 7열 월간 달력에 A·B·C·D 교대조와 O조(오피스조)를 함께 담는 큰 위젯입니다.
+ * 월간 달력 위젯과 전체 조 비교 위젯을 하나로 합친 형태입니다.
+ * 아래쪽 전체 조 띠는 한 주씩만 보여 주고 ‹ › 로 주를 넘깁니다.
  */
 public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
     private static final String ACTION_PREVIOUS =
@@ -31,7 +31,6 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
     private static final String ACTION_WEEK_NEXT =
             "kr.co.shiftcalendar.widget.action.MONTH_ALL_WEEK_NEXT";
     private static final String EXTRA_WIDGET_ID = "widget_id";
-    private static final String[] GROUPS = {"A", "B", "C", "D"};
     private static final int MONTH_LIMIT = 18;
     /** 저장된 주가 없으면 오늘이 든 주를 씁니다. 달을 옮길 때마다 이 값으로 되돌립니다. */
     private static final int AUTO_WEEK = -1;
@@ -123,15 +122,8 @@ public class MonthAllGroupsWidgetProvider extends AppWidgetProvider {
                     groupKey(widgetId),
                     CalendarWidgetRenderer.activeGroup(context)
             );
-            int index = 0;
-            for (int i = 0; i < GROUPS.length; i++) {
-                if (GROUPS[i].equals(current)) {
-                    index = i;
-                    break;
-                }
-            }
             preferences.edit()
-                    .putString(groupKey(widgetId), GROUPS[(index + 1) % GROUPS.length])
+                    .putString(groupKey(widgetId), CalendarWidgetRenderer.nextGroup(current))
                     .apply();
         }
 

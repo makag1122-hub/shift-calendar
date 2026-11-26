@@ -94,9 +94,61 @@ assert(renderer.includes('memoText(entry)'), '위젯의 날짜별 메모 표시�
 assert(renderer.includes('boolean compactCell = rowHeight < 60f'), '낮은 월간 위젯 셀의 자동 축소 처리가 없습니다.');
 assert(renderer.includes('canvas.clipRect(cell.left + 1f'), '월간 위젯 내용이 날짜 셀 밖으로 넘칠 수 있습니다.');
 assert(renderer.includes('boolean showMemoText'), '작은 셀에서 메모 표시 밀도를 조절하지 않습니다.');
-assert(renderer.includes('drawAllGroups('), '위젯의 A/B/C/D 4행 비교 렌더링이 없습니다.');
-assert(renderer.includes('renderWeek('), '4개 조 주간 위젯 렌더링이 없습니다.');
-assert(renderer.includes('drawWeekGroups('), '4개 조 주간 4행 비교 렌더링이 없습니다.');
+assert(renderer.includes('drawAllGroups('), '위젯의 조별 비교 렌더링이 없습니다.');
+assert(renderer.includes('renderWeek('), '주간 비교 위젯 렌더링이 없습니다.');
+assert(renderer.includes('drawWeekGroups('), '주간 조별 비교 렌더링이 없습니다.');
+
+/* ---------- 위젯이 아는 조 목록 ----------
+   웹앱에 O조(오피스조)가 생겼습니다. 위젯이 A~D만 알면 홈 화면에서는 O조가 보이지 않고,
+   내 조가 O조인 사람은 비교 띠에서 자기 줄을 찾을 수 없습니다. */
+const rendererGroups = (() => {
+  const found = renderer.match(/String\[\] GROUPS = \{([^}]*)\}/);
+  assert(found, '렌더러에서 조 목록을 읽지 못했습니다.');
+  return found[1].split(',').map(part => part.trim().replace(/"/g, '')).filter(Boolean);
+})();
+assert(
+  rendererGroups.join(',') === 'A,B,C,D,O',
+  `위젯 조 목록이 웹앱(A·B·C·D·O)과 다릅니다: ${rendererGroups.join(',')}`
+);
+assert(
+  Object.keys(payload.months['2026-08']).join(',') === rendererGroups.join(','),
+  '위젯이 아는 조와 스냅샷에 담기는 조가 다릅니다.'
+);
+/* [ABCD] 정규식이 남아 있으면 스냅샷의 activeGroup "O"가 A조로 되돌려집니다. */
+assert(
+  !/matches\("\[ABCD/.test(renderer),
+  '위젯이 O조를 A조로 되돌리는 [ABCD] 검사를 아직 쓰고 있습니다.'
+);
+assert(
+  renderer.includes('DEFAULT_GROUP = "O"'),
+  '저장된 설정이 없을 때의 위젯 기본 조가 앱 기본값(O조)과 다릅니다.'
+);
+/* 조 전환 버튼이 위젯마다 자기 목록을 들고 있으면 한쪽만 고쳐질 수 있습니다. */
+assert(
+  renderer.includes('static String nextGroup('),
+  '조 전환이 공통 목록을 쓰지 않습니다.'
+);
+[
+  { name: '월간 위젯', source: provider },
+  { name: '6×7 위젯', source: fs.readFileSync(
+      path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'java', 'kr', 'co', 'shiftcalendar', 'widget', 'MonthAllGroupsWidgetProvider.java'),
+      'utf8'
+    ) },
+].forEach(sample => {
+  assert(
+    !/String\[\] GROUPS = \{/.test(sample.source),
+    `${sample.name}이 조 목록을 따로 들고 있어 O조가 빠질 수 있습니다.`
+  );
+  assert(
+    sample.source.includes('CalendarWidgetRenderer.nextGroup('),
+    `${sample.name}의 조 전환이 공통 목록을 쓰지 않습니다.`
+  );
+});
+/* 주간 비교 위젯은 행 수를 4로 박아 두어 O조 줄이 비트맵 밖으로 나갔습니다. */
+assert(
+  !/\(height - headerHeight\) \/ 4f/.test(renderer),
+  '주간 비교 위젯이 조 수와 무관하게 4행으로 나뉘어 마지막 조가 잘립니다.'
+);
 assert(renderer.includes('calendarHeight('), '위젯 크기에 맞춘 달력 비율 계산이 없습니다.');
 assert(
   /static Result render\([\s\S]*?int bitmapHeight = calendarHeight\(/.test(renderer),
@@ -153,6 +205,43 @@ function fittedBitmapHeight(width, height, horizontalChrome, verticalChrome){
     `${sample.name} 위젯의 세로/가로 배율이 다릅니다: ${axisRatio}`
   );
 });
+function number(name){
+  const found = renderer.match(new RegExp(name + '\\s*=\\s*([0-9.]+)f?;'));
+  assert(found, `${name} 값을 렌더러에서 읽지 못했습니다.`);
+  return Number(found[1]);
+}
+
+/* ---------- 주간 비교 위젯의 조 줄 ----------
+   머리글 38 아래 남은 높이를 조 수만큼 나눠 씁니다. 조가 늘어도 마지막 줄(O조)이
+   비트맵 밖으로 나가거나 근무 배지가 눌려 글자가 잘리면 안 됩니다. */
+const weekMin = number('MIN_WEEK_HEIGHT');
+const weekDefault = number('DEFAULT_WEEK_HEIGHT');
+const weekMax = number('MAX_WEEK_HEIGHT');
+assert(
+  weekMin <= weekDefault && weekDefault <= weekMax,
+  '주간 위젯의 최소·기본·최대 높이 순서가 맞지 않습니다.'
+);
+[weekMin, weekDefault, weekMax].forEach(height => {
+  const headerHeight = 38;
+  const rowHeight = (height - headerHeight) / rendererGroups.length;
+  assert(
+    headerHeight + rowHeight * rendererGroups.length <= height + 0.01,
+    `주간 위젯 높이 ${height}에서 마지막 조 줄이 비트맵 밖으로 나갑니다.`
+  );
+  /* 조 라벨 칸은 위아래 5씩 비웁니다. */
+  assert(rowHeight - 10 >= 12, `주간 위젯 높이 ${height}에서 조 라벨 칸이 너무 얇습니다.`);
+  const badgeHeight = Math.min(25, Math.max(12, rowHeight - 11));
+  const badgeText = Math.min(11.5, Math.max(8.5, badgeHeight * 0.62));
+  assert(
+    badgeHeight <= rowHeight - 6,
+    `주간 위젯 높이 ${height}에서 근무 배지가 줄 밖으로 넘칩니다.`
+  );
+  assert(
+    badgeText >= 9.5,
+    `주간 위젯 높이 ${height}에서 근무 글자가 너무 작습니다: ${badgeText}`
+  );
+});
+
 /* ---------- 6×7 큰 달력 위젯 ----------
    이 위젯의 목적은 메모를 크게 보는 것입니다. 위쪽 달력 칸에는 날짜·근무 배지
    아래로 메모가 들어가야 하고, 4개 조는 하단 얇은 띠에만 나와야 합니다. */
@@ -296,11 +385,6 @@ assert(
   '앱에서 근무표를 저장할 때 6×7 위젯이 갱신되지 않습니다.'
 );
 
-function number(name){
-  const found = renderer.match(new RegExp(name + '\\s*=\\s*([0-9.]+)f?;'));
-  assert(found, `${name} 값을 렌더러에서 읽지 못했습니다.`);
-  return Number(found[1]);
-}
 const monthAllWidth = number('MONTH_ALL_WIDTH');
 const monthAllScale = number('MONTH_ALL_RENDER_SCALE');
 const monthAllHeader = number('MONTH_ALL_HEADER_HEIGHT');
@@ -327,9 +411,10 @@ const bandRatio = number('MONTH_ALL_BAND_RATIO');
 
 [
   /* 최소 크기는 사용자가 위젯을 크게 줄인 경우입니다. 읽히기만 하면 됩니다. */
-  { height: monthAllMin, memoLines: 1, bandRow: 24, bandText: 10 },
-  { height: monthAllDefault, memoLines: 2, bandRow: 30, bandText: 13 },
-  { height: monthAllMax, memoLines: 2, bandRow: 30, bandText: 13 },
+  /* 조가 다섯이 되어 줄은 얇아졌지만, 읽는 데 중요한 근무 글자 크기는 지켜야 합니다. */
+  { height: monthAllMin, memoLines: 1, bandRow: 20, bandText: 10 },
+  { height: monthAllDefault, memoLines: 2, bandRow: 26, bandText: 13 },
+  { height: monthAllMax, memoLines: 2, bandRow: 26, bandText: 13 },
 ].forEach(sample => {
   const height = sample.height;
   const bandHeight = Math.min(bandMax, Math.max(bandMin, height * bandRatio));
@@ -357,17 +442,30 @@ const bandRatio = number('MONTH_ALL_BAND_RATIO');
 
   /* 하단 띠: 한 주(7일)만 그리므로 근무 이름이 한 글자로 잘리면 안 됩니다.
      예전처럼 31일을 밀어 넣으면 하루 폭이 21px라 이니셜만 겨우 들어갔습니다.
-     카드 안쪽 여백 8, 머리글 17, 요일줄 16, 조 라벨 칸 30을 뺀 나머지가 실제 칸입니다. */
+     카드 안쪽 여백 8, 머리글 15, 요일줄 14.5, 조 라벨 칸 30을 뺀 나머지가 실제 칸입니다.
+     줄 수는 위젯이 아는 조 수(A·B·C·D·O)와 같아야 합니다. */
   const bandInner = bandHeight - 6;
   const bandPad = Math.max(5, Math.min(8, bandInner * 0.045));
-  const bandTitle = Math.max(13, Math.min(17, bandInner * 0.10));
-  const bandDays = Math.max(12.5, Math.min(16, bandInner * 0.09));
-  const bandRowHeight = (bandInner - bandPad * 2 - bandTitle - bandDays) / 4;
+  const bandTitle = Math.max(13, Math.min(15, bandInner * 0.10));
+  const bandDays = Math.max(12.5, Math.min(14.5, bandInner * 0.09));
+  const bandRowHeight =
+    (bandInner - bandPad * 2 - bandTitle - bandDays) / rendererGroups.length;
   const bandColumnWidth = (monthAllWidth - bandPad * 2 - 30) / 7;
-  const bandTextSize = Math.min(14.5, Math.max(9, bandRowHeight * 0.44));
+  const bandTextSize = Math.min(14.5, Math.max(8.5, bandRowHeight * 0.5));
   assert(
     bandRowHeight >= sample.bandRow,
-    `높이 ${height}에서 하단 4개 조 줄이 너무 얇습니다: ${bandRowHeight}`
+    `높이 ${height}에서 하단 전체 조 줄이 너무 얇습니다: ${bandRowHeight}`
+  );
+  /* 줄이 카드 밖으로 넘치면 마지막 조(O조)가 잘립니다. */
+  assert(
+    bandPad + bandTitle + bandDays + bandRowHeight * rendererGroups.length
+      <= bandInner - bandPad + 0.01,
+    `높이 ${height}에서 하단 띠 줄이 카드 밖으로 넘칩니다.`
+  );
+  /* 근무 배지 안쪽 여백(위아래 2.5)을 빼고도 글자가 들어가야 합니다. */
+  assert(
+    bandRowHeight - 5 >= bandTextSize,
+    `높이 ${height}에서 하단 띠 근무 글자가 칸보다 큽니다.`
   );
   assert(
     bandColumnWidth >= 60,
@@ -385,7 +483,7 @@ const bandRatio = number('MONTH_ALL_BAND_RATIO');
   /* 카드가 달력을 밀어내면 위쪽 메모가 사라집니다. */
   assert(
     bandHeight <= height * 0.27,
-    `높이 ${height}에서 4개 조 카드가 달력을 너무 많이 차지합니다: ${bandHeight}`
+    `높이 ${height}에서 전체 조 카드가 달력을 너무 많이 차지합니다: ${bandHeight}`
   );
   assert(
     calendarHeight >= height * 0.75,
