@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192-v2.png" />
   <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
-  <link rel="stylesheet" href="style.css?v=20261126d" />
+  <link rel="stylesheet" href="style.css?v=20261126e" />
 </head>
 <body>
   <div class="app">
@@ -185,9 +185,9 @@
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20261126d"></script>
-  <script src="sync.js?v=20261126d"></script>
-  <script src="app.js?v=20261126d"></script>
+  <script src="sync-config.js?v=20261126e"></script>
+  <script src="sync.js?v=20261126e"></script>
+  <script src="app.js?v=20261126e"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -197,7 +197,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20261126d', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20261126e', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });

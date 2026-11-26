@@ -473,7 +473,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
      화면이 작은 폰에서는 아래 한계값까지만 줄어들어 글씨가 읽히는 선을 지킨다. */
   --rows: 6;
   --cell-h: clamp(56px, calc((100dvh - 184px - (var(--rows) - 1) * 3px) / var(--rows)), 120px);
-  --cell-shift-h: clamp(16px, calc(var(--cell-h) * .22), 27px);
+  --cell-shift-h: 17px;   /* 칸이 커져도 근무 칩 높이는 그대로 — 늘어난 자리는 메모가 쓴다 */
   --cell-row-gap: 4px;
   display:grid;
   grid-template-columns: repeat(7,1fr);
@@ -692,7 +692,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   .team-item{ min-height:58px; padding:7px 6px; }
   .grid{
     --cell-h: clamp(52px, calc((100dvh - 172px - (var(--rows) - 1) * 2px) / var(--rows)), 108px);
-    --cell-row-gap:3px; gap:2px;
+    --cell-shift-h:16px; --cell-row-gap:3px; gap:2px;
   }
   .cell{ border-radius:6px; padding-inline:2px; }
   .badge{ font-size:8.5px; }
