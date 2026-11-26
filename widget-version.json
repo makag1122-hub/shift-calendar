@@ -1,6 +1,6 @@
 {
-  "versionCode": 27,
-  "versionName": "1.24.0",
+  "versionCode": 28,
+  "versionName": "1.24.1",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "홈 화면 위젯이 오피스조(O조)까지 다섯 개 조를 보여줍니다. 조 비교 띠가 다섯 줄로 늘었고, 앱에서 O조를 보고 있으면 위젯도 O조로 맞춰집니다. 예전에는 O조를 모르고 A조로 되돌려 엉뚱한 근무를 보여줄 수 있었는데 그 문제도 함께 고쳤습니다."
+  "notes": "조 순서를 O조(오피스조)부터로 바꿨습니다. 앱과 위젯 모두 O조가 맨 앞에 나옵니다."
 }

@@ -15,7 +15,7 @@ const BASE_DATE = '2026-06-25';
 const BASE_PATTERN_START = '2026-06-09'; // 2026-06-25 = A조 GY 4일차
 const SHIFT_GROUPS = ['A','B','C','D'];          // 20일 주기로 도는 교대조
 const OFFICE_GROUP = 'O';                        // 오피스조: 주기 없이 달력(월~금)으로 정해짐
-const GROUPS = [...SHIFT_GROUPS, OFFICE_GROUP];
+const GROUPS = [OFFICE_GROUP, ...SHIFT_GROUPS];   // 기본 조이므로 맨 앞
 const GROUP_OFFSETS = { A:0, B:5, C:10, D:15 };  // 오피스조는 주기를 쓰지 않아 오프셋이 없다
 function emptyGroupMap(){ return Object.fromEntries(GROUPS.map(g => [g, {}])); }
 
@@ -326,7 +326,7 @@ function patternShiftFor(dateStr){
   return idx === null ? null : state.pattern.cycle[idx];
 }
 function st(key){ return key ? state.shiftTypes[key] : null; }
-function normalizeGroup(group){ return GROUPS.includes(group) ? group : 'A'; }
+function normalizeGroup(group){ return GROUPS.includes(group) ? group : OFFICE_GROUP; }
 function isOfficeGroup(group){ return normalizeGroup(group) === OFFICE_GROUP; }
 function currentGroup(){ return normalizeGroup(state.activeGroup); }
 function groupOffset(group){ return GROUP_OFFSETS[normalizeGroup(group)] || 0; }
@@ -433,6 +433,12 @@ function shiftDayText(dateStr, group){
   return n ? `${n}일차` : '';
 }
 function isNextDay(t){ return !!(t && t.start && t.end && t.end <= t.start); } // 예: 22:00 → 06:00
+/* 조 카드는 한 줄에 다섯이라 칸이 좁다. 공백을 뺀 짧은 꼴로 적고 전체는 title에 둔다. */
+function compactTime(t){
+  if(!t) return '';
+  if(t.start) return `${t.start}~${t.end}`;
+  return (t.kind === 'work') ? '근무' : '쉬는 날';
+}
 function timeText(t){
   if(!t) return '';
   if(t.start) return `${t.start} ~ ${t.end}${isNextDay(t) ? ' (익일)' : ''}`;
@@ -606,22 +612,25 @@ function renderTeamBoard(){
       <strong>${group}조</strong>
       <span class="team-shift">${t ? t.label : '미설정'}</span>
       <span class="team-day">${shiftDay}</span>
-      ${group===selected ? `<span class="team-time">${escapeHtml(timeText(t))}</span>` : ''}
+      ${group===selected ? `<span class="team-time" title="${escapeHtml(timeText(t))}">${escapeHtml(compactTime(t))}</span>` : ''}
     </button>`;
   }).join('');
-  const openNow = teamBoardOpen;
+  /* 펼침 여부는 class 하나로만 나타낸다. 접을 때 innerHTML을 다시 쓰면
+     새로 그려진 칸이 이미 목표 높이라 전환이 보이지 않으므로, 두 상태의 글자를
+     모두 넣어 두고 CSS로 하나만 보여 준다. 그래야 높이만 스르륵 움직인다. */
   const mine = st(shiftFor(today, selected));
-  el.classList.toggle('collapsed', !openNow);
+  el.classList.toggle('collapsed', !teamBoardOpen);
   el.innerHTML = `
-    <button class="team-head" id="teamToggle" type="button" aria-expanded="${openNow}" aria-controls="teamGrid">
+    <button class="team-head" id="teamToggle" type="button" aria-expanded="${teamBoardOpen}" aria-controls="teamGridWrap">
       <span class="team-head-main">
-        <span>${openNow ? `${GROUPS.join('/')} 오늘 배치` : '오늘 배치'}</span>
-        ${openNow ? '' : `<em class="team-head-peek">${selected}조 · ${mine ? escapeHtml(mine.label) : '미설정'}</em>`}
+        <span class="th-long">${GROUPS.join('/')} 오늘 배치</span>
+        <span class="th-short">오늘 배치</span>
+        <em class="team-head-peek">${selected}조 · ${mine ? escapeHtml(mine.label) : '미설정'}</em>
       </span>
       <b>오늘 · ${todayLabel}</b>
-      <span class="team-caret" aria-hidden="true">${openNow ? '▴' : '▾'}</span>
+      <span class="team-caret" aria-hidden="true">▾</span>
     </button>
-    <div class="team-grid" id="teamGrid"${openNow ? '' : ' hidden'}>${items}</div>`;
+    <div class="team-grid-wrap" id="teamGridWrap"><div class="team-grid">${items}</div></div>`;
 }
 
 function renderAllGroupsCalendar(){
@@ -861,7 +870,14 @@ let teamBoardOpen = (()=>{
 function toggleTeamBoard(){
   teamBoardOpen = !teamBoardOpen;
   try{ localStorage.setItem(TEAM_BOARD_KEY, teamBoardOpen ? 'open' : 'closed'); }catch(e){}
-  renderTeamBoard();
+  /* 다시 그리지 않고 클래스만 바꾼다 — 같은 칸이 그대로 남아야 높이가 움직인다. */
+  const el = $('teamBoard');
+  if(!el) return;
+  el.classList.toggle('collapsed', !teamBoardOpen);
+  const toggle = $('teamToggle');
+  if(toggle) toggle.setAttribute('aria-expanded', String(teamBoardOpen));
+  const wrap = $('teamGridWrap');
+  if(wrap) wrap.setAttribute('aria-hidden', String(!teamBoardOpen));
 }
 
 let androidWidgetTimer = null;

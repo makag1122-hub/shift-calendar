@@ -61,7 +61,7 @@ final class CalendarWidgetRenderer {
      * 비교 위젯이 그리는 조 목록입니다. A~D는 20일 주기 교대조, O는 달력으로 정해지는
      * 오피스조(월~금 오피스 · 주말·공휴일 휴무)입니다. 웹앱의 GROUPS와 같은 순서입니다.
      */
-    private static final String[] GROUPS = {"A", "B", "C", "D", "O"};
+    private static final String[] GROUPS = {"O", "A", "B", "C", "D"};
     /** 앱의 기본 선택 조와 같은 오피스조입니다. 저장된 조와 스냅샷이 모두 없을 때만 씁니다. */
     static final String DEFAULT_GROUP = "O";
     private static final int COLOR_BRAND = Color.rgb(79, 70, 229);

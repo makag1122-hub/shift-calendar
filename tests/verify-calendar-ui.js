@@ -82,8 +82,32 @@ assert(
   'A/B/C/D 오늘 배치 머리글에 오늘 날짜가 없습니다.'
 );
 assert(
-  app.includes('<span class="team-time">${escapeHtml(timeText(t))}</span>'),
-  '선택한 조 카드에 오늘 근무 시간이 없습니다.'
+  app.includes('class="team-time" title="${escapeHtml(timeText(t))}">${escapeHtml(compactTime(t))}')
+    && app.includes('function compactTime(t)'),
+  '선택한 조 카드에 오늘 근무 시간이 없습니다. (좁은 칸용 짧은 꼴 + 전체는 title)'
+);
+
+/* ---------- 오늘 배치: 한 줄에 다섯 조 · 스르륵 접기 ---------- */
+assert(
+  !/@media[^{]*\{\s*\.team-grid\{[^}]*grid-template-columns/.test(css),
+  '좁은 화면에서 조 카드가 여러 줄로 접히고 있습니다.'
+);
+assert(
+  css.includes('.team-grid-wrap{') && css.includes('grid-template-rows:0fr'),
+  '오늘 배치가 높이 전환 없이 즉시 사라집니다(스르륵 접히지 않습니다).'
+);
+assert(
+  app.includes('/* 다시 그리지 않고 클래스만 바꾼다')
+    && app.includes("if(toggle) toggle.setAttribute('aria-expanded'"),
+  '접을 때 다시 그려서 전환이 보이지 않습니다.'
+);
+assert(
+  css.includes('@media (prefers-reduced-motion: reduce)'),
+  '움직임을 줄이도록 설정한 사람을 위한 처리가 없습니다.'
+);
+assert(
+  app.includes('const GROUPS = [OFFICE_GROUP, ...SHIFT_GROUPS];'),
+  '기본 조(O조)가 첫 번째 자리에 있지 않습니다.'
 );
 assert(
   !app.includes('<b>${BASE_DATE} 기준</b>'),

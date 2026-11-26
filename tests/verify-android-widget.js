@@ -99,7 +99,7 @@ assert(renderer.includes('renderWeek('), '주간 비교 위젯 렌더링이 없�
 assert(renderer.includes('drawWeekGroups('), '주간 조별 비교 렌더링이 없습니다.');
 
 /* ---------- 위젯이 아는 조 목록 ----------
-   웹앱에 O조(오피스조)가 생겼습니다. 위젯이 A~D만 알면 홈 화면에서는 O조가 보이지 않고,
+   웹앱의 조 목록·순서와 같아야 합니다. 위젯이 A~D만 알면 홈 화면에서는 O조가 보이지 않고,
    내 조가 O조인 사람은 비교 띠에서 자기 줄을 찾을 수 없습니다. */
 const rendererGroups = (() => {
   const found = renderer.match(/String\[\] GROUPS = \{([^}]*)\}/);
@@ -107,8 +107,8 @@ const rendererGroups = (() => {
   return found[1].split(',').map(part => part.trim().replace(/"/g, '')).filter(Boolean);
 })();
 assert(
-  rendererGroups.join(',') === 'A,B,C,D,O',
-  `위젯 조 목록이 웹앱(A·B·C·D·O)과 다릅니다: ${rendererGroups.join(',')}`
+  rendererGroups.join(',') === 'O,A,B,C,D',
+  `위젯 조 목록이 웹앱(O·A·B·C·D)과 다릅니다: ${rendererGroups.join(',')}`
 );
 assert(
   Object.keys(payload.months['2026-08']).join(',') === rendererGroups.join(','),
