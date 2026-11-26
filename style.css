@@ -472,8 +472,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
      줄 사이 간격까지 빼고 나눠, 첫 화면이 달력으로 꽉 차되 넘치지는 않게 한다.
      화면이 작은 폰에서는 아래 한계값까지만 줄어들어 글씨가 읽히는 선을 지킨다. */
   --rows: 6;
-  --cell-h: clamp(56px, calc((100dvh - 184px - (var(--rows) - 1) * 3px) / var(--rows)), 98px);
-  --cell-shift-h: clamp(16px, calc(var(--cell-h) * .2), 23px);
+  --cell-h: clamp(56px, calc((100dvh - 184px - (var(--rows) - 1) * 3px) / var(--rows)), 120px);
+  --cell-shift-h: clamp(16px, calc(var(--cell-h) * .22), 27px);
   --cell-row-gap: 4px;
   display:grid;
   grid-template-columns: repeat(7,1fr);
@@ -691,7 +691,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   .team-grid{ gap:5px; }
   .team-item{ min-height:58px; padding:7px 6px; }
   .grid{
-    --cell-h: clamp(52px, calc((100dvh - 172px - (var(--rows) - 1) * 2px) / var(--rows)), 92px);
+    --cell-h: clamp(52px, calc((100dvh - 172px - (var(--rows) - 1) * 2px) / var(--rows)), 108px);
     --cell-row-gap:3px; gap:2px;
   }
   .cell{ border-radius:6px; padding-inline:2px; }
