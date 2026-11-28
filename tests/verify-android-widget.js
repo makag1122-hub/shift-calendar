@@ -809,5 +809,40 @@ assert(
   'Play 출시 노트를 widget-version.json 에서 만들지 않습니다.'
 );
 
+/* ---------- 달력 줄 수 (사용자 신고 2026-11-28: 위젯 날짜 칸에 공란이 남음) ----------
+   6으로 박아 두면 5줄짜리 달에서 맨 아래 한 줄이 통째로 비어, 날짜 칸이
+   위젯 높이를 다 쓰지 못한다. 그 달이 실제로 쓰는 줄 수로 나눠야 한다. */
+assert(
+  renderer.includes('private static int monthRows('),
+  '위젯이 그 달의 실제 줄 수를 세지 않습니다.'
+);
+assert(
+  !/\/\s*\(?float\)?\s*ROWS/.test(renderer) && !/ROWS\s*;/.test(renderer),
+  '위젯 달력이 아직 줄 수를 6으로 박아 쓰고 있습니다.'
+);
+assert(
+  (renderer.match(/monthRows\(firstColumn, daysInMonth\)/g) || []).length === 2,
+  '두 월간 위젯(4×4 · 6×7) 모두가 실제 줄 수를 쓰지는 않습니다.'
+);
+/* 줄 수 계산이 맞는지 — 2026년 열두 달로 확인한다. */
+const monthRows = (firstColumn, daysInMonth) => Math.ceil((firstColumn + daysInMonth) / 7);
+for(let m = 0; m < 12; m++){
+  const firstColumn = new Date(2026, m, 1).getDay();
+  const daysInMonth = new Date(2026, m + 1, 0).getDate();
+  const rows = monthRows(firstColumn, daysInMonth);
+  assert(
+    rows >= 4 && rows <= 6,
+    `2026-${m + 1} 의 줄 수가 이상합니다: ${rows}`
+  );
+  assert(
+    rows * 7 >= firstColumn + daysInMonth,
+    `2026-${m + 1} 의 마지막 날이 줄 밖으로 나갑니다.`
+  );
+  assert(
+    (rows - 1) * 7 < firstColumn + daysInMonth,
+    `2026-${m + 1} 에 빈 줄이 남습니다 — 칸이 위젯 높이를 다 쓰지 못합니다.`
+  );
+}
+
 console.log('Android 월간 달력 위젯 데이터 검사 통과');
 console.log(`업데이트 버전 정보 일치: ${gradleVersionName} (versionCode ${gradleVersionCode})`);

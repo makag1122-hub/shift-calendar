@@ -92,7 +92,7 @@ assert(
 );
 assert(
   /\.tabbar\{[\s\S]*?position:fixed;[\s\S]*?\}/.test(css)
-    && css.includes('env(safe-area-inset-bottom)')
+    && css.includes('--safe-bottom: env(safe-area-inset-bottom')
     && /\.app\{[\s\S]*?padding: 0 12px calc\(var\(--tabbar-h\)/.test(css),
   '하단 탭이 고정되지 않았거나 본문 아래를 가립니다.'
 );
@@ -266,9 +266,10 @@ assert(
 );
 
 /* ---------- 칸 메모: 칸을 키운 만큼 더 보여 준다 (사용자 신고 2026-11-28) ---------- */
+const cellMemoTag = (app.match(/<span class="cell-memo[\s\S]{0,200}?<\/span>/) || [])[0] || '';
 assert(
-  app.includes('<span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memo)}</span>'),
-  '달력 칸 메모가 아직 18자에서 "…"로 잘립니다.'
+  cellMemoTag.includes('escapeHtml(memo)') && !/memoPreview\(/.test(cellMemoTag),
+  '달력 칸 메모가 글자 수로 잘려 들어갑니다 — 칸을 키운 만큼 보여 줘야 합니다.'
 );
 assert(
   css.includes('-webkit-line-clamp:var(--memo-lines, 2);') && app.includes('function syncMemoLines()'),
@@ -452,6 +453,53 @@ assert(
 assert(
   !app.includes('!androidBridge() || !window.Sync || !Sync.isOn()'),
   '참여자 목록이 아직 Android 앱에서만 보입니다.'
+);
+
+/* ---------- 화면 가장자리 띠 (사용자 신고 2026-11-28: 갤럭시에서 '공유중' 라벨에 달력이 잘림) ----------
+   달력 칸 높이를 100dvh 에서 끌어오면서 상태표시줄이 덮는 두께를 빼지 않으면,
+   그 띠가 두꺼워질 때(화면 공유·녹화 중) 달력 아래가 화면 밖으로 밀린다. */
+assert(
+  /--safe-top:\s*env\(safe-area-inset-top/.test(css)
+  && /--safe-bottom:\s*env\(safe-area-inset-bottom/.test(css),
+  '화면 가장자리 띠 두께에 이름이 붙어 있지 않습니다.'
+);
+const cellHeightRules = css.split(/\r?\n/).filter(line => /--cell-h:\s*clamp\(/.test(line));
+assert(cellHeightRules.length === 2, `--cell-h 선언이 2개가 아닙니다: ${cellHeightRules.length}`);
+cellHeightRules.forEach(rule => assert(
+  rule.includes('var(--safe-top)') && rule.includes('var(--safe-bottom)'),
+  `달력 칸 높이가 화면 가장자리 띠를 빼지 않습니다 — 공유중 라벨이 뜨면 아래가 잘립니다: ${rule.trim()}`
+));
+assert(
+  !/env\(safe-area-inset-(top|bottom)\)/.test(css.replace(/--safe-(top|bottom):[^;]+;/g, '')),
+  '가장자리 띠를 토큰 말고 직접 읽는 곳이 남아 있습니다 — 두 곳의 값이 어긋납니다.'
+);
+
+/* ---------- 며칠에 걸친 일정 (사용자 요청 2026-11-28) ----------
+   1월 1일~12일 해외여행처럼 이어진 일정은 칸마다 따로 뜨지 않고 한 띠로 보여야 한다. */
+assert(app.includes('function memoRunAt('), '이어진 메모를 알아보는 처리가 없습니다.');
+assert(
+  app.includes('memo-run') && app.includes('joins-left') && app.includes('joins-right'),
+  '이어진 일정이 띠로 이어지지 않습니다.'
+);
+/* 가운데 칸에까지 같은 글을 되풀이하면 이어진 것으로 보이지 않는다. */
+assert(
+  app.includes("showsText ? escapeHtml(memo) : ''"),
+  '이어진 일정의 가운데 칸에도 같은 글이 되풀이됩니다.'
+);
+assert(
+  /dateStr === run\.start \|\| dow === 0/.test(app),
+  '주가 바뀌는 칸에서 일정 이름을 다시 적지 않습니다.'
+);
+/* 띠가 칸 사이 틈을 건너가지 못하면 끊겨 보인다. */
+const bandRules = css.slice(css.indexOf('.cell-memo.memo-run{'), css.indexOf('.cell-memo-slot{'));
+assert(
+  /z-index:\s*1/.test(bandRules) && /margin-left:\s*-\d/.test(bandRules) && /margin-right:\s*-\d/.test(bandRules),
+  '이어진 띠가 칸 사이에서 끊깁니다(음수 여백과 z-index 가 필요합니다).'
+);
+/* 메모 탭에서도 한 줄로 묶여야 한다. */
+assert(
+  app.includes('memo-span') && /shortDateText\(run\.start\)/.test(app),
+  '메모 탭에서 여러 날짜리 일정이 날마다 따로 나열됩니다.'
 );
 
 console.log('달력 카드 정보 구조 검사 통과');

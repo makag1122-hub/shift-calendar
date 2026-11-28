@@ -783,6 +783,25 @@ function renderCalendar(){
   /* 가로 비교표는 보고 있을 때만 그린다 — 숨어 있으면 '오늘로 가로 스크롤'이 먹지 않는다. */
   if(activeTab === 'groups') renderAllGroupsCalendar();
   applyTab();
+  /* 달력 탭이 이제 막 보이게 됐을 수도 있다 — 숨어 있는 동안에는 높이를 잴 수 없다. */
+  syncCellHeight();
+  syncMemoLines();
+}
+
+/* 며칠에 걸친 일정은 "1월 1일~12일 해외여행"처럼 한 덩어리로 보여야 한다.
+   기간 메모는 같은 글이 날마다 똑같이 저장되므로(saveMemoValue), 앞뒤 날의 글이
+   같은지만 보면 이어진 띠인지 알 수 있다. 저장 방식은 건드리지 않는다 —
+   공유방에 올라간 메모와 지난 데이터가 그대로 살아 있어야 하기 때문이다. */
+function memoRunAt(memos, dateStr){
+  const memo = (memos[dateStr] || '').trim();
+  if(!memo) return null;
+  const same = ds => (memos[ds] || '').trim() === memo;
+  let start = dateStr;
+  while(same(addDays(start, -1))) start = addDays(start, -1);
+  let end = dateStr;
+  while(same(addDays(end, 1))) end = addDays(end, 1);
+  const length = Math.round((parseYmd(end) - parseYmd(start)) / 86400000) + 1;
+  return { memo, start, end, length };
 }
 
 function renderMonthGrid(group){
@@ -816,15 +835,30 @@ function renderMonthGrid(group){
       : '';
     const memo = memos[dateStr];
     const hasMemo = !!memo;
+    /* 이어진 일정은 띠 하나로 보이게 한다. 글은 띠가 시작하는 칸과 주가 바뀌는
+       칸(일요일)에만 쓴다 — 날마다 되풀이하면 읽기 어렵고 이어진 것으로 안 보인다. */
+    const run = hasMemo ? memoRunAt(memos, dateStr) : null;
+    const runLong = !!run && run.length > 1;
+    const joinsLeft = runLong && dateStr !== run.start && dow !== 0;
+    const joinsRight = runLong && dateStr !== run.end && dow !== 6;
+    const showsText = !runLong || dateStr === run.start || dow === 0;
+    /* 띠가 칸 밖(칸 사이 틈)까지 나가야 하므로, 그 칸만 잘라내지 않게 표시해 둔다. */
+    const joinCls = (joinsLeft || joinsRight) ? ' memo-joins' : '';
+    const runCls = runLong
+      ? ` memo-run${joinsLeft ? ' joins-left' : ''}${joinsRight ? ' joins-right' : ''}${showsText ? '' : ' run-quiet'}`
+      : '';
+    const runTitle = runLong
+      ? `${shortDateText(run.start)}~${shortDateText(run.end)} · ${run.memo}`
+      : memo;
     const special = isSpecialSchedule(dateStr, group) && !isOverride(dateStr, group) && !isBaseline(dateStr, group);
     const longRun = workRunTotalFor(dateStr, group) >= 6;
     const selCls = `${rangeAnchor===dateStr ? ' range-anchor' : ''}${rangeSet && rangeSet.has(dateStr) ? ' range-sel' : ''}`;
     const isFam = dateStr === famDayStr;
-    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${hol?' is-holiday':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
+    html += `<button class="cell ${dateStr===todayS?'today':''}${hasMemo?' has-memo':''}${hasTag?' has-tag':''}${hol?' is-holiday':''}${special?' is-special':''}${longRun?' long-run':''}${isFam?' is-familyday':''}${joinCls}${selCls}" data-date="${dateStr}" style="--tint:${tint}">
       <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}${isFam ? `<span class="fam-mark" title="${escapeHtml(famHint)}">패데</span>` : ''}</span>
       ${badge}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
-      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memo)}</span>` : '<span class="cell-memo-slot" aria-hidden="true"></span>'}
+      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo${runCls}" title="${escapeHtml(runTitle)}">${showsText ? escapeHtml(memo) : ''}</span>` : '<span class="cell-memo-slot" aria-hidden="true"></span>'}
     </button>`;
   }
   const gridEl = $('grid');
@@ -832,7 +866,45 @@ function renderMonthGrid(group){
      그 달이 실제로 쓰는 줄 수를 넘겨, 남는 높이를 칸이 나눠 갖게 한다. */
   gridEl.style.setProperty('--rows', Math.ceil((startDow + daysInMonth) / 7));
   gridEl.innerHTML = html;
+  syncCellHeight();
   syncMemoLines();
+}
+
+/* 달력이 화면 아래로 넘치지 않게 칸 높이를 실제로 재서 맞춘다.
+
+   CSS 의 --cell-h 는 머리글·월 이동·요일줄이 늘 224px 쯤 된다고 치고 계산한다.
+   그 가정이 틀어지면 달력 아래가 하단 탭에 가려진다 — 갤럭시에서 화면 공유 중에
+   상단 '공유중' 라벨이 뜨면 화면이 그만큼 짧아져 실제로 그렇게 된다
+   (사용자 신고 2026-11-28). 안드로이드 앱은 안전영역을 WebView 바깥에서 처리하므로
+   CSS 의 env(safe-area-inset-top) 으로는 그 변화를 알 수 없다.
+
+   그래서 가정을 고치는 대신, 그린 뒤에 넘친 만큼을 재서 그만큼만 줄인다.
+   글자가 안 읽힐 만큼 작아지면 거기서 멈추고 넘치게 둔다 — 그때는 스크롤해서 본다. */
+const MIN_CELL_H = 44;
+function syncCellHeight(){
+  const grid = $('grid');
+  const panel = $('singleCalendar');
+  const tabbar = $('tabbar');
+  if(!grid || !panel || panel.hidden) return;
+  grid.style.removeProperty('--cell-h');   // 먼저 CSS 계산값으로 되돌린다(계속 줄어들지 않게)
+  const rows = Number(getComputedStyle(grid).getPropertyValue('--rows')) || 6;
+  const limit = (tabbar && !tabbar.hidden ? tabbar.getBoundingClientRect().top : window.innerHeight) - 6;
+  const overflow = panel.getBoundingClientRect().bottom - limit;
+  if(overflow <= 0 || rows < 1) return;
+  /* 칸 높이에서 직접 뺀다. 달력 전체 높이를 줄 수로 나누면 칸 사이 간격까지
+     칸 몫으로 쳐서 덜 줄어든다 — 그래서 한 번에 안 맞았다. */
+  const cell = grid.querySelector('.cell');
+  if(!cell) return;
+  const cellHeight = cell.getBoundingClientRect().height;
+  const next = Math.floor(cellHeight - overflow / rows);
+  if(next < MIN_CELL_H) return;   // 더 줄이면 글씨가 안 읽힌다 — 넘치게 두고 스크롤로 본다
+  grid.style.setProperty('--cell-h', `${next}px`);
+  /* 한 번에 딱 맞지 않을 수 있다(칸 높이 말고도 반올림·여백이 섞여 있다).
+     다음 프레임에 한 번 더 재서 맞춘다. 두 번째 패스에서는 넘치지 않으면 그냥 끝난다. */
+  if(!syncCellHeight.again){
+    syncCellHeight.again = true;
+    requestAnimationFrame(()=>{ syncCellHeight.again = false; syncCellHeight(); });
+  }
 }
 
 /* 칸에 들어가는 메모 줄 수 — 칸 높이를 재서 CSS에 알려 준다.
@@ -878,9 +950,12 @@ function renderMemoPanel(){
     const dateStr = `${ym}-${pad(d)}`;
     const memo = (memos[dateStr] || '').trim();
     if(!memo) continue;
-    const key = shiftFor(dateStr, group);
-    const t = st(key);
-    items.push({ dateStr, memo, shift: t });
+    const run = memoRunAt(memos, dateStr);
+    /* 며칠에 걸친 일정은 한 줄로 묶는다 — 12일짜리 여행이 12줄로 늘어서면
+       이번 달에 할 일이 몇 가지인지 알 수 없다. 시작한 날에만 적되, 지난달부터
+       이어져 온 일정은 이 달 첫날에 적어 목록에서 통째로 사라지지 않게 한다. */
+    if(run.length > 1 && dateStr !== run.start && d !== 1) continue;
+    items.push({ dateStr, memo, shift: st(shiftFor(dateStr, group)), run });
   }
 
   const badge = $('memoTabBadge');
@@ -911,11 +986,17 @@ function renderMemoPanel(){
       <b>${items.length}개</b>
     </div>
     <div class="memo-list">
-      ${items.map(({ dateStr, memo, shift }) => {
-        const color = shift ? shift.color : '#94a3b8';
-        const label = shift ? (shift.short || shift.label) : '-';
-        return `<button class="memo-item" data-date="${dateStr}" style="--c:${color}">
-          <span class="memo-date">${shortDateText(dateStr)}</span>
+      ${items.map(({ dateStr, memo, shift, run }) => {
+        const spans = run.length > 1;
+        const color = spans ? 'var(--brand)' : (shift ? shift.color : '#94a3b8');
+        /* 여러 날짜리는 근무 배지 대신 며칠인지 적는다 — 시작한 날의 근무 하나만
+           보여 줘 봤자 그 기간 전체를 설명하지 못한다. */
+        const label = spans ? `${run.length}일` : (shift ? (shift.short || shift.label) : '-');
+        const when = spans
+          ? `${shortDateText(run.start)} ~ ${shortDateText(run.end)}`
+          : shortDateText(dateStr);
+        return `<button class="memo-item${spans ? ' memo-span' : ''}" data-date="${dateStr}"${spans ? ` data-range-start="${run.start}" data-range-end="${run.end}"` : ''} style="--c:${color}">
+          <span class="memo-date">${when}</span>
           <span class="memo-shift">${label}</span>
           <span class="memo-text">${escapeHtml(memo)}</span>
         </button>`;
@@ -1194,6 +1275,12 @@ function openDaySheet(dateStr){
   if(runTotal >= 6) infoParts.push(`<span class="sh-run">🔺 ${runTotal}일 연속근무 (오늘 ${workRunDayFor(dateStr, group)}일차)</span>`);
   if(ti) infoParts.push(`<b>${tagLabel(ti)}</b>`);
   if(isFamilyDayCandidate(dateStr, group)) infoParts.push(`<span class="sh-fam">${familyDayNote(group)}</span>`);
+  /* 며칠에 걸친 일정 중 하루를 연 것이라면 그렇다고 알려 준다 — 모르고 여기서 메모를
+     고치면 그 하루만 달라져 기간이 쪼개진다. 기간째 고치려면 메모 탭에서 누르면 된다. */
+  const dayRun = memoRunAt(memosFor(group), dateStr);
+  if(dayRun && dayRun.length > 1){
+    infoParts.push(`<span class="sh-span">🔗 ${shortDateText(dayRun.start)}~${shortDateText(dayRun.end)} ${dayRun.length}일 일정 중 하루 · 메모는 이 하루만 바뀝니다</span>`);
+  }
   if(infoParts.length){ sh.hidden = false; sh.innerHTML = infoParts.join(' '); }
   else { sh.hidden = true; sh.innerHTML = ''; }
   const ro = !canEdit();
@@ -2252,7 +2339,14 @@ function wire(){
   });
   $('memoPanel').addEventListener('click', (e)=>{
     const item = e.target.closest('[data-date]');
-    if(item) openDaySheet(item.dataset.date);
+    if(!item) return;
+    /* 여러 날짜리 일정은 한 줄로 묶어 보여 주므로, 누르면 그 기간 전체를 연다.
+       하루만 열면 거기서 고친 내용이 그 하루에만 들어가 기간이 쪼개진다. */
+    if(item.dataset.rangeStart && item.dataset.rangeEnd){
+      openRangeSheet(item.dataset.rangeStart, item.dataset.rangeEnd);
+      return;
+    }
+    openDaySheet(item.dataset.date);
   });
 
   // 설정 열기/닫기
@@ -2408,9 +2502,14 @@ applyTheme();            // 머리 스크립트가 정한 테마에 theme-color 
 renderAll();
 wire();
 /* 화면을 돌리거나 창 크기가 바뀌면 칸 높이가 달라지므로 메모 줄 수를 다시 센다. */
+const syncLayout = ()=>{ syncCellHeight(); syncMemoLines(); };
 if(typeof ResizeObserver === 'function'){
   new ResizeObserver(()=> syncMemoLines()).observe($('grid'));
-}else{
-  window.addEventListener('resize', syncMemoLines);
 }
+/* 쓸 수 있는 높이가 달라지는 때를 본다. 문서 자체를 관찰하면 syncCellHeight 가
+   바꾼 높이에 자기가 다시 반응해 맴돌 수 있으므로, 창 크기 변화만 듣는다.
+   상단 '공유중' 라벨이 떴다 사라지면 여기로 들어온다. */
+window.addEventListener('resize', syncLayout);
+if(window.visualViewport) window.visualViewport.addEventListener('resize', syncLayout);
+window.addEventListener('orientationchange', ()=> setTimeout(syncLayout, 150));
 if(window.Sync && Sync.init){ renderSyncBanner(); renderInstallBanner(); Sync.init(); }  // 공유 링크 감지 + 실시간 연결

@@ -33,7 +33,13 @@ final class CalendarWidgetRenderer {
     private static final int MAX_WEEK_HEIGHT = 290;
     private static final float RENDER_SCALE = 2.5f;
     private static final int WEEK_HEIGHT = 32;
-    private static final int ROWS = 6;
+    /**
+     * 그 달이 실제로 쓰는 줄 수입니다. 6으로 박아 두면 5줄짜리 달에서 맨 아래 한 줄이
+     * 통째로 빈 채 남아, 날짜 칸이 위젯 높이를 다 쓰지 못합니다(사용자 신고 2026-11-28).
+     */
+    private static int monthRows(int firstColumn, int daysInMonth) {
+        return (int) Math.ceil((firstColumn + daysInMonth) / 7.0);
+    }
     /*
      * 6행 7열 큰 달력 위젯입니다. 칸마다 메모를 두 줄까지 보여 주려면
      * 기본 월간 위젯(560)보다 넓어야 합니다.
@@ -402,7 +408,8 @@ final class CalendarWidgetRenderer {
         int firstColumn = first.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
         int daysInMonth = first.getActualMaximum(Calendar.DAY_OF_MONTH);
         float columnWidth = width / 7f;
-        float rowHeight = (height - MONTH_ALL_HEADER_HEIGHT) / ROWS;
+        float rowHeight =
+                (height - MONTH_ALL_HEADER_HEIGHT) / (float) monthRows(firstColumn, daysInMonth);
 
         Calendar today = Calendar.getInstance();
         boolean currentMonth =
@@ -1209,7 +1216,7 @@ final class CalendarWidgetRenderer {
         int firstColumn = first.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY;
         int daysInMonth = first.getActualMaximum(Calendar.DAY_OF_MONTH);
         float columnWidth = WIDTH / 7f;
-        float rowHeight = (height - WEEK_HEIGHT) / (float) ROWS;
+        float rowHeight = (height - WEEK_HEIGHT) / (float) monthRows(firstColumn, daysInMonth);
 
         Calendar today = Calendar.getInstance();
         boolean currentMonth =
