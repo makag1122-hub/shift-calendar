@@ -13,7 +13,20 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192-v2.png" />
   <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
-  <link rel="stylesheet" href="style.css?v=20261128a" />
+  <link rel="stylesheet" href="style.css?v=20261128b" />
+  <script>
+    /* 화면이 그려지기 전에 테마를 정한다. app.js 를 기다리면 어두운 화면에서
+       흰 화면이 한 번 번쩍인다. '자동'이면 기기 설정을 따른다. */
+    (function(){
+      var saved;
+      try{ saved = localStorage.getItem('shiftcal.theme'); }catch(e){}
+      var mode = (saved === 'light' || saved === 'dark') ? saved : 'auto';
+      var dark = mode === 'dark' || (mode === 'auto'
+        && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.documentElement.dataset.themeMode = mode;
+    })();
+  </script>
 </head>
 <body>
   <div class="app">
@@ -157,6 +170,12 @@
     <div class="modal-body">
 
       <section class="set-section">
+        <h3>화면 테마</h3>
+        <p class="set-desc"><b>자동</b>은 휴대폰 설정(다크 모드)을 그대로 따릅니다. 밤 근무 때 눈이 부시면 <b>어둡게</b>를 고르세요.</p>
+        <div class="set-theme-pick" id="setThemePick"></div>
+      </section>
+
+      <section class="set-section">
         <h3>내 조</h3>
         <p class="set-desc">달력·메모·요약이 모두 이 조를 기준으로 보입니다. <b>O조(오피스조)</b>는 20일 주기를 쓰지 않고 월~금 오피스 근무(09:00~18:00), 주말·공휴일은 휴무입니다. 화면 위쪽 <b>내 조</b> 줄에서도 바로 바꿀 수 있어요.</p>
         <div class="set-group-pick" id="setGroupPick"></div>
@@ -214,9 +233,9 @@
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20261128a"></script>
-  <script src="sync.js?v=20261128a"></script>
-  <script src="app.js?v=20261128a"></script>
+  <script src="sync-config.js?v=20261128b"></script>
+  <script src="sync.js?v=20261128b"></script>
+  <script src="app.js?v=20261128b"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -226,7 +245,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20261128a', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20261128b', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });

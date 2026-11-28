@@ -129,8 +129,47 @@ assert(
   '설정의 내 조 선택이 동작하지 않습니다.'
 );
 assert(
-  /renderSettings\(\)\{\s*renderGroupPick\(\);/.test(app),
+  /renderSettings\(\)\{[\s\S]{0,120}renderGroupPick\(\);/.test(app),
   '설정을 열 때 내 조 선택이 현재 값으로 그려지지 않습니다.'
+);
+
+/* ---------- 화면 테마(밝게 · 어둡게 · 자동) ---------- */
+assert(
+  css.includes(':root[data-theme="dark"]{') && css.includes('color-scheme: dark;'),
+  '어두운 화면 팔레트가 없습니다.'
+);
+/* 머리 스크립트가 첫 칠하기 전에 테마를 정하지 않으면 어두운 화면이 흰색으로 번쩍인다. */
+assert(
+  /<head>[\s\S]*?document\.documentElement\.dataset\.theme[\s\S]*?<\/head>/.test(index)
+    && index.includes("localStorage.getItem('shiftcal.theme')"),
+  '첫 칠하기 전에 테마를 정하는 머리 스크립트가 없습니다.'
+);
+assert(
+  index.includes('id="setThemePick"') && app.includes('function renderThemePick()')
+    && app.includes("$('setThemePick').addEventListener"),
+  '설정에서 화면 테마를 고를 수 없습니다.'
+);
+assert(
+  app.includes("prefers-color-scheme: dark") && app.includes("if(themeMode() === 'auto') applyTheme();"),
+  "'자동'일 때 기기 설정 변화를 따라가지 않습니다."
+);
+assert(
+  app.includes('meta[name="theme-color"]'),
+  '테마를 바꿔도 브라우저 주소창 색이 그대로입니다.'
+);
+/* 색을 토큰으로 돌리지 않고 박아 두면 어두운 화면에서 흰 상자가 그대로 남는다.
+   흰 바탕이 허용되는 곳은 QR 한 군데뿐이다. */
+const whiteBackgrounds = css
+  .split(/\r?\n/)
+  .filter(line => /background:\s*#fff\b/i.test(line) && !/QR/.test(line));
+assert(
+  whiteBackgrounds.length === 1 && /172px/.test(whiteBackgrounds[0]),
+  `어두운 화면에서 흰색으로 남는 바탕이 있습니다: ${whiteBackgrounds.join(' / ')}`
+);
+/* QR 만은 흰 바탕을 지켜야 카메라가 읽는다. */
+assert(
+  /\.sync-qr svg\{[\s\S]*?background:#fff;/.test(css),
+  'QR 바탕이 흰색이 아니면 카메라가 읽지 못합니다.'
 );
 
 /* ---------- 달력을 좌우로 밀어 달 넘기기 ---------- */

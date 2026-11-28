@@ -11,6 +11,15 @@
 const STORAGE_KEY = 'shiftcal.v2';
 const CALENDAR_VIEW_KEY = 'shiftcal.calendarView';   // 지난 버전의 '내 조/전체' 토글
 const TAB_KEY = 'shiftcal.tab';
+const THEME_KEY = 'shiftcal.theme';
+/* 화면 테마 — '자동'은 기기 설정(다크 모드)을 따라간다. index.html 의 머리 스크립트가
+   첫 칠하기 전에 같은 값을 읽어 data-theme 을 정해 두므로 여기서는 바꾸기만 하면 된다. */
+const THEMES = [
+  { key:'auto',  label:'자동',   note:'기기 설정' },
+  { key:'light', label:'밝게',   note:'항상 흰 화면' },
+  { key:'dark',  label:'어둡게', note:'항상 검은 화면' },
+];
+const THEME_COLORS = { light:'#18233f', dark:'#10131b' };
 /* 한 화면을 길게 밀어 보지 않고 네 갈래로 나눈다 — 달력 / 조 비교 / 메모 / 요약 */
 const TABS = ['calendar', 'groups', 'memo', 'info'];
 const TEAM_BOARD_KEY = 'shiftcal.teamBoardOpen';
@@ -601,6 +610,42 @@ const $ = (id) => document.getElementById(id);
 function renderWeekdays(){
   $('weekdays').innerHTML = WEEK.map((w,i)=>
     `<div class="wd ${i===0?'sun':''} ${i===6?'sat':''}">${w}</div>`
+  ).join('');
+}
+
+function themeMode(){
+  const saved = document.documentElement.dataset.themeMode;
+  return THEMES.some(t => t.key === saved) ? saved : 'auto';
+}
+
+function prefersDark(){
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+
+function applyTheme(){
+  const mode = themeMode();
+  const dark = mode === 'dark' || (mode === 'auto' && prefersDark());
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', dark ? THEME_COLORS.dark : THEME_COLORS.light);
+}
+
+function selectTheme(mode){
+  const next = THEMES.some(t => t.key === mode) ? mode : 'auto';
+  document.documentElement.dataset.themeMode = next;
+  try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+  applyTheme();
+  renderThemePick();
+}
+
+function renderThemePick(){
+  const box = $('setThemePick');
+  if(!box) return;
+  const mode = themeMode();
+  box.innerHTML = THEMES.map(t =>
+    `<button type="button" class="pick-theme${t.key===mode?' active':''}" data-theme-mode="${t.key}" aria-pressed="${t.key===mode}">
+      <strong>${t.label}</strong><span>${t.note}</span>
+    </button>`
   ).join('');
 }
 
@@ -1302,6 +1347,7 @@ function renderGroupPick(){
 }
 
 function renderSettings(){
+  renderThemePick();
   renderGroupPick();
   $('setShiftTypes').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
@@ -2175,6 +2221,17 @@ function wire(){
   });
 
   // 근무 종류: 추가/삭제(클릭) + 수정(입력)
+  $('setThemePick').addEventListener('click', (e)=>{
+    const button = e.target.closest('[data-theme-mode]');
+    if(button) selectTheme(button.dataset.themeMode);
+  });
+  /* '자동'으로 두었으면 기기 설정이 바뀌는 즉시 따라간다(밤에 자동 전환되는 폰). */
+  if(window.matchMedia){
+    const watcher = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = ()=>{ if(themeMode() === 'auto') applyTheme(); };
+    if(watcher.addEventListener) watcher.addEventListener('change', onChange);
+    else if(watcher.addListener) watcher.addListener(onChange);
+  }
   $('setGroupPick').addEventListener('click', (e)=>{
     const button = e.target.closest('[data-group]');
     if(!button) return;
@@ -2257,6 +2314,7 @@ function wire(){
 
 /* ---------- 시작 ---------- */
 renderWeekdays();
+applyTheme();            // 머리 스크립트가 정한 테마에 theme-color 까지 맞춘다
 renderAll();
 wire();
 /* 화면을 돌리거나 창 크기가 바뀌면 칸 높이가 달라지므로 메모 줄 수를 다시 센다. */
