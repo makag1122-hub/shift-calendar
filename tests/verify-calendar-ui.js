@@ -172,14 +172,62 @@ assert(
   'QR 바탕이 흰색이 아니면 카메라가 읽지 못합니다.'
 );
 
-/* ---------- 달력을 좌우로 밀어 달 넘기기 ---------- */
+/* ---------- 달력을 좌우로 밀어 달 넘기기 (사용자 신고 2026-11-28: 폰에서 안 밀림) ----------
+   세 가지가 각각 혼자서도 제스처를 막을 수 있다. 셋 다 지킨다. */
+assert(app.includes('swipeGuardUntil'), '달력을 좌우로 밀어 달을 넘길 수 없습니다.');
+
+/* 1) 미는 곳 — 달력 카드만이 아니라 월 제목 줄에서도 받아야 한다. */
+const swipeZone = (app.match(/SWIPE_ZONE\s*=\s*'([^']+)'/) || [])[1];
+assert(swipeZone, '스와이프를 받는 영역(SWIPE_ZONE)이 정의되어 있지 않습니다.');
 assert(
-  app.includes("const calendarPanel = $('singleCalendar');") && app.includes('swipeGuardUntil'),
-  '달력을 좌우로 밀어 달을 넘길 수 없습니다.'
+  swipeZone.includes('.month-nav') && swipeZone.includes('#singleCalendar'),
+  `달 제목 줄에서 밀면 반응하지 않습니다: ${swipeZone}`
+);
+
+/* 2) 기울기 — 엄지로 미는 자국은 호라서, 가로가 세로의 몇 배여야 한다는 조건을 두면
+      현실적인 궤적(가로 150·세로 110)이 걸러진다. 가로가 세로보다 길면 받는다. */
+assert(
+  !/Math\.abs\(dy\)\s*\*\s*[\d.]+/.test(app),
+  '스와이프 판정이 세로 이동에 배수를 곱해 비교합니다 — 엄지로 그리는 호가 거부됩니다.'
 );
 assert(
-  app.includes('if(Date.now() < swipeGuardUntil) return;'),
-  '달을 넘긴 직후 손을 뗀 자리의 날짜가 눌립니다.'
+  app.includes('Math.abs(dx) <= Math.abs(dy)'),
+  '가로가 세로보다 길면 받는 판정이 아닙니다.'
+);
+const swipeMin = Number((app.match(/SWIPE_MIN\s*=\s*(\d+)/) || [])[1]);
+assert(
+  swipeMin > 0 && swipeMin <= 50,
+  `스와이프 최소 거리가 깁니다(${swipeMin}px) — 짧게 미는 사람은 못 넘깁니다.`
+);
+
+/* 3) touch-action — 기본값이면 브라우저가 제스처를 스크롤로 가져가고,
+      가져가는 순간 pointermove 가 끊겨 스와이프가 통째로 사라진다. */
+['.month-nav{', '.calendar{'].forEach(selector => {
+  const block = css.slice(css.indexOf(selector), css.indexOf('}', css.indexOf(selector)));
+  assert(
+    css.includes(selector) && /touch-action:\s*pan-y/.test(block),
+    `${selector} 에 touch-action: pan-y 가 없습니다 — 폰에서 가로로 밀어도 반응하지 않습니다.`
+  );
+});
+
+/* 손을 뗄 때도 한 번 더 본다 — 터치에서 중간 pointermove 가 묶여 오는 경우가 있다. */
+assert(
+  /pointerup['"],\s*\(e\)=>\{\s*trySwipe\(e\)/.test(app),
+  '손을 뗄 때 스와이프를 다시 판정하지 않습니다.'
+);
+/* 민 직후의 click 은 통째로 막는다(달력 칸이 열리거나 달이 두 번 넘어가지 않게). */
+const clickGuard = (app.match(
+  /addEventListener\('click',\s*\(e\)=>\{[\s\S]*?\},\s*true\)/
+) || [])[0];
+assert(
+  clickGuard && clickGuard.includes('swipeGuardUntil') && clickGuard.includes('stopPropagation()'),
+  '민 직후의 click 을 막지 않아 날짜가 열리거나 달이 두 번 넘어갑니다.'
+);
+/* 막는 범위는 민 자리 안으로 한정해야 한다 — 화면 전체를 막으면 밀고 나서 바로
+   하단 탭을 누른 손가락이 무시된다(실제로 그렇게 되는 것을 보고 좁혔다). */
+assert(
+  clickGuard.includes('closest(SWIPE_ZONE)'),
+  '민 직후 화면 전체의 click 을 막고 있습니다 — 하단 탭이 눌리지 않습니다.'
 );
 
 /* ---------- 칸 메모: 칸을 키운 만큼 더 보여 준다 (사용자 신고 2026-11-28) ---------- */

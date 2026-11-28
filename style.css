@@ -295,6 +295,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
 .month-nav{
   display:flex; align-items:center; justify-content:space-between;
   margin-bottom: 7px;
+  /* 가로로 미는 동작은 달 넘기기다 — 브라우저가 스크롤로 가져가면
+     pointermove 가 끊겨 제스처가 통째로 사라진다. 세로만 내준다. */
+  touch-action: pan-y;
 }
 .month-title{
   border:none; background:transparent; font-size: 18px; font-weight: 800;
@@ -529,6 +532,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible{
   border-radius:var(--radius);
   box-shadow:var(--shadow);
   padding:8px 6px 8px;
+  /* .month-nav 와 같은 이유 — 가로 제스처는 달 넘기기로 쓴다. */
+  touch-action: pan-y;
 }
 .weekdays{ display:grid; grid-template-columns: repeat(7,1fr); margin-bottom: 4px; }
 .wd{ text-align:center; font-size: 12px; color: var(--ink-soft); padding: 4px 0; font-weight:600; }

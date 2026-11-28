@@ -2055,32 +2055,61 @@ function wire(){
   $('monthTitle').onclick = goToday;
 
   /* 달력을 좌우로 밀면 달이 넘어간다(캘린더 앱의 기본 동작).
-     위아래로 미는 것은 스크롤이므로, 가로로 더 많이 움직였을 때만 받는다. */
-  const calendarPanel = $('singleCalendar');
+
+     폰에서 이게 안 먹던 이유가 세 가지였다.
+
+     1) 밀 수 있는 곳이 달력 카드뿐이었다. 달을 넘기려는 사람은 달력 칸이 아니라
+        월 제목 줄에서도 민다. 그래서 두 곳 다 받는다.
+     2) 엄지로 미는 자국은 직선이 아니라 손목을 축으로 한 호다. "가로가 세로의
+        1.6배를 넘어야 한다"는 조건이 그 호를 걸러 냈다(가로 150·세로 110인
+        현실적인 궤적이 거부되는 것을 확인했다). 가로가 세로보다 길기만 하면 받는다.
+     3) touch-action 이 기본값이면 브라우저가 이 제스처를 스크롤로 가져가며,
+        가져가는 순간 pointermove 가 끊기고 pointercancel 이 온다. style.css 에서
+        이 두 곳만 pan-y 로 두어 세로는 브라우저, 가로는 우리가 받는다. */
+  const SWIPE_MIN = 48;
+  const SWIPE_ZONE = '.month-nav, #singleCalendar';
+  const swipeRoot = document.querySelector('.app') || document.body;
   let swipe = null;
-  /* 밀어서 달을 넘기면 달력을 다시 그리므로, 손을 뗀 자리의 새 칸이 눌리지 않게 막는다. */
+  /* 밀어서 달을 넘기면 달력을 다시 그리므로, 손을 뗀 자리가 눌리지 않게 막는다. */
   let swipeGuardUntil = 0;
-  calendarPanel.addEventListener('pointerdown', (e)=>{
-    if(e.pointerType === 'mouse' && e.button !== 0) return;
-    swipe = { x:e.clientX, y:e.clientY, done:false };
-  });
-  calendarPanel.addEventListener('pointermove', (e)=>{
+
+  const stepMonth = (forward)=>{
+    if(forward){ if(++view.month > 11){ view.month = 0; view.year++; } }
+    else { if(--view.month < 0){ view.month = 11; view.year--; } }
+    renderCalendar();
+  };
+  const trySwipe = (e)=>{
     if(!swipe || swipe.done) return;
     const dx = e.clientX - swipe.x;
     const dy = e.clientY - swipe.y;
-    if(Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    if(Math.abs(dx) < SWIPE_MIN || Math.abs(dx) <= Math.abs(dy)) return;
     swipe.done = true;
-    swipeGuardUntil = Date.now() + 300;
+    swipeGuardUntil = Date.now() + 400;
     cancelLp();
     hideRangeBanner();
-    if(dx < 0){ if(++view.month > 11){ view.month = 0; view.year++; } }
-    else { if(--view.month < 0){ view.month = 11; view.year--; } }
-    renderCalendar();
+    stepMonth(dx < 0);
+  };
+
+  swipeRoot.addEventListener('pointerdown', (e)=>{
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    const start = e.target && e.target.closest && e.target.closest(SWIPE_ZONE);
+    swipe = start ? { x:e.clientX, y:e.clientY, done:false } : null;
   });
-  const endSwipe = ()=>{ swipe = null; };
-  calendarPanel.addEventListener('pointerup', endSwipe);
-  calendarPanel.addEventListener('pointercancel', endSwipe);
-  calendarPanel.addEventListener('pointerleave', endSwipe);
+  swipeRoot.addEventListener('pointermove', trySwipe);
+  /* 손을 뗄 때 한 번 더 본다 — 터치에서는 중간 pointermove 가 묶여 오거나
+     마지막 한 번만 오는 경우가 있어, 그 한 번을 놓치면 제스처가 통째로 사라진다. */
+  swipeRoot.addEventListener('pointerup', (e)=>{ trySwipe(e); swipe = null; });
+  swipeRoot.addEventListener('pointercancel', ()=>{ swipe = null; });
+  /* 민 직후의 click 은 민 자리 안에서만 막는다. 달력 칸이 열리는 것뿐 아니라, 월 이동
+     버튼 위에서 밀기 시작했을 때 달이 두 번 넘어가는 것도 이것이 막는다.
+     막는 범위를 민 자리로 한정하는 게 중요하다 — 화면 전체를 막으면 밀고 나서
+     바로 하단 탭을 누른 사람의 손가락이 통째로 무시된다. */
+  swipeRoot.addEventListener('click', (e)=>{
+    if(Date.now() >= swipeGuardUntil) return;
+    if(!(e.target && e.target.closest && e.target.closest(SWIPE_ZONE))) return;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
 
   // 날짜 셀: 짧게 탭 = 하루 편집 / 길게 누르기 = 기간 선택 시작
   const grid = $('grid');
