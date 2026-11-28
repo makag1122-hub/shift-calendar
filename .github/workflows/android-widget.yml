@@ -20,6 +20,14 @@ on:
         description: "릴리스로 발행할 버전 (예: 1.1.0). 비워두면 빌드만 합니다."
         required: false
         default: ""
+      play_track:
+        description: "Play 스토어 트랙. production = 모두에게, internal = 내부 테스터만."
+        required: false
+        default: production
+        type: choice
+        options:
+          - production
+          - internal
 
 permissions:
   contents: write
@@ -120,3 +128,42 @@ jobs:
             달력 내용(근무 패턴·공휴일·명절 편성)은 앱을 열 때마다 웹에서
             최신으로 갱신되므로, 이 APK는 위젯 화면 자체가 바뀔 때만 새로 받으면 됩니다.
           files: shift-calendar-widget.apk
+
+      # ---- Play 스토어 자동 업로드 ----
+      # PLAY_SERVICE_ACCOUNT_JSON 시크릿이 있을 때만 동작합니다. 없으면 조용히 건너뛰고
+      # 지금까지처럼 GitHub 릴리스만 나갑니다. 이 시크릿은 Play Console 에 초대한
+      # 서비스 계정(로봇 계정)의 JSON 키입니다 — 사람 계정 로그인은 쓰지 않습니다.
+      #
+      # secrets 는 step 의 if 에서 직접 읽을 수 없어, 있는지부터 확인해 둡니다.
+      - name: Check for Play credential
+        id: play_key
+        if: github.event_name == 'workflow_dispatch' && inputs.release_version != ''
+        env:
+          PLAY_KEY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$PLAY_KEY" ]; then
+            echo "ready=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=no" >> "$GITHUB_OUTPUT"
+            echo "PLAY_SERVICE_ACCOUNT_JSON 이 없어 Play 업로드를 건너뜁니다."
+          fi
+
+      # Play 의 '새로운 기능' 글은 widget-version.json 의 notes 를 그대로 씁니다.
+      # 앱 안의 업데이트 안내창과 같은 글이어야 하므로 따로 적어 두지 않습니다.
+      - name: Write Play release notes
+        if: steps.play_key.outputs.ready == 'yes'
+        run: |
+          mkdir -p play-notes
+          node -e "process.stdout.write((require('./widget-version.json').notes || '') + String.fromCharCode(10))" > play-notes/whatsnew-ko-KR
+          cat play-notes/whatsnew-ko-KR
+
+      - name: Upload to Google Play
+        if: steps.play_key.outputs.ready == 'yes'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: kr.co.shiftcalendar.widget
+          releaseFiles: shift-calendar-play.aab
+          track: ${{ inputs.play_track }}
+          status: completed
+          whatsNewDirectory: play-notes

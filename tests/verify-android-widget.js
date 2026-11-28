@@ -783,5 +783,31 @@ const defaultGroupLabel = `${rendererDefaultGroup}조`;
     `${file} 의 첫 화면 조 칩이 기본 조(${defaultGroupLabel})와 다릅니다.`
   ));
 
+/* ---------- Play 스토어 자동 업로드 ----------
+   main 에 push 만 해도 스토어에 올라가는 일은 절대 없어야 한다.
+   발행은 workflow_dispatch + release_version 을 손으로 넣었을 때만. */
+assert(
+  workflow.includes('r0adkll/upload-google-play'),
+  'Play 스토어 업로드 단계가 없습니다.'
+);
+const playGate = (workflow.match(
+  /- name: Check for Play credential[\s\S]*?if:\s*(.+)/
+) || [])[1] || '';
+assert(
+  playGate.includes("github.event_name == 'workflow_dispatch'")
+  && playGate.includes("inputs.release_version != ''"),
+  `Play 업로드가 손으로 발행할 때로 묶여 있지 않습니다: ${playGate}`
+);
+assert(
+  (workflow.match(/if: steps\.play_key\.outputs\.ready == 'yes'/g) || []).length === 2,
+  'Play 업로드가 시크릿 유무를 확인하지 않습니다 — 키가 없으면 조용히 건너뛰어야 합니다.'
+);
+/* Play 에 보일 글과 앱 안의 안내문이 어긋나지 않도록 한 곳에서 만든다. */
+assert(
+  /whatsnew-ko-KR[\s\S]{0,40}|widget-version\.json'\)\.notes/.test(workflow)
+  && workflow.includes("require('./widget-version.json').notes"),
+  'Play 출시 노트를 widget-version.json 에서 만들지 않습니다.'
+);
+
 console.log('Android 월간 달력 위젯 데이터 검사 통과');
 console.log(`업데이트 버전 정보 일치: ${gradleVersionName} (versionCode ${gradleVersionCode})`);
