@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">교대캘린더</string>
+    <!--
+        위젯 고르는 목록에 뜨는 이름입니다. 셋 다 이름이 없으면 "교대캘린더"로만 보여
+        어느 것이 어느 위젯인지 구분할 수 없습니다. 목록에서 잘리므로 짧게 둡니다.
+    -->
+    <string name="widget_calendar_label">내 조 달력</string>
+    <string name="week_widget_label">전체 조 주간표</string>
+    <string name="month_all_widget_label">큰 달력 + 전체 조</string>
+
     <string name="widget_description">선택한 내 조의 월간 교대 달력</string>
     <string name="widget_default_title">이번 달 근무</string>
     <string name="widget_calendar_description">선택한 내 조의 월간 교대근무 달력</string>

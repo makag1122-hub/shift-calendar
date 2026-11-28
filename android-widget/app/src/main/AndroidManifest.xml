@@ -83,7 +83,8 @@
 
         <receiver
             android:name=".CalendarWidgetProvider"
-            android:exported="false">
+            android:exported="false"
+            android:label="@string/widget_calendar_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -94,7 +95,8 @@
 
         <receiver
             android:name=".FourGroupWeekWidgetProvider"
-            android:exported="false">
+            android:exported="false"
+            android:label="@string/week_widget_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -105,7 +107,8 @@
 
         <receiver
             android:name=".MonthAllGroupsWidgetProvider"
-            android:exported="false">
+            android:exported="false"
+            android:label="@string/month_all_widget_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

@@ -744,5 +744,44 @@ assert(!appSource.includes('onAndroidKakaoUser'), '카카오 닉네임 수신 �
 assert(appSource.includes('renderNameCard'), '이름 직접 입력 UI가 없습니다.');
 assert(appSource.includes('renderParticipantNames'), '공유방 참여자 이름 UI가 없습니다.');
 
+/* ---------- 위젯 목록에 뜨는 이름 ----------
+   리시버에 android:label 이 없으면 셋 다 앱 이름("교대캘린더")으로만 보여
+   위젯을 고를 때 어느 것이 어느 것인지 구분할 수 없습니다. */
+const stringsXml = fs.readFileSync(
+  path.join(ROOT, 'android-widget', 'app', 'src', 'main', 'res', 'values', 'strings.xml'),
+  'utf8'
+);
+const receiverBlocks = manifest.match(/<receiver[\s\S]*?>/g) || [];
+assert(receiverBlocks.length === 3, `위젯 리시버가 3개가 아닙니다: ${receiverBlocks.length}`);
+const receiverLabels = receiverBlocks.map(block => {
+  const name = (block.match(/android:name="\.(\w+)"/) || [])[1] || '?';
+  const label = (block.match(/android:label="@string\/(\w+)"/) || [])[1];
+  assert(label, `${name} 에 위젯 이름(android:label)이 없습니다 — 목록에서 앱 이름으로만 보입니다.`);
+  const text = (stringsXml.match(
+    new RegExp(`<string name="${label}">([^<]+)</string>`)
+  ) || [])[1];
+  assert(text, `strings.xml 에 ${label} 문구가 없습니다.`);
+  return text;
+});
+assert(
+  new Set(receiverLabels).size === 3,
+  `위젯 이름이 서로 겹칩니다: ${receiverLabels.join(' / ')}`
+);
+receiverLabels.forEach(text => assert(
+  text.length <= 12,
+  `위젯 이름이 길어 목록에서 잘립니다: ${text}`
+));
+
+/* 첫 로딩 화면의 조 칩은 기본 조와 같아야 합니다(지금은 O조). */
+const rendererDefaultGroup =
+  (renderer.match(/DEFAULT_GROUP\s*=\s*"(\w+)"/) || [])[1];
+assert(rendererDefaultGroup, '렌더러에서 DEFAULT_GROUP 을 찾지 못했습니다.');
+const defaultGroupLabel = `${rendererDefaultGroup}조`;
+[['widget_calendar.xml', widgetLayout], ['widget_month_all_groups.xml', monthAllLayout]]
+  .forEach(([file, layout]) => assert(
+    layout.includes(`android:text="${defaultGroupLabel}"`),
+    `${file} 의 첫 화면 조 칩이 기본 조(${defaultGroupLabel})와 다릅니다.`
+  ));
+
 console.log('Android 월간 달력 위젯 데이터 검사 통과');
 console.log(`업데이트 버전 정보 일치: ${gradleVersionName} (versionCode ${gradleVersionCode})`);
