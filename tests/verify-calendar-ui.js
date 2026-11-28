@@ -191,7 +191,7 @@ assert(
   '스와이프 판정이 세로 이동에 배수를 곱해 비교합니다 — 엄지로 그리는 호가 거부됩니다.'
 );
 assert(
-  app.includes('Math.abs(dx) <= Math.abs(dy)'),
+  app.includes('Math.abs(dx) > Math.abs(dy)'),
   '가로가 세로보다 길면 받는 판정이 아닙니다.'
 );
 const swipeMin = Number((app.match(/SWIPE_MIN\s*=\s*(\d+)/) || [])[1]);
@@ -210,10 +210,45 @@ assert(
   );
 });
 
-/* 손을 뗄 때도 한 번 더 본다 — 터치에서 중간 pointermove 가 묶여 오는 경우가 있다. */
+/* 넘길지 말지는 손을 뗄 때 정한다 — 터치에서 중간 pointermove 가 묶여 오기도 하고,
+   미는 도중에 달을 바꾸면 따라오던 달력이 손가락 밑에서 튄다. */
 assert(
-  /pointerup['"],\s*\(e\)=>\{\s*trySwipe\(e\)/.test(app),
-  '손을 뗄 때 스와이프를 다시 판정하지 않습니다.'
+  /addEventListener\('pointerup',\s*endSwipe\)/.test(app)
+  && /const endSwipe\s*=/.test(app),
+  '손을 뗄 때 스와이프를 판정하지 않습니다.'
+);
+assert(
+  /addEventListener\('pointercancel',[\s\S]{0,60}endSwipe/.test(app),
+  '브라우저가 제스처를 가져갔을 때 달력이 밀린 채로 남습니다.'
+);
+
+/* ---------- 미는 동안 달력이 손가락을 따라온다 ---------- */
+assert(
+  /const slide\s*=\s*\(x,\s*ms\)/.test(app) && app.includes('translateX('),
+  '미는 동안 달력이 손가락을 따라오지 않습니다.'
+);
+assert(
+  app.includes('commitSwipe('),
+  '달을 넘길 때 빠졌다 들어오는 움직임이 없습니다.'
+);
+/* 모션을 줄여 달라고 한 사람에게는 애니메이션 없이 달만 바뀌어야 한다. */
+assert(
+  /prefers-reduced-motion/.test(app) && /reduceMotion\(\)\)\{\s*stepMonth/.test(app),
+  '모션 줄이기 설정을 켠 사람에게도 애니메이션이 재생됩니다.'
+);
+assert(
+  /prefers-reduced-motion/.test(css),
+  'style.css 에 모션 줄이기 대응이 없습니다.'
+);
+/* 카드가 잘라 주지 않으면 민 날짜판이 카드 밖으로 비어져 나온다. */
+assert(
+  /\.calendar\{[^}]*overflow:\s*hidden/.test(css),
+  '.calendar 가 민 날짜판을 잘라 주지 않습니다.'
+);
+/* 애니메이션이 끝나면 인라인 스타일을 비워야 다음 렌더가 끌려가지 않는다. */
+assert(
+  app.includes("el.style.transform = '';") && app.includes("el.style.opacity = '';"),
+  '애니메이션이 끝난 뒤 달력에 인라인 위치가 남습니다.'
 );
 /* 민 직후의 click 은 통째로 막는다(달력 칸이 열리거나 달이 두 번 넘어가지 않게). */
 const clickGuard = (app.match(

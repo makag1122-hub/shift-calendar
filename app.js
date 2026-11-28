@@ -2078,28 +2078,89 @@ function wire(){
     else { if(--view.month < 0){ view.month = 11; view.year--; } }
     renderCalendar();
   };
-  const trySwipe = (e)=>{
-    if(!swipe || swipe.done) return;
-    const dx = e.clientX - swipe.x;
-    const dy = e.clientY - swipe.y;
-    if(Math.abs(dx) < SWIPE_MIN || Math.abs(dx) <= Math.abs(dy)) return;
-    swipe.done = true;
-    swipeGuardUntil = Date.now() + 400;
-    cancelLp();
-    hideRangeBanner();
-    stepMonth(dx < 0);
+  /* 미는 동안 달력이 손가락을 따라온다.
+     그래서 넘김 판정을 "미는 도중"이 아니라 "손 뗄 때"로 옮겼다 — 도중에 넘기면
+     따라오던 달력이 손가락 밑에서 갑자기 바뀌어, 미는 느낌 자체가 없어진다. */
+  const reduceMotion = () => !!(window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  /* 요일 줄과 안내문은 두고 날짜판만 민다 — 머리글까지 같이 흐르면 어지럽다.
+     카드가 overflow:hidden 이라 카드 밖으로 나간 부분은 잘린다. */
+  const slide = (x, ms)=>{
+    const el = $('grid');
+    if(!el) return;
+    el.style.transition = ms
+      ? `transform ${ms}ms cubic-bezier(.22,.61,.36,1), opacity ${ms}ms linear`
+      : 'none';
+    if(x){
+      el.style.transform = `translateX(${Math.round(x)}px)`;
+      el.style.opacity = String(Math.max(.4, 1 - Math.abs(x) / ((el.clientWidth || 320) * 1.25)));
+    }else{
+      el.style.transform = '';
+      el.style.opacity = '';
+    }
+  };
+  const commitSwipe = (forward)=>{
+    const el = $('grid');
+    if(!el || reduceMotion()){ stepMonth(forward); slide(0, 0); return; }
+    const w = el.clientWidth || 320;
+    slide(forward ? -w * 0.5 : w * 0.5, 150);   // 가던 방향으로 마저 빠지고
+    setTimeout(()=>{
+      stepMonth(forward);                        // 새 달로 갈아 끼운 뒤
+      slide(forward ? w * 0.5 : -w * 0.5, 0);    // 반대쪽에 세워 두고
+      void el.offsetWidth;                       // 그 자리를 브라우저에 먼저 반영시킨다
+      slide(0, 190);                             // 제자리로 들어온다
+      setTimeout(()=>{ el.style.transition = ''; }, 220);
+    }, 150);
   };
 
   swipeRoot.addEventListener('pointerdown', (e)=>{
     if(e.pointerType === 'mouse' && e.button !== 0) return;
     const start = e.target && e.target.closest && e.target.closest(SWIPE_ZONE);
-    swipe = start ? { x:e.clientX, y:e.clientY, done:false } : null;
+    swipe = start ? { x:e.clientX, y:e.clientY, t:Date.now(), axis:null, dx:0 } : null;
   });
-  swipeRoot.addEventListener('pointermove', trySwipe);
-  /* 손을 뗄 때 한 번 더 본다 — 터치에서는 중간 pointermove 가 묶여 오거나
-     마지막 한 번만 오는 경우가 있어, 그 한 번을 놓치면 제스처가 통째로 사라진다. */
-  swipeRoot.addEventListener('pointerup', (e)=>{ trySwipe(e); swipe = null; });
-  swipeRoot.addEventListener('pointercancel', ()=>{ swipe = null; });
+  swipeRoot.addEventListener('pointermove', (e)=>{
+    if(!swipe) return;
+    const dx = e.clientX - swipe.x;
+    const dy = e.clientY - swipe.y;
+    if(!swipe.axis){
+      if(Math.max(Math.abs(dx), Math.abs(dy)) < 12) return;   // 손 떨림은 무시
+      /* 세로가 가로보다 확실히 길 때에만 세로로 본다. 엄지가 그리는 호를
+         세로로 오해하면 "안 밀린다"던 그 문제로 되돌아간다. */
+      swipe.axis = Math.abs(dy) > Math.abs(dx) * 1.5 ? 'y' : 'x';
+      if(swipe.axis === 'x'){
+        cancelLp();
+        const el = $('grid');
+        if(el) el.classList.add('swiping');
+      }
+    }
+    if(swipe.axis !== 'x') return;
+    swipe.dx = dx;
+    if(!reduceMotion()) slide(dx, 0);
+  });
+  /* 손을 뗄 때 판정한다. 터치에서는 중간 pointermove 가 묶여 오거나 마지막
+     한 번만 오기도 해서, 마지막 좌표로 다시 재는 이 길이 가장 믿을 만하다. */
+  const endSwipe = (e)=>{
+    const s = swipe;
+    swipe = null;
+    const el = $('grid');
+    if(el) el.classList.remove('swiping');
+    if(!s || s.axis !== 'x'){ if(s) slide(0, 0); return; }
+    const dx = (e && typeof e.clientX === 'number') ? e.clientX - s.x : s.dx;
+    const dy = (e && typeof e.clientY === 'number') ? e.clientY - s.y : 0;
+    const sideways = Math.abs(dx) > Math.abs(dy);
+    /* 짧고 빠르게 튕기는 것도 넘김으로 본다 — 천천히 끌 때만 멀리 가야 한다. */
+    const flick = Date.now() - s.t < 300 && Math.abs(dx) >= 24;
+    if(sideways && (Math.abs(dx) >= SWIPE_MIN || flick)){
+      swipeGuardUntil = Date.now() + 400;
+      hideRangeBanner();
+      commitSwipe(dx < 0);
+    }else{
+      slide(0, 190);        // 모자라면 제자리로 돌아간다
+    }
+  };
+  swipeRoot.addEventListener('pointerup', endSwipe);
+  swipeRoot.addEventListener('pointercancel', ()=>{ endSwipe(null); });
   /* 민 직후의 click 은 민 자리 안에서만 막는다. 달력 칸이 열리는 것뿐 아니라, 월 이동
      버튼 위에서 밀기 시작했을 때 달이 두 번 넘어가는 것도 이것이 막는다.
      막는 범위를 민 자리로 한정하는 게 중요하다 — 화면 전체를 막으면 밀고 나서
