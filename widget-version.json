@@ -1,6 +1,6 @@
 {
-  "versionCode": 28,
-  "versionName": "1.24.1",
+  "versionCode": 29,
+  "versionName": "1.24.2",
   "apkUrl": "https://github.com/makag1122-hub/shift-calendar/releases/latest/download/shift-calendar-widget.apk",
-  "notes": "조 순서를 O조(오피스조)부터로 바꿨습니다. 앱과 위젯 모두 O조가 맨 앞에 나옵니다."
+  "notes": "위젯을 고르는 목록에서 세 위젯의 이름이 따로 보입니다 — 내 조 달력 / 전체 조 주간표 / 큰 달력 + 전체 조. 위젯이 처음 뜰 때의 조 표시도 O조로 맞췄습니다."
 }
