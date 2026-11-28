@@ -13,24 +13,27 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192-v2.png" />
   <link rel="apple-touch-icon" href="icons/icon-180-v2.png" />
-  <link rel="stylesheet" href="style.css?v=20261126e" />
+  <link rel="stylesheet" href="style.css?v=20261128a" />
 </head>
 <body>
   <div class="app">
-    <!-- 상단 헤더 -->
+    <!-- 상단 헤더: 브랜드 줄 + 내 조 선택 줄 -->
     <header class="app-header">
-      <div class="brand">
-        <img class="brand-logo" src="icons/icon-192-v2.png" alt="" />
-        <div class="brand-text">
-          <h1>교대캘린더</h1>
-          <p class="brand-sub">4조 3교대 · 오피스조 · 근무표와 메모</p>
+      <div class="header-top">
+        <div class="brand">
+          <img class="brand-logo" src="icons/icon-192-v2.png" alt="" />
+          <div class="brand-text">
+            <h1>교대캘린더</h1>
+            <p class="brand-sub">4조 3교대 · 오피스조 · 근무표와 메모</p>
+          </div>
         </div>
+        <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
       </div>
-      <nav class="calendar-view-tabs" id="calendarViewTabs" aria-label="달력 보기 방식">
-        <button type="button" data-calendar-view="single">내 조</button>
-        <button type="button" data-calendar-view="all">전체</button>
+      <!-- 내 조 선택 — 다섯 개 조를 모두 왼쪽에 펼쳐 둔다(설정에서도 바꿀 수 있다) -->
+      <nav class="group-bar" id="groupBar" aria-label="내 조 선택">
+        <span class="group-bar-label">내 조</span>
+        <div class="group-bar-chips" id="groupBarChips"></div>
       </nav>
-      <button class="icon-btn" id="btnSettings" aria-label="설정">⚙</button>
     </header>
 
     <!-- 공유 보기 + 공동 메모 배너 -->
@@ -52,15 +55,18 @@
       <button id="rangeCancel">취소</button>
     </div>
 
-    <!-- 캘린더 -->
-    <main class="calendar" id="singleCalendar">
+    <!-- 캘린더 (달력 탭) -->
+    <main class="calendar" id="singleCalendar" data-tab-panel="calendar">
       <div class="weekdays" id="weekdays"></div>
       <div class="grid" id="grid"></div>
-      <p class="cal-hint">💡 날짜를 <b>길게 누르면</b> 여러 날을 한꺼번에 선택할 수 있어요</p>
+      <p class="cal-hint">💡 <b>좌우로 밀어</b> 달 이동 · 날짜를 <b>길게 눌러</b> 여러 날 선택</p>
     </main>
 
-    <!-- 조별 가로 비교표 -->
-    <section class="all-groups-calendar" id="allGroupsCalendar" hidden>
+    <!-- 오늘 조별 배치 (조 비교 탭의 머리 카드) -->
+    <section class="team-board" id="teamBoard" data-tab-panel="groups" hidden></section>
+
+    <!-- 조별 가로 비교표 (조 비교 탭) -->
+    <section class="all-groups-calendar" id="allGroupsCalendar" data-tab-panel="groups" hidden>
       <div class="all-groups-head">
         <div>
           <span>월간 근무 흐름</span>
@@ -74,25 +80,42 @@
       <p class="all-groups-hint">근무 칸을 누르면 해당 조의 일정과 메모를 수정할 수 있어요.</p>
     </section>
 
-    <!-- 이번 달 공휴일 -->
-    <section class="holiday-panel" id="holidayPanel" hidden></section>
+    <!-- 이번 달 메모 (메모 탭) -->
+    <section class="memo-panel" id="memoPanel" data-tab-panel="memo" hidden></section>
 
-    <!-- 이번 달 메모 -->
-    <section class="memo-panel" id="memoPanel" hidden></section>
+    <!-- 이번 달 공휴일 (요약 탭) -->
+    <section class="holiday-panel" id="holidayPanel" data-tab-panel="info" hidden></section>
 
-    <!-- 오늘 조별 배치 (달력이 화면을 먼저 차지하도록 메모 아래에 둔다) -->
-    <section class="team-board" id="teamBoard"></section>
+    <!-- 오늘 · 다음 근무 · 다음 휴무 (요약 탭) -->
+    <section class="today-card" id="todayCard" data-tab-panel="info" hidden></section>
 
-    <!-- 월 요약 -->
-    <section class="summary" id="summary"></section>
+    <!-- 월 요약 (요약 탭) -->
+    <section class="summary" id="summary" data-tab-panel="info" hidden></section>
 
-    <!-- 범례 -->
-    <section class="legend" id="legend"></section>
+    <!-- 범례 (요약 탭) -->
+    <section class="legend" id="legend" data-tab-panel="info" hidden></section>
 
-    <footer class="app-footer">
+    <footer class="app-footer" id="appFooter" data-tab-panel="info" hidden>
       <button class="btn-soft" id="btnToday">오늘로 이동</button>
-      <div class="app-version">ver 2026.11.26</div>
+      <div class="app-version">ver 2026.11.28</div>
     </footer>
+
+    <!-- 하단 탭 — 한 화면을 길게 밀어 보지 않고 네 갈래로 나눠 본다 -->
+    <nav class="tabbar" id="tabbar" aria-label="화면 이동">
+      <button type="button" data-tab="calendar">
+        <i aria-hidden="true">🗓</i><span>달력</span>
+      </button>
+      <button type="button" data-tab="groups">
+        <i aria-hidden="true">👥</i><span>조 비교</span>
+      </button>
+      <button type="button" data-tab="memo">
+        <i aria-hidden="true">📝</i><span>메모</span>
+        <b class="tab-badge" id="memoTabBadge" hidden>0</b>
+      </button>
+      <button type="button" data-tab="info">
+        <i aria-hidden="true">📊</i><span>요약</span>
+      </button>
+    </nav>
   </div>
 
   <!-- 날짜 편집 시트 -->
@@ -132,6 +155,12 @@
       <span style="width:38px"></span>
     </header>
     <div class="modal-body">
+
+      <section class="set-section">
+        <h3>내 조</h3>
+        <p class="set-desc">달력·메모·요약이 모두 이 조를 기준으로 보입니다. <b>O조(오피스조)</b>는 20일 주기를 쓰지 않고 월~금 오피스 근무(09:00~18:00), 주말·공휴일은 휴무입니다. 화면 위쪽 <b>내 조</b> 줄에서도 바로 바꿀 수 있어요.</p>
+        <div class="set-group-pick" id="setGroupPick"></div>
+      </section>
 
       <section class="set-section">
         <h3>근무 종류 · 시간 · 색상</h3>
@@ -180,14 +209,14 @@
         <a class="legal-link" href="privacy.html">개인정보 처리방침</a>
       </section>
 
-      <p class="set-foot">교대캘린더 · ver 2026.11.26</p>
+      <p class="set-foot">교대캘린더 · ver 2026.11.28</p>
     </div>
   </div>
 
   <script src="qrcode.js?v=20260715a"></script>
-  <script src="sync-config.js?v=20261126e"></script>
-  <script src="sync.js?v=20261126e"></script>
-  <script src="app.js?v=20261126e"></script>
+  <script src="sync-config.js?v=20261128a"></script>
+  <script src="sync.js?v=20261128a"></script>
+  <script src="app.js?v=20261128a"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
@@ -197,7 +226,7 @@
           refreshed = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('./service-worker.js?v=20261126e', { updateViaCache:'none' })
+        navigator.serviceWorker.register('./service-worker.js?v=20261128a', { updateViaCache:'none' })
           .then((registration) => registration.update())
           .catch((error) => console.warn('Service worker registration failed:', error));
       });

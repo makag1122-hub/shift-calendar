@@ -9,7 +9,10 @@
    ============================================================ */
 
 const STORAGE_KEY = 'shiftcal.v2';
-const CALENDAR_VIEW_KEY = 'shiftcal.calendarView';
+const CALENDAR_VIEW_KEY = 'shiftcal.calendarView';   // 지난 버전의 '내 조/전체' 토글
+const TAB_KEY = 'shiftcal.tab';
+/* 한 화면을 길게 밀어 보지 않고 네 갈래로 나눈다 — 달력 / 조 비교 / 메모 / 요약 */
+const TABS = ['calendar', 'groups', 'memo', 'info'];
 const TEAM_BOARD_KEY = 'shiftcal.teamBoardOpen';
 const BASE_DATE = '2026-06-25';
 const BASE_PATTERN_START = '2026-06-09'; // 2026-06-25 = A조 GY 4일차
@@ -312,9 +315,14 @@ function canEditMemo(){
 
 let state = loadState();
 let view = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
-let calendarView = (() => {
-  try{ return localStorage.getItem(CALENDAR_VIEW_KEY) === 'all' ? 'all' : 'single'; }
-  catch(e){ return 'single'; }
+let activeTab = (() => {
+  try{
+    const saved = localStorage.getItem(TAB_KEY);
+    if(TABS.includes(saved)) return saved;
+    /* 지난 버전에서 '전체' 보기를 켜 둔 사람은 조 비교 탭으로 이어 준다. */
+    return localStorage.getItem(CALENDAR_VIEW_KEY) === 'all' ? 'groups' : 'calendar';
+  }
+  catch(e){ return 'calendar'; }
 })();
 let selectedDate = null;
 let sheetRange = null;   // 범위 시트 모드 { start, end }
@@ -596,6 +604,35 @@ function renderWeekdays(){
   ).join('');
 }
 
+/* 머리글의 '내 조' 줄 — 다섯 조를 모두 왼쪽에 펼쳐 두고, 점 색으로 오늘 근무까지 알려 준다. */
+function renderGroupBar(){
+  const box = $('groupBarChips');
+  if(!box) return;
+  const today = todayStr();
+  const selected = currentGroup();
+  box.innerHTML = GROUPS.map(group=>{
+    const t = st(shiftFor(today, group));
+    const color = t ? t.color : '#94a3b8';
+    const todayLabel = t ? t.label : '미설정';
+    return `<button type="button" class="group-chip${group===selected?' active':''}" data-group="${group}" style="--c:${color}" aria-pressed="${group===selected}" title="${group}조 · 오늘 ${escapeHtml(todayLabel)}">
+      <i aria-hidden="true"></i>${group}조
+    </button>`;
+  }).join('');
+}
+
+/* 탭에 맞는 영역만 남긴다. 비어 있는 영역(공휴일이 없는 달 등)은 data-tab-empty 로 알려 온다. */
+function applyTab(){
+  document.querySelectorAll('[data-tab-panel]').forEach(el=>{
+    const mine = el.dataset.tabPanel === activeTab;
+    el.hidden = !mine || el.dataset.tabEmpty === '1';
+  });
+  document.querySelectorAll('#tabbar [data-tab]').forEach(button=>{
+    const on = button.dataset.tab === activeTab;
+    button.classList.toggle('active', on);
+    button.setAttribute('aria-pressed', String(on));
+  });
+}
+
 function renderTeamBoard(){
   const el = $('teamBoard');
   if(!el) return;
@@ -686,27 +723,24 @@ function renderAllGroupsCalendar(){
   });
 }
 
+/* 탭마다 다른 영역을 보여 주므로, 달을 옮길 때는 모든 탭의 내용을 함께 맞춰 둔다.
+   예전처럼 보고 있는 쪽만 그리면 탭을 옮겼을 때 지난 달 내용이 남아 있었다. */
 function renderCalendar(){
-  const showAllGroups = calendarView === 'all';
-  document.querySelectorAll('[data-calendar-view]').forEach(button=>{
-    const active = button.dataset.calendarView === calendarView;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
-  $('singleCalendar').hidden = showAllGroups;
-  $('allGroupsCalendar').hidden = !showAllGroups;
-  $('memoPanel').hidden = showAllGroups;
-  $('summary').hidden = showAllGroups;
-  renderHolidayPanel();   // 두 보기 모두에서 쓰므로 갈라지기 전에 그린다
-
-  if(showAllGroups){
-    $('monthTitle').textContent = `${view.year}년 ${view.month+1}월 · 전체 ${GROUPS.length}개 조`;
-    renderAllGroupsCalendar();
-    return;
-  }
-
   const group = currentGroup();
-  $('monthTitle').textContent = `${view.year}년 ${view.month+1}월 · ${group}조`;
+  $('monthTitle').textContent = activeTab === 'groups'
+    ? `${view.year}년 ${view.month+1}월 · 전체 ${GROUPS.length}개 조`
+    : `${view.year}년 ${view.month+1}월 · ${group}조`;
+  renderHolidayPanel();
+  renderMonthGrid(group);
+  renderMemoPanel();
+  renderTodayCard();
+  renderSummary();
+  /* 가로 비교표는 보고 있을 때만 그린다 — 숨어 있으면 '오늘로 가로 스크롤'이 먹지 않는다. */
+  if(activeTab === 'groups') renderAllGroupsCalendar();
+  applyTab();
+}
+
+function renderMonthGrid(group){
   const startDow = new Date(view.year, view.month, 1).getDay();
   const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
   const todayS = todayStr();
@@ -745,7 +779,7 @@ function renderCalendar(){
       <span class="cell-top"><span class="dnum ${dnumCls}">${d}</span>${holHtml}${tagHtml}${isFam ? `<span class="fam-mark" title="${escapeHtml(famHint)}">패데</span>` : ''}</span>
       ${badge}
       ${isOverride(dateStr, group) ? '<span class="dot-ov"></span>' : ''}
-      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memoPreview(memo))}</span>` : '<span class="cell-memo-slot" aria-hidden="true"></span>'}
+      ${memo ? `<span class="memo-pin" aria-hidden="true"></span><span class="cell-memo" title="${escapeHtml(memo)}">${escapeHtml(memo)}</span>` : '<span class="cell-memo-slot" aria-hidden="true"></span>'}
     </button>`;
   }
   const gridEl = $('grid');
@@ -753,9 +787,24 @@ function renderCalendar(){
      그 달이 실제로 쓰는 줄 수를 넘겨, 남는 높이를 칸이 나눠 갖게 한다. */
   gridEl.style.setProperty('--rows', Math.ceil((startDow + daysInMonth) / 7));
   gridEl.innerHTML = html;
-  $('summary').hidden = false;
-  renderMemoPanel();
-  renderSummary();
+  syncMemoLines();
+}
+
+/* 칸에 들어가는 메모 줄 수 — 칸 높이를 재서 CSS에 알려 준다.
+   2줄로 박아 두면 칸을 키워도 세 줄째부터 "…"로 잘렸다(사용자 신고 2026-11-28). */
+function syncMemoLines(){
+  const grid = $('grid');
+  if(!grid) return;
+  const probe = grid.querySelector('.cell-memo');
+  if(!probe) return;
+  const style = getComputedStyle(probe);
+  const lineHeight = parseFloat(style.lineHeight);
+  const inner = probe.clientHeight
+    - (parseFloat(style.paddingTop) || 0)
+    - (parseFloat(style.paddingBottom) || 0);
+  if(!(lineHeight > 0) || !(inner > 0)) return;
+  const lines = Math.max(1, Math.min(8, Math.floor(inner / lineHeight)));
+  grid.style.setProperty('--memo-lines', String(lines));
 }
 
 /* 달력 칸은 좁아서 이름이 잘릴 수 있으니, 그 달 공휴일을 아래에 또렷하게 적어준다. */
@@ -763,9 +812,9 @@ function renderHolidayPanel(){
   const el = $('holidayPanel');
   if(!el) return;
   const items = holidaysInMonth(view.year, view.month);
-  if(!items.length){ el.hidden = true; el.innerHTML = ''; return; }
+  if(!items.length){ el.dataset.tabEmpty = '1'; el.hidden = true; el.innerHTML = ''; return; }
   const month = view.month + 1;
-  el.hidden = false;
+  el.dataset.tabEmpty = '0';
   el.innerHTML = `<span class="hol-title">🔴 이번 달 공휴일</span>` + items.map(h=>{
     const range = h.startDay === h.endDay ? `${month}/${h.startDay}` : `${month}/${h.startDay}~${h.endDay}`;
     return `<span class="hol-item"><b>${range}</b>${escapeHtml(h.name)}</span>`;
@@ -789,7 +838,11 @@ function renderMemoPanel(){
     items.push({ dateStr, memo, shift: t });
   }
 
-  el.hidden = false;
+  const badge = $('memoTabBadge');
+  if(badge){
+    badge.textContent = String(items.length);
+    badge.hidden = items.length === 0;
+  }
 
   if(!items.length){
     el.innerHTML = `
@@ -836,6 +889,47 @@ function renderLegend(){
     <span class="lg lg-mark"><span class="lg-bar top"></span>명절 편성</span>
     <span class="lg lg-mark"><span class="lg-bar bottom"></span>6일+ 연속근무</span>`;
   $('legend').innerHTML = shifts + marks;
+}
+
+/* 교대근무 달력 앱들이 공통으로 두는 '다음 근무 · 다음 휴무'.
+   오늘부터 넉 달 안에서 찾는다(그 안에 없으면 패턴이 비어 있는 경우다). */
+function findNextDay(fromStr, group, wantWork){
+  for(let i = 1; i <= 120; i++){
+    const ds = addDays(fromStr, i);
+    if(isWorkDay(ds, group) === wantWork) return { date: ds, days: i };
+  }
+  return null;
+}
+
+function renderTodayCard(){
+  const el = $('todayCard');
+  if(!el) return;
+  const group = currentGroup();
+  const today = todayStr();
+  const t = st(shiftFor(today, group));
+  const working = isWorkDay(today, group);
+  const nextWork = findNextDay(today, group, true);
+  const nextOff = findNextDay(today, group, false);
+  const run = working ? workRunDayFor(today, group) : offRunDayFor(today, group);
+  const runText = run > 1 ? ` · ${run}일차` : '';
+  const line = (label, found, extra) => {
+    if(!found) return '';
+    const shift = extra ? st(shiftFor(found.date, group)) : null;
+    return `<div class="tc-row">
+      <span class="tc-key">${label}</span>
+      <b>${shortDateText(found.date)}</b>
+      <span class="tc-dday">D-${found.days}</span>
+      ${shift ? `<em style="--c:${shift.color}">${escapeHtml(shift.label)}</em>` : ''}
+    </div>`;
+  };
+  el.innerHTML = `
+    <div class="tc-today" style="--c:${t ? t.color : '#94a3b8'}">
+      <span class="tc-key">오늘 · ${shortDateText(today)}</span>
+      <strong>${group}조 ${escapeHtml(t ? t.label : '미설정')}${runText}</strong>
+      <span class="tc-time">${escapeHtml(timeText(t))}</span>
+    </div>
+    ${line('다음 근무', nextWork, true)}
+    ${line('다음 휴무', nextOff, false)}`;
 }
 
 function renderSummary(){
@@ -960,6 +1054,7 @@ function queueAndroidWidgetSnapshot(){
 window.publishAndroidWidgetSnapshot = publishAndroidWidgetSnapshot;
 
 function renderAll(){
+  renderGroupBar();
   renderTeamBoard();
   renderCalendar();
   renderLegend();
@@ -1189,7 +1284,25 @@ function saveMemoValue(value){
 }
 
 /* ---------- 설정: 근무 종류 ---------- */
+/* 설정의 '내 조' — 머리글 줄과 같은 값을 고르지만, 조마다 설명을 한 줄 붙여 준다. */
+function renderGroupPick(){
+  const box = $('setGroupPick');
+  if(!box) return;
+  const selected = currentGroup();
+  const today = todayStr();
+  box.innerHTML = GROUPS.map(group=>{
+    const t = st(shiftFor(today, group));
+    const note = group === OFFICE_GROUP ? '오피스 · 월~금' : '4조 3교대';
+    return `<button type="button" class="pick-group${group===selected?' active':''}" data-group="${group}" aria-pressed="${group===selected}">
+      <strong>${group}조</strong>
+      <span>${note}</span>
+      <em style="--c:${t ? t.color : '#94a3b8'}">오늘 ${escapeHtml(t ? t.label : '미설정')}</em>
+    </button>`;
+  }).join('');
+}
+
 function renderSettings(){
+  renderGroupPick();
   $('setShiftTypes').innerHTML = state.shiftOrder.map(key=>{
     const t = state.shiftTypes[key];
     return `<div class="st-card" data-code="${key}">
@@ -1842,13 +1955,18 @@ function selectGroup(group){
   if(selectedDate) openDaySheet(selectedDate);
 }
 
-function selectCalendarView(nextView){
-  const next = nextView === 'all' ? 'all' : 'single';
-  if(calendarView === next) return;
-  calendarView = next;
-  try{ localStorage.setItem(CALENDAR_VIEW_KEY, calendarView); }catch(e){}
+function selectTab(nextTab){
+  const next = TABS.includes(nextTab) ? nextTab : 'calendar';
+  if(activeTab === next){
+    /* 같은 탭을 다시 누르면 맨 위로 — 긴 목록에서 되돌아오는 흔한 동작이다. */
+    window.scrollTo({ top:0, behavior:'smooth' });
+    return;
+  }
+  activeTab = next;
+  try{ localStorage.setItem(TAB_KEY, activeTab); }catch(e){}
   hideRangeBanner();
   renderCalendar();
+  window.scrollTo({ top:0, behavior:'auto' });
 }
 
 /* ---------- 이벤트 연결 ---------- */
@@ -1858,9 +1976,13 @@ function wire(){
     const card = e.target.closest('[data-group]');
     if(card) selectGroup(card.dataset.group);
   });
-  $('calendarViewTabs').addEventListener('click', (e)=>{
-    const button = e.target.closest('[data-calendar-view]');
-    if(button) selectCalendarView(button.dataset.calendarView);
+  $('tabbar').addEventListener('click', (e)=>{
+    const button = e.target.closest('[data-tab]');
+    if(button) selectTab(button.dataset.tab);
+  });
+  $('groupBar').addEventListener('click', (e)=>{
+    const chip = e.target.closest('[data-group]');
+    if(chip) selectGroup(chip.dataset.group);
   });
   $('allGroupsGrid').addEventListener('click', (e)=>{
     const cell = e.target.closest('.all-group-cell');
@@ -1881,7 +2003,38 @@ function wire(){
   // 월 이동
   $('btnPrev').onclick = () => { if(--view.month < 0){ view.month=11; view.year--; } renderCalendar(); };
   $('btnNext').onclick = () => { if(++view.month > 11){ view.month=0; view.year++; } renderCalendar(); };
-  $('btnToday').onclick = () => { const n=new Date(); view={year:n.getFullYear(), month:n.getMonth()}; renderCalendar(); };
+  const goToday = () => { const n=new Date(); view={year:n.getFullYear(), month:n.getMonth()}; renderCalendar(); };
+  $('btnToday').onclick = goToday;
+  /* 월 제목은 예전부터 버튼이었는데 아무 일도 하지 않았다 — 눌러서 오늘로 돌아온다. */
+  $('monthTitle').onclick = goToday;
+
+  /* 달력을 좌우로 밀면 달이 넘어간다(캘린더 앱의 기본 동작).
+     위아래로 미는 것은 스크롤이므로, 가로로 더 많이 움직였을 때만 받는다. */
+  const calendarPanel = $('singleCalendar');
+  let swipe = null;
+  /* 밀어서 달을 넘기면 달력을 다시 그리므로, 손을 뗀 자리의 새 칸이 눌리지 않게 막는다. */
+  let swipeGuardUntil = 0;
+  calendarPanel.addEventListener('pointerdown', (e)=>{
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    swipe = { x:e.clientX, y:e.clientY, done:false };
+  });
+  calendarPanel.addEventListener('pointermove', (e)=>{
+    if(!swipe || swipe.done) return;
+    const dx = e.clientX - swipe.x;
+    const dy = e.clientY - swipe.y;
+    if(Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    swipe.done = true;
+    swipeGuardUntil = Date.now() + 300;
+    cancelLp();
+    hideRangeBanner();
+    if(dx < 0){ if(++view.month > 11){ view.month = 0; view.year++; } }
+    else { if(--view.month < 0){ view.month = 11; view.year--; } }
+    renderCalendar();
+  });
+  const endSwipe = ()=>{ swipe = null; };
+  calendarPanel.addEventListener('pointerup', endSwipe);
+  calendarPanel.addEventListener('pointercancel', endSwipe);
+  calendarPanel.addEventListener('pointerleave', endSwipe);
 
   // 날짜 셀: 짧게 탭 = 하루 편집 / 길게 누르기 = 기간 선택 시작
   const grid = $('grid');
@@ -1904,6 +2057,7 @@ function wire(){
     const cell = e.target.closest('.cell');
     if(!cell || cell.classList.contains('empty')) return;
     if(lpFired){ lpFired = false; return; }   // 길게 누른 직후 발생하는 click 무시
+    if(Date.now() < swipeGuardUntil) return;  // 달을 넘긴 직후의 click 무시
     if(rangeAnchor){                          // 두 번째 탭 = 기간 끝
       const start = rangeAnchor, end = cell.dataset.date;
       hideRangeBanner();
@@ -2021,6 +2175,12 @@ function wire(){
   });
 
   // 근무 종류: 추가/삭제(클릭) + 수정(입력)
+  $('setGroupPick').addEventListener('click', (e)=>{
+    const button = e.target.closest('[data-group]');
+    if(!button) return;
+    selectGroup(button.dataset.group);
+    renderGroupPick();
+  });
   $('setShiftTypes').addEventListener('click', (e)=>{
     if(e.target.id === 'btnAddType') addShiftType();
     else if(e.target.dataset.del !== undefined) removeShiftType(e.target.dataset.del);
@@ -2099,4 +2259,10 @@ function wire(){
 renderWeekdays();
 renderAll();
 wire();
+/* 화면을 돌리거나 창 크기가 바뀌면 칸 높이가 달라지므로 메모 줄 수를 다시 센다. */
+if(typeof ResizeObserver === 'function'){
+  new ResizeObserver(()=> syncMemoLines()).observe($('grid'));
+}else{
+  window.addEventListener('resize', syncMemoLines);
+}
 if(window.Sync && Sync.init){ renderSyncBanner(); renderInstallBanner(); Sync.init(); }  // 공유 링크 감지 + 실시간 연결
